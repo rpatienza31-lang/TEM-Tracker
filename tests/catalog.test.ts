@@ -12,7 +12,7 @@ describe("catalog generator", () => {
     await seedSettings();
   });
 
-  it("creates the expected count for grades x subjects x weeks, and re-running creates zero duplicates", async () => {
+  it("creates a DLP + PPT item per grade x subject x week, and re-running creates zero duplicates", async () => {
     const term = await makeTerm();
     const math = await makeSubject("Mathematics", "MATH");
     const science = await makeSubject("Science", "SCI");
@@ -21,27 +21,30 @@ describe("catalog generator", () => {
       termId: term.id,
       grades: [3, 4],
       subjectsByGrade: { 3: [math.id, science.id], 4: [math.id, science.id] },
-      cotByGrade: {},
+      cotDlpByGrade: {},
+      cotPptByGrade: {},
       weeks: Array.from({ length: 10 }, (_, i) => ({ weekNumber: i + 1, uploadDeadline: "2099-01-01" })),
     };
 
     const preview = await previewCatalog(input);
-    expect(preview.toCreate).toBe(2 * 2 * 10); // 2 grades x 2 subjects x 10 weeks x 1 DLP each
+    expect(preview.toCreate).toBe(2 * 2 * 10 * 2); // 2 grades x 2 subjects x 10 weeks x (DLP + PPT)
     expect(preview.toSkip).toBe(0);
 
     const first = await generateCatalog(input);
-    expect(first.created).toBe(40);
+    expect(first.created).toBe(80);
     expect(first.skipped).toBe(0);
 
     const rows = await db.select().from(workItems).where(eq(workItems.termId, term.id));
-    expect(rows).toHaveLength(40);
+    expect(rows).toHaveLength(80);
+    expect(rows.filter((r) => r.type === "DLP")).toHaveLength(40);
+    expect(rows.filter((r) => r.type === "PPT")).toHaveLength(40);
 
     const second = await generateCatalog(input);
     expect(second.created).toBe(0);
-    expect(second.skipped).toBe(40);
+    expect(second.skipped).toBe(80);
 
     const rowsAfterRerun = await db.select().from(workItems).where(eq(workItems.termId, term.id));
-    expect(rowsAfterRerun).toHaveLength(40);
+    expect(rowsAfterRerun).toHaveLength(80);
   });
 
   it("backfills only the missing items when a subject is added after the first run", async () => {
@@ -53,7 +56,8 @@ describe("catalog generator", () => {
       termId: term.id,
       grades: [4],
       subjectsByGrade: { 4: [math.id] },
-      cotByGrade: {},
+      cotDlpByGrade: {},
+      cotPptByGrade: {},
       weeks,
     });
 
@@ -62,15 +66,16 @@ describe("catalog generator", () => {
       termId: term.id,
       grades: [4],
       subjectsByGrade: { 4: [math.id, science.id] },
-      cotByGrade: {},
+      cotDlpByGrade: {},
+      cotPptByGrade: {},
       weeks,
     });
 
-    expect(result.created).toBe(10); // only Science's 10 weeks are new
-    expect(result.skipped).toBe(10); // Math's 10 weeks already existed
+    expect(result.created).toBe(20); // only Science's 10 weeks x (DLP + PPT) are new
+    expect(result.skipped).toBe(20); // Math's 10 weeks x (DLP + PPT) already existed
   });
 
-  it("supports a partial COT selection alongside DLP", async () => {
+  it("supports independently selecting COT-DLP and COT-PPT per subject", async () => {
     const term = await makeTerm();
     const math = await makeSubject("Mathematics", "MATH");
     const science = await makeSubject("Science", "SCI");
@@ -79,12 +84,15 @@ describe("catalog generator", () => {
       termId: term.id,
       grades: [4],
       subjectsByGrade: { 4: [math.id, science.id] },
-      cotByGrade: { 4: [math.id] }, // only Math gets COT
+      cotDlpByGrade: { 4: [math.id] }, // only Math gets COT-DLP
+      cotPptByGrade: { 4: [science.id] }, // only Science gets COT-PPT
       weeks: [{ weekNumber: 1, uploadDeadline: "2099-01-01" }],
     });
 
-    expect(result.created).toBe(3); // Math DLP + Math COT + Science DLP
+    // Math: DLP + PPT + COT_DLP = 3. Science: DLP + PPT + COT_PPT = 3.
+    expect(result.created).toBe(6);
     const rows = await db.select().from(workItems).where(eq(workItems.termId, term.id));
-    expect(rows.filter((r) => r.type === "COT")).toHaveLength(1);
+    expect(rows.filter((r) => r.type === "COT_DLP")).toHaveLength(1);
+    expect(rows.filter((r) => r.type === "COT_PPT")).toHaveLength(1);
   });
 });

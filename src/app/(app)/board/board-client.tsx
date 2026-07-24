@@ -12,7 +12,7 @@ import { AssignDialog } from "@/components/work-items/assign-dialog";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { releaseItemAction, uploadItemAction } from "@/lib/work-items/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
-import { ALL_GRADES, STATUS_LABELS, WEEK_NUMBERS, type ItemStatus } from "@/lib/constants";
+import { ALL_DELIVERABLE_TYPES, ALL_GRADES, DELIVERABLE_TYPE_LABELS, STATUS_LABELS, WEEK_NUMBERS, type ItemStatus } from "@/lib/constants";
 import type { BoardItem } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
 
@@ -145,9 +145,12 @@ export function BoardClient({
           value={searchParams.get("type") ?? ""}
           onChange={(e) => setParam("type", e.target.value)}
         >
-          <option value="">DLP + COT</option>
-          <option value="DLP">DLP only</option>
-          <option value="COT">COT only</option>
+          <option value="">Any type</option>
+          {ALL_DELIVERABLE_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {DELIVERABLE_TYPE_LABELS[t]}
+            </option>
+          ))}
         </select>
         <select
           className="h-9 rounded-md border border-input bg-background px-2 text-sm"
@@ -240,7 +243,7 @@ export function BoardClient({
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
-                <TableCell>{item.type}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
                 <TableCell>
                   <StatusBadge status={item.status} overdue={overdue} />
                 </TableCell>

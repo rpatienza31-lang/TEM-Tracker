@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { submitItemAction } from "@/lib/work-items/actions";
+import { DELIVERABLE_TYPE_LABELS, type DeliverableType } from "@/lib/constants";
 
 export function SubmitDialog({
   itemId,
@@ -24,20 +25,19 @@ export function SubmitDialog({
   onError,
 }: {
   itemId: string;
-  type: "DLP" | "COT";
+  type: DeliverableType;
   label: string;
   onError?: (message: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [dlpUrl, setDlpUrl] = useState("");
-  const [pptUrl, setPptUrl] = useState("");
+  const [fileUrl, setFileUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function submit() {
     startTransition(async () => {
-      const result = await submitItemAction(itemId, { dlpUrl, pptUrl: pptUrl || undefined, notes: notes || undefined });
+      const result = await submitItemAction(itemId, { fileUrl, notes: notes || undefined });
       if (!result.ok) {
         setError(result.error.message);
         onError?.(result.error.message);
@@ -45,8 +45,7 @@ export function SubmitDialog({
       }
       setError(null);
       setOpen(false);
-      setDlpUrl("");
-      setPptUrl("");
+      setFileUrl("");
       setNotes("");
     });
   }
@@ -61,19 +60,13 @@ export function SubmitDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Submit for review</DialogTitle>
-          <DialogDescription>Links to wherever the files already live (Google Drive, etc.)</DialogDescription>
+          <DialogDescription>Link to wherever the file already lives (Google Drive, etc.)</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <Label htmlFor="dlpUrl">{type === "DLP" ? "DLP link" : "COT link"}</Label>
-            <Input id="dlpUrl" value={dlpUrl} onChange={(e) => setDlpUrl(e.target.value)} placeholder="https://drive.google.com/…" />
+            <Label htmlFor="fileUrl">{DELIVERABLE_TYPE_LABELS[type]} link</Label>
+            <Input id="fileUrl" value={fileUrl} onChange={(e) => setFileUrl(e.target.value)} placeholder="https://drive.google.com/…" />
           </div>
-          {type === "DLP" && (
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="pptUrl">PPT link (required)</Label>
-              <Input id="pptUrl" value={pptUrl} onChange={(e) => setPptUrl(e.target.value)} placeholder="https://drive.google.com/…" />
-            </div>
-          )}
           <div className="flex flex-col gap-1">
             <Label htmlFor="notes">Notes (optional)</Label>
             <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -81,7 +74,7 @@ export function SubmitDialog({
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
-          <Button onClick={submit} disabled={isPending || !dlpUrl.trim() || (type === "DLP" && !pptUrl.trim())}>
+          <Button onClick={submit} disabled={isPending || !fileUrl.trim()}>
             {isPending ? "Submitting…" : "Submit"}
           </Button>
         </DialogFooter>

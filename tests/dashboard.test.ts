@@ -56,8 +56,7 @@ describe("dashboard deadline buckets (spec §6.3)", () => {
             action: "submit",
             itemId: item.id,
             actor: editor,
-            dlpUrl: "https://x.test/f",
-            pptUrl: "https://x.test/p",
+            fileUrl: "https://x.test/f",
           });
           await transitionWorkItem({ action: "approve", itemId: item.id, actor: admin });
           await transitionWorkItem({ action: "upload", itemId: item.id, actor: admin });

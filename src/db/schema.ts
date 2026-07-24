@@ -18,7 +18,7 @@ import {
 
 export const userRole = pgEnum("user_role", ["owner", "admin", "sales", "editor"]);
 export const payType = pgEnum("pay_type", ["hourly", "quota"]);
-export const deliverableType = pgEnum("deliverable_type", ["DLP", "COT"]);
+export const deliverableType = pgEnum("deliverable_type", ["DLP", "PPT", "COT_DLP", "COT_PPT"]);
 export const itemStatus = pgEnum("item_status", [
   "available",
   "claimed",
@@ -112,8 +112,7 @@ export const workItems = pgTable(
     dueDate: date("due_date").notNull(),
     pointsValue: numeric("points_value", { precision: 4, scale: 2 }).notNull(),
     pointsAwarded: numeric("points_awarded", { precision: 4, scale: 2 }),
-    dlpUrl: text("dlp_url"),
-    pptUrl: text("ppt_url"),
+    fileUrl: text("file_url"),
     notes: text("notes"),
     revisionCount: integer("revision_count").notNull().default(0),
     version: integer("version").notNull().default(0),

@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 
 import { requireUser } from "@/lib/auth";
@@ -7,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/progress-bar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ALL_DELIVERABLE_TYPES, DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 
 type SearchParams = { from?: string; to?: string; sort?: string; dir?: string };
 
@@ -61,10 +63,12 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
                 <dd className="text-right">{mine.completedCycles}</dd>
                 <dt className="text-muted-foreground">Total points (all time)</dt>
                 <dd className="text-right">{mine.totalPoints.toFixed(1)}</dd>
-                <dt className="text-muted-foreground">DLP points</dt>
-                <dd className="text-right">{mine.dlpCount.toFixed(1)}</dd>
-                <dt className="text-muted-foreground">COT points</dt>
-                <dd className="text-right">{mine.cotCount.toFixed(1)}</dd>
+                {ALL_DELIVERABLE_TYPES.map((type) => (
+                  <Fragment key={type}>
+                    <dt className="text-muted-foreground">{DELIVERABLE_TYPE_LABELS[type]} points</dt>
+                    <dd className="text-right">{mine.pointsByType[type].toFixed(1)}</dd>
+                  </Fragment>
+                ))}
                 <dt className="text-muted-foreground">Avg turnaround (claim → approved)</dt>
                 <dd className="text-right">{formatHours(mine.avgTurnaroundHours)}</dd>
                 <dt className="text-muted-foreground">Revision rate</dt>
@@ -140,7 +144,17 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
               <TableCell>{row.completedCycles}</TableCell>
               <TableCell>
                 {row.totalPoints.toFixed(1)}
-                <span className="text-muted-foreground"> ({row.dlpCount.toFixed(1)} DLP / {row.cotCount.toFixed(1)} COT)</span>
+                <span className="text-muted-foreground">
+                  {" "}
+                  (
+                  {ALL_DELIVERABLE_TYPES.map((type, i) => (
+                    <span key={type}>
+                      {i > 0 && " / "}
+                      {row.pointsByType[type].toFixed(1)} {DELIVERABLE_TYPE_LABELS[type]}
+                    </span>
+                  ))}
+                  )
+                </span>
               </TableCell>
               <TableCell>{formatHours(row.avgTurnaroundHours)}</TableCell>
               <TableCell>{formatRate(row.revisionRate)}</TableCell>

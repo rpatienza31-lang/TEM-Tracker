@@ -6,17 +6,11 @@ import { quotaCycles } from "@/db/schema";
 import { transitionWorkItem } from "@/lib/work-items/transitions";
 import { makeSubject, makeTerm, makeUser, makeWorkItem, resetDb, seedSettings } from "./helpers";
 
-async function approveViaLifecycle(itemId: string, editorId: string, adminId: string, type: "DLP" | "COT") {
+async function approveViaLifecycle(itemId: string, editorId: string, adminId: string) {
   const admin = { id: adminId, role: "admin" } as never;
   const editor = { id: editorId, role: "editor" } as never;
   await transitionWorkItem({ action: "claim", itemId, actor: editor });
-  await transitionWorkItem({
-    action: "submit",
-    itemId,
-    actor: editor,
-    dlpUrl: "https://x.test/f",
-    pptUrl: type === "DLP" ? "https://x.test/p" : undefined,
-  });
+  await transitionWorkItem({ action: "submit", itemId, actor: editor, fileUrl: "https://x.test/f" });
   return transitionWorkItem({ action: "approve", itemId, actor: admin });
 }
 
@@ -48,17 +42,17 @@ describe("quota cycles", () => {
     // subjects and, for the 21st, a different grade of the first subject.
     for (let week = 1; week <= 10; week++) {
       const item = await makeWorkItem({ termId, subjectId, weekNumber: week, type: "DLP" });
-      const result = await approveViaLifecycle(item.id, editorId, adminId, "DLP");
+      const result = await approveViaLifecycle(item.id, editorId, adminId);
       expect(result.ok).toBe(true);
     }
     const subject2 = await makeSubject("Subject Two", "SUB2");
     for (let week = 1; week <= 10; week++) {
       const item = await makeWorkItem({ termId, subjectId: subject2.id, weekNumber: week, type: "DLP" });
-      const result = await approveViaLifecycle(item.id, editorId, adminId, "DLP");
+      const result = await approveViaLifecycle(item.id, editorId, adminId);
       expect(result.ok).toBe(true);
     }
     const item21 = await makeWorkItem({ termId, subjectId, grade: 5, weekNumber: 1, type: "DLP" });
-    const result21 = await approveViaLifecycle(item21.id, editorId, adminId, "DLP");
+    const result21 = await approveViaLifecycle(item21.id, editorId, adminId);
     expect(result21.ok).toBe(true);
 
     const cycles = await getCycles(editorId);
@@ -74,15 +68,15 @@ describe("quota cycles", () => {
     // 20 DLP (20.0) + 1 COT (0.5) = 20.5, then one more DLP (+1.0) -> 21.5.
     for (let week = 1; week <= 10; week++) {
       const item = await makeWorkItem({ termId, subjectId, weekNumber: week, type: "DLP" });
-      await approveViaLifecycle(item.id, editorId, adminId, "DLP");
+      await approveViaLifecycle(item.id, editorId, adminId);
     }
     const subject2 = await makeSubject("Subject Two", "SUB2");
     for (let week = 1; week <= 10; week++) {
       const item = await makeWorkItem({ termId, subjectId: subject2.id, weekNumber: week, type: "DLP" });
-      await approveViaLifecycle(item.id, editorId, adminId, "DLP");
+      await approveViaLifecycle(item.id, editorId, adminId);
     }
-    const cotItem = await makeWorkItem({ termId, subjectId, weekNumber: 1, type: "COT", pointsValue: "0.5" });
-    await approveViaLifecycle(cotItem.id, editorId, adminId, "COT");
+    const cotItem = await makeWorkItem({ termId, subjectId, weekNumber: 1, type: "COT_DLP", pointsValue: "0.5" });
+    await approveViaLifecycle(cotItem.id, editorId, adminId);
 
     let cycles = await getCycles(editorId);
     expect(cycles).toHaveLength(1);
@@ -90,7 +84,7 @@ describe("quota cycles", () => {
     expect(cycles[0].isClosed).toBe(false);
 
     const crossingItem = await makeWorkItem({ termId, subjectId: subject2.id, weekNumber: 1, grade: 5, type: "DLP" });
-    const result = await approveViaLifecycle(crossingItem.id, editorId, adminId, "DLP");
+    const result = await approveViaLifecycle(crossingItem.id, editorId, adminId);
     expect(result.ok).toBe(true);
 
     cycles = await getCycles(editorId);
@@ -112,7 +106,7 @@ describe("quota cycles", () => {
     }
     items.push(await makeWorkItem({ termId, subjectId, grade: 5, weekNumber: 1, type: "DLP" }));
     for (const item of items) {
-      await approveViaLifecycle(item.id, editorId, adminId, "DLP");
+      await approveViaLifecycle(item.id, editorId, adminId);
     }
 
     let cycles = await getCycles(editorId);
@@ -137,7 +131,7 @@ describe("quota cycles", () => {
 
   it("reverses points when an approved item is released", async () => {
     const item = await makeWorkItem({ termId, subjectId, type: "DLP" });
-    await approveViaLifecycle(item.id, editorId, adminId, "DLP");
+    await approveViaLifecycle(item.id, editorId, adminId);
 
     let cycles = await getCycles(editorId);
     expect(Number(cycles[0].pointsTotal)).toBe(1);
@@ -155,8 +149,8 @@ describe("quota cycles", () => {
   });
 
   it("never requires a human to type a point total: points_awarded always equals the snapshotted points_value", async () => {
-    const item = await makeWorkItem({ termId, subjectId, type: "COT", pointsValue: "0.5" });
-    const result = await approveViaLifecycle(item.id, editorId, adminId, "COT");
+    const item = await makeWorkItem({ termId, subjectId, type: "COT_DLP", pointsValue: "0.5" });
+    const result = await approveViaLifecycle(item.id, editorId, adminId);
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.item.pointsAwarded).toBe(result.item.pointsValue);

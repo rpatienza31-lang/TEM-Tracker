@@ -9,6 +9,7 @@ import { RequestRevisionDialog } from "@/components/work-items/request-revision-
 import { approveItemAction, unapproveItemAction, uploadItemAction } from "@/lib/work-items/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import type { BoardItem } from "@/lib/work-items/queries";
+import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 
 export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[]; readyToUpload: BoardItem[] }) {
   const [banner, setBanner] = useState<string | null>(null);
@@ -60,21 +61,13 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
-                <TableCell>{item.type}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
                 <TableCell>{item.assigneeName}</TableCell>
                 <TableCell>
-                  {item.dlpUrl && (
-                    <a className="text-primary underline" href={item.dlpUrl} target="_blank" rel="noreferrer">
-                      DLP
+                  {item.fileUrl && (
+                    <a className="text-primary underline" href={item.fileUrl} target="_blank" rel="noreferrer">
+                      File
                     </a>
-                  )}
-                  {item.pptUrl && (
-                    <>
-                      {" · "}
-                      <a className="text-primary underline" href={item.pptUrl} target="_blank" rel="noreferrer">
-                        PPT
-                      </a>
-                    </>
                   )}
                 </TableCell>
                 <TableCell className="flex flex-wrap gap-1">
@@ -135,7 +128,7 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
-                <TableCell>{item.type}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
                 <TableCell>{item.assigneeName}</TableCell>
                 <TableCell className="text-muted-foreground">{item.pointsValue} pts</TableCell>
                 <TableCell>

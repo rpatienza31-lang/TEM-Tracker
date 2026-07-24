@@ -70,7 +70,7 @@ async function seedSettings() {
     .insert(settings)
     .values([
       { key: "quota_size", value: 21 },
-      { key: "points", value: { DLP: 1, COT: 0.5 } },
+      { key: "points", value: { DLP: 1, PPT: 1, COT_DLP: 0.5, COT_PPT: 0.5 } },
       { key: "wip_limit", value: 5 },
     ])
     .onConflictDoNothing();
@@ -127,23 +127,25 @@ async function main() {
     uploadDeadline: w.uploadDeadline,
   }));
 
-  const term1Result = await generateCatalog({
+  const term1CotResult = await generateCatalog({
     termId: term1.id,
     grades: TERM1_GRADES,
     subjectsByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
-    cotByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, cotSubjectIds])),
+    cotDlpByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, cotSubjectIds])),
+    cotPptByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, cotSubjectIds])),
     weeks: term1Weeks.filter((w) => w.weekNumber === 4 || w.weekNumber === 8),
   });
-  console.log(`  COT items (weeks 4 & 8, Math/English): created ${term1Result.created}, skipped ${term1Result.skipped}`);
+  console.log(`  COT items (weeks 4 & 8, Math/English): created ${term1CotResult.created}, skipped ${term1CotResult.skipped}`);
 
-  const term1DlpResult = await generateCatalog({
+  const term1DlpPptResult = await generateCatalog({
     termId: term1.id,
     grades: TERM1_GRADES,
     subjectsByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
-    cotByGrade: {},
+    cotDlpByGrade: {},
+    cotPptByGrade: {},
     weeks: term1Weeks,
   });
-  console.log(`  DLP items (all weeks): created ${term1DlpResult.created}, skipped ${term1DlpResult.skipped}`);
+  console.log(`  DLP+PPT items (all weeks): created ${term1DlpPptResult.created}, skipped ${term1DlpPptResult.skipped}`);
 
   console.log("Generating catalog for Term 2 (offerings & weeks only, no items yet)...");
   await db
@@ -191,8 +193,7 @@ async function main() {
           assigneeId: editor.id,
           claimedAt,
           submittedAt: new Date(),
-          dlpUrl: "https://drive.google.com/seed-placeholder",
-          pptUrl: item.type === "DLP" ? "https://drive.google.com/seed-placeholder-ppt" : null,
+          fileUrl: "https://drive.google.com/seed-placeholder",
           version: 2,
         })
         .where(eq(workItems.id, item.id));
@@ -222,8 +223,7 @@ async function main() {
           submittedAt: new Date(),
           approvedAt: new Date(),
           pointsAwarded: String(pointsTable[item.type]),
-          dlpUrl: "https://drive.google.com/seed-placeholder",
-          pptUrl: item.type === "DLP" ? "https://drive.google.com/seed-placeholder-ppt" : null,
+          fileUrl: "https://drive.google.com/seed-placeholder",
           version: 3,
         })
         .where(eq(workItems.id, item.id));
@@ -245,8 +245,7 @@ async function main() {
           approvedAt: new Date(),
           uploadedAt: new Date(),
           pointsAwarded: String(pointsTable[item.type]),
-          dlpUrl: "https://drive.google.com/seed-placeholder",
-          pptUrl: item.type === "DLP" ? "https://drive.google.com/seed-placeholder-ppt" : null,
+          fileUrl: "https://drive.google.com/seed-placeholder",
           version: 4,
         })
         .where(eq(workItems.id, item.id));

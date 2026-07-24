@@ -1,6 +1,16 @@
 import type { workItems } from "@/db/schema";
 
 export type ItemStatus = (typeof workItems.$inferSelect)["status"];
+export type DeliverableType = (typeof workItems.$inferSelect)["type"];
+
+export const ALL_DELIVERABLE_TYPES: DeliverableType[] = ["DLP", "PPT", "COT_DLP", "COT_PPT"];
+
+export const DELIVERABLE_TYPE_LABELS: Record<DeliverableType, string> = {
+  DLP: "DLP",
+  PPT: "PPT",
+  COT_DLP: "COT (DLP)",
+  COT_PPT: "COT (PPT)",
+};
 
 export const STATUS_LABELS: Record<ItemStatus, string> = {
   available: "Available",
@@ -33,9 +43,11 @@ export const STATUS_BADGE_CLASS: Record<ItemStatus, string> = {
   cancelled: "bg-gray-200 text-gray-500 line-through dark:bg-gray-800 dark:text-gray-500",
 };
 
-export const DELIVERABLE_POINTS: Record<"DLP" | "COT", number> = {
+export const DELIVERABLE_POINTS: Record<DeliverableType, number> = {
   DLP: 1,
-  COT: 0.5,
+  PPT: 1,
+  COT_DLP: 0.5,
+  COT_PPT: 0.5,
 };
 
 export const WEEK_NUMBERS = Array.from({ length: 10 }, (_, i) => i + 1);

@@ -31,7 +31,7 @@ test("only one of two simultaneous claims on the same item succeeds", async ({ b
       subjectId: subject.id,
       grade: 4,
       weekNumber: 9,
-      type: "COT",
+      type: "COT_DLP",
       dueDate: "2099-01-01",
       pointsValue: "0.5",
     })

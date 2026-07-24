@@ -31,8 +31,7 @@ type SubmitInput = {
   action: "submit";
   itemId: string;
   actor: AppUser;
-  dlpUrl: string;
-  pptUrl?: string;
+  fileUrl: string;
   notes?: string;
 };
 type RequestRevisionInput = {
@@ -176,11 +175,8 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
           if (current.status !== "claimed" && current.status !== "revision") {
             return invalid(`Cannot submit an item in status "${current.status}".`);
           }
-          if (!input.dlpUrl.trim()) {
+          if (!input.fileUrl.trim()) {
             return invalid("A file link is required to submit.");
-          }
-          if (current.type === "DLP" && !input.pptUrl?.trim()) {
-            return invalid("A PPT link is required for DLP submissions.");
           }
 
           const [updated] = await tx
@@ -188,8 +184,7 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
             .set({
               status: "in_review",
               submittedAt: new Date(),
-              dlpUrl: input.dlpUrl,
-              pptUrl: input.pptUrl ?? current.pptUrl,
+              fileUrl: input.fileUrl,
               notes: input.notes ?? current.notes,
               version: sql`${workItems.version} + 1`,
               updatedAt: new Date(),

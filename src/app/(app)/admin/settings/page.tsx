@@ -3,6 +3,7 @@ import { getPointsTable, getQuotaSize, getWipLimit } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ALL_DELIVERABLE_TYPES, DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 import { updateSettingsAction } from "./actions";
 
 export default async function SettingsAdminPage() {
@@ -29,14 +30,12 @@ export default async function SettingsAdminPage() {
           <Label htmlFor="wipLimit">WIP limit per editor</Label>
           <Input id="wipLimit" name="wipLimit" type="number" step="1" defaultValue={wipLimit} />
         </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="dlpPoints">DLP points</Label>
-          <Input id="dlpPoints" name="dlpPoints" type="number" step="0.5" defaultValue={points.DLP} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="cotPoints">COT points</Label>
-          <Input id="cotPoints" name="cotPoints" type="number" step="0.5" defaultValue={points.COT} />
-        </div>
+        {ALL_DELIVERABLE_TYPES.map((type) => (
+          <div key={type} className="flex flex-col gap-1">
+            <Label htmlFor={`points_${type}`}>{DELIVERABLE_TYPE_LABELS[type]} points</Label>
+            <Input id={`points_${type}`} name={`points_${type}`} type="number" step="0.5" defaultValue={points[type]} />
+          </div>
+        ))}
         <Button type="submit" className="w-fit">
           Save settings
         </Button>

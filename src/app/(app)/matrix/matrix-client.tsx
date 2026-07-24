@@ -18,7 +18,7 @@ import { AssignDialog } from "@/components/work-items/assign-dialog";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { releaseItemAction, uploadItemAction } from "@/lib/work-items/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
-import { WEEK_NUMBERS, type ItemStatus } from "@/lib/constants";
+import { ALL_DELIVERABLE_TYPES, DELIVERABLE_TYPE_LABELS, WEEK_NUMBERS, type DeliverableType, type ItemStatus } from "@/lib/constants";
 import type { BoardItem } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +64,7 @@ export function MatrixClient({
   termId?: string;
   grades: number[];
   grade?: number;
-  type: "DLP" | "COT";
+  type: DeliverableType;
   subjects: { id: string; name: string; shortCode: string }[];
   items: BoardItem[];
   editors: Editor[];
@@ -132,13 +132,13 @@ export function MatrixClient({
           ))}
         </select>
         <div className="flex overflow-hidden rounded-md border border-input">
-          {(["DLP", "COT"] as const).map((t) => (
+          {ALL_DELIVERABLE_TYPES.map((t) => (
             <button
               key={t}
               className={cn("px-3 py-1.5 text-sm", type === t ? "bg-primary text-primary-foreground" : "bg-background")}
               onClick={() => setParam("type", t)}
             >
-              {t}
+              {DELIVERABLE_TYPE_LABELS[t]}
             </button>
           ))}
         </div>
@@ -214,7 +214,8 @@ export function MatrixClient({
             <>
               <DialogHeader>
                 <DialogTitle>
-                  Grade {selectedItem.grade} · {selectedItem.subjectName} · Week {selectedItem.weekNumber} · {selectedItem.type}
+                  Grade {selectedItem.grade} · {selectedItem.subjectName} · Week {selectedItem.weekNumber} ·{" "}
+                  {DELIVERABLE_TYPE_LABELS[selectedItem.type]}
                 </DialogTitle>
                 <DialogDescription>Due {selectedItem.dueDate}</DialogDescription>
               </DialogHeader>
@@ -224,8 +225,8 @@ export function MatrixClient({
                   <span className="text-muted-foreground">{selectedItem.assigneeName ?? "Unassigned"}</span>
                 </div>
                 <p className="text-muted-foreground">Points: {selectedItem.pointsValue}</p>
-                {selectedItem.dlpUrl && (
-                  <a className="text-primary underline" href={selectedItem.dlpUrl} target="_blank" rel="noreferrer">
+                {selectedItem.fileUrl && (
+                  <a className="text-primary underline" href={selectedItem.fileUrl} target="_blank" rel="noreferrer">
                     File link
                   </a>
                 )}

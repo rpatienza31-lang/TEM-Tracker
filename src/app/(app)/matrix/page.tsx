@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms, users } from "@/db/schema";
 import { getGradeSubjects, getMatrixItems, getTermGrades } from "@/lib/work-items/queries";
+import type { DeliverableType } from "@/lib/constants";
 import { MatrixClient } from "./matrix-client";
 
 type SearchParams = { term?: string; grade?: string; type?: string };
@@ -18,7 +19,7 @@ export default async function MatrixPage({ searchParams }: { searchParams: Promi
 
   const grades = termId ? await getTermGrades(termId) : [];
   const grade = sp.grade ? Number(sp.grade) : grades[0];
-  const type = (sp.type as "DLP" | "COT") || "DLP";
+  const type = (sp.type as DeliverableType) || "DLP";
 
   const [subjects, items, editors] = await Promise.all([
     termId && grade ? getGradeSubjects(termId, grade) : Promise.resolve([]),

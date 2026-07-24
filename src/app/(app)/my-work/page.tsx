@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
@@ -5,6 +6,7 @@ import { getMyWorkItems } from "@/lib/work-items/queries";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/work-items/status-badge";
 import { SubmitDialog } from "@/components/work-items/submit-dialog";
+import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 
 function isOverdue(dueDate: string, status: string) {
   return dueDate < new Date().toISOString().slice(0, 10) && status !== "uploaded" && status !== "cancelled";
@@ -25,7 +27,7 @@ export default async function MyWorkPage() {
       <div>
         <h1 className="text-xl font-semibold">My Work</h1>
         <p className="text-sm text-muted-foreground">
-          Quota-cycle progress and point totals arrive in Phase 2 — this view covers your active claims for now.
+          See <Link href="/productivity" className="underline">Productivity &amp; Quota</Link> for your cycle progress and point totals.
         </p>
       </div>
 
@@ -49,7 +51,7 @@ export default async function MyWorkPage() {
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
-                <TableCell>{item.type}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
                 <TableCell>
                   <StatusBadge status={item.status} overdue={isOverdue(item.dueDate, item.status)} />
                 </TableCell>
@@ -88,7 +90,7 @@ export default async function MyWorkPage() {
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
-                <TableCell>{item.type}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
                 <TableCell className="text-muted-foreground">Pending admin review</TableCell>
               </TableRow>
             ))}
@@ -122,7 +124,7 @@ export default async function MyWorkPage() {
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
-                <TableCell>{item.type}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
                 <TableCell>
                   <StatusBadge status={item.status} />
                 </TableCell>

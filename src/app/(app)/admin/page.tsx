@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const SECTIONS = [
-  { href: "/admin/catalog", title: "Catalog generator", description: "Bulk-create work items for a term (grades × subjects × weeks × DLP/COT)." },
+  { href: "/admin/catalog", title: "Catalog generator", description: "Bulk-create work items for a term (grades × subjects × weeks × DLP/PPT/COT)." },
   { href: "/admin/users", title: "Users", description: "Invite staff, set role and pay type, deactivate accounts." },
   { href: "/admin/subjects", title: "Subjects", description: "Master subject list used by the catalog generator." },
   { href: "/admin/terms", title: "Terms & weeks", description: "Create terms, mark the active one, and set weekly upload deadlines." },

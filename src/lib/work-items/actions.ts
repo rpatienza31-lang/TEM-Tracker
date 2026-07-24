@@ -41,7 +41,7 @@ export async function releaseItemAction(itemId: string, note?: string): Promise<
 
 export async function submitItemAction(
   itemId: string,
-  data: { dlpUrl: string; pptUrl?: string; notes?: string },
+  data: { fileUrl: string; notes?: string },
 ): Promise<TransitionResult> {
   const actor = await requireUser();
   const result = await transitionWorkItem({ action: "submit", itemId, actor, ...data });

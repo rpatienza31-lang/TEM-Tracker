@@ -1,4 +1,4 @@
-CREATE TYPE "public"."deliverable_type" AS ENUM('DLP', 'COT');--> statement-breakpoint
+CREATE TYPE "public"."deliverable_type" AS ENUM('DLP', 'PPT', 'COT_DLP', 'COT_PPT');--> statement-breakpoint
 CREATE TYPE "public"."item_status" AS ENUM('available', 'claimed', 'in_review', 'revision', 'approved', 'uploaded', 'cancelled');--> statement-breakpoint
 CREATE TYPE "public"."pay_type" AS ENUM('hourly', 'quota');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('owner', 'admin', 'sales', 'editor');--> statement-breakpoint
@@ -115,8 +115,7 @@ CREATE TABLE "work_items" (
 	"due_date" date NOT NULL,
 	"points_value" numeric(4, 2) NOT NULL,
 	"points_awarded" numeric(4, 2),
-	"dlp_url" text,
-	"ppt_url" text,
+	"file_url" text,
 	"notes" text,
 	"revision_count" integer DEFAULT 0 NOT NULL,
 	"version" integer DEFAULT 0 NOT NULL,

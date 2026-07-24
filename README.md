@@ -15,7 +15,7 @@ written by hand to match its conventions), Supabase (Postgres, Auth, Realtime), 
 1. Create a Supabase project. Copy `.env.example` to `.env` and fill in `NEXT_PUBLIC_SUPABASE_URL`,
    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `DATABASE_URL` (Settings → Database → Connection
    string).
-2. Apply the schema: `npm run db:push` (or run `drizzle/0000_pink_onslaught.sql` directly in the Supabase SQL editor).
+2. Apply the schema: `npm run db:push` (or run `drizzle/0000_init.sql` directly in the Supabase SQL editor).
 3. Apply Row Level Security: run `supabase/sql/001_rls.sql` then `supabase/sql/002_seed_settings.sql` in the Supabase
    SQL editor (these aren't Drizzle-managed since Drizzle doesn't model policies).
 4. Seed sample data: `npm run db:seed`. This creates one owner, one admin, two sales, six editors, the subject master
@@ -46,6 +46,16 @@ written by hand to match its conventions), Supabase (Postgres, Auth, Realtime), 
   un-approve/release reversal (spec §6.4). `src/lib/quota/productivity.ts` backs the Productivity & Quota screen.
 - `src/app/(app)/` — authenticated screens: dashboard, board, matrix, my-work, review, productivity, admin/*.
 - `scripts/seed.ts` — the seed script described above.
+
+## Deliverable types (owner clarification, supersedes spec §4)
+
+The spec's §4 DECISION bundled a DLP and its paired PPT into one work item worth 1 point, with COT as a separate
+0.5-point item. The owner clarified this should instead be **four independent, separately claimable/submittable/
+approvable work items** per grade × subject × week: `DLP` (1 pt), `PPT` (1 pt), `COT_DLP` (0.5 pt), `COT_PPT`
+(0.5 pt). Each is its own row on the board/matrix with its own status lifecycle; `work_items.file_url` holds a
+single link per item (no more paired `dlp_url`/`ppt_url`). The catalog generator always creates DLP + PPT for every
+selected subject, with COT-DLP and COT-PPT as independent per-subject opt-ins (mirroring the original "COT optional"
+behavior, just doubled).
 
 ## What's not in Phase 1/2 yet
 

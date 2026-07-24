@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { terms, subjects, users, workItems, termWeeks, settings } from "@/db/schema";
 import type { AppUser } from "@/lib/auth";
+import { DELIVERABLE_POINTS, type DeliverableType } from "@/lib/constants";
 
 export async function resetDb() {
   await db.execute(sql`truncate table
@@ -14,7 +15,7 @@ export async function resetDb() {
 export async function seedSettings(overrides: { wipLimit?: number } = {}) {
   await db.insert(settings).values([
     { key: "quota_size", value: 21 },
-    { key: "points", value: { DLP: 1, COT: 0.5 } },
+    { key: "points", value: DELIVERABLE_POINTS },
     { key: "wip_limit", value: overrides.wipLimit ?? 5 },
   ]);
 }
@@ -52,7 +53,7 @@ export async function makeWorkItem(params: {
   subjectId: string;
   grade?: number;
   weekNumber?: number;
-  type?: "DLP" | "COT";
+  type?: DeliverableType;
   dueDate?: string;
   pointsValue?: string;
 }) {
@@ -66,7 +67,7 @@ export async function makeWorkItem(params: {
       weekNumber: params.weekNumber ?? 1,
       type,
       dueDate: params.dueDate ?? "2099-01-01",
-      pointsValue: params.pointsValue ?? (type === "COT" ? "0.5" : "1"),
+      pointsValue: params.pointsValue ?? String(DELIVERABLE_POINTS[type]),
     })
     .returning();
   return item;

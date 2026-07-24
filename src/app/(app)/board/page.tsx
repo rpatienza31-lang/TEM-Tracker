@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms, subjects, users } from "@/db/schema";
 import { getBoardItems, type BoardFilters } from "@/lib/work-items/queries";
-import type { ItemStatus } from "@/lib/constants";
+import type { DeliverableType, ItemStatus } from "@/lib/constants";
 import { BoardClient } from "./board-client";
 
 type SearchParams = Record<string, string | undefined>;
@@ -15,7 +15,7 @@ function parseFilters(sp: SearchParams): BoardFilters {
     grade: sp.grade ? Number(sp.grade) : undefined,
     subjectId: sp.subject || undefined,
     weekNumber: sp.week ? Number(sp.week) : undefined,
-    type: (sp.type as "DLP" | "COT") || undefined,
+    type: (sp.type as DeliverableType) || undefined,
     status: (sp.status as ItemStatus) || undefined,
     assigneeId: sp.assignee || undefined,
     availableOnly: sp.availableOnly === "1",

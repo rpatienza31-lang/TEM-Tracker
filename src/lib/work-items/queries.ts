@@ -2,14 +2,14 @@ import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { workItems, subjects, users, terms, termOfferings } from "@/db/schema";
-import type { ItemStatus } from "@/lib/constants";
+import type { DeliverableType, ItemStatus } from "@/lib/constants";
 
 export type BoardFilters = {
   termId?: string;
   grade?: number;
   subjectId?: string;
   weekNumber?: number;
-  type?: "DLP" | "COT";
+  type?: DeliverableType;
   status?: ItemStatus;
   assigneeId?: string | "unassigned";
   availableOnly?: boolean;
@@ -25,15 +25,14 @@ export type BoardItem = {
   subjectName: string;
   subjectCode: string;
   weekNumber: number;
-  type: "DLP" | "COT";
+  type: DeliverableType;
   status: ItemStatus;
   assigneeId: string | null;
   assigneeName: string | null;
   dueDate: string;
   pointsValue: string;
   pointsAwarded: string | null;
-  dlpUrl: string | null;
-  pptUrl: string | null;
+  fileUrl: string | null;
   notes: string | null;
   revisionCount: number;
   version: number;
@@ -55,8 +54,7 @@ const boardColumns = {
   dueDate: workItems.dueDate,
   pointsValue: workItems.pointsValue,
   pointsAwarded: workItems.pointsAwarded,
-  dlpUrl: workItems.dlpUrl,
-  pptUrl: workItems.pptUrl,
+  fileUrl: workItems.fileUrl,
   notes: workItems.notes,
   revisionCount: workItems.revisionCount,
   version: workItems.version,
@@ -117,7 +115,7 @@ export async function getGradeSubjects(termId: string, grade: number) {
   return rows;
 }
 
-export async function getMatrixItems(termId: string, grade: number, type: "DLP" | "COT") {
+export async function getMatrixItems(termId: string, grade: number, type: DeliverableType) {
   return db
     .select(boardColumns)
     .from(workItems)

@@ -1,5 +1,5 @@
 {
-  "id": "c644f398-b7ea-48ad-9975-b108612d43f5",
+  "id": "5678f962-320e-454f-9512-36b6caec7457",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -808,14 +808,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "dlp_url": {
-          "name": "dlp_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ppt_url": {
-          "name": "ppt_url",
+        "file_url": {
+          "name": "file_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -997,7 +991,9 @@
       "schema": "public",
       "values": [
         "DLP",
-        "COT"
+        "PPT",
+        "COT_DLP",
+        "COT_PPT"
       ]
     },
     "public.item_status": {

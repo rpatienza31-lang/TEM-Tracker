@@ -3,6 +3,7 @@ import { and, asc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { quotaCycles, quotaCycleItems, users, workItems } from "@/db/schema";
 import { getQuotaSize } from "@/lib/settings";
+import { ALL_DELIVERABLE_TYPES, type DeliverableType } from "@/lib/constants";
 
 export type DateRange = { from?: string; to?: string };
 
@@ -14,8 +15,7 @@ export type EditorProductivity = {
   targetPoints: number;
   completedCycles: number;
   totalPoints: number;
-  dlpCount: number;
-  cotCount: number;
+  pointsByType: Record<DeliverableType, number>;
   avgTurnaroundHours: number | null;
   revisionRate: number | null;
 };
@@ -86,17 +86,20 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
   const turnaroundByEditor = new Map(turnaround.map((t) => [t.editorId, t.avgSeconds]));
   const revisionByEditor = new Map(revision.map((r) => [r.editorId, r]));
 
-  const breakdownByEditor = new Map<string, { dlp: number; cot: number }>();
+  function emptyBreakdown(): Record<DeliverableType, number> {
+    return Object.fromEntries(ALL_DELIVERABLE_TYPES.map((t) => [t, 0])) as Record<DeliverableType, number>;
+  }
+
+  const breakdownByEditor = new Map<string, Record<DeliverableType, number>>();
   for (const row of breakdown) {
-    const entry = breakdownByEditor.get(row.editorId) ?? { dlp: 0, cot: 0 };
-    if (row.type === "DLP") entry.dlp += Number(row.points);
-    else entry.cot += Number(row.points);
+    const entry = breakdownByEditor.get(row.editorId) ?? emptyBreakdown();
+    entry[row.type] += Number(row.points);
     breakdownByEditor.set(row.editorId, entry);
   }
 
   return editors.map((editor): EditorProductivity => {
     const open = openCycleByEditor.get(editor.id);
-    const bd = breakdownByEditor.get(editor.id) ?? { dlp: 0, cot: 0 };
+    const pointsByType = breakdownByEditor.get(editor.id) ?? emptyBreakdown();
     const rev = revisionByEditor.get(editor.id);
     const avgSeconds = turnaroundByEditor.get(editor.id);
 
@@ -107,9 +110,8 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
       pointsTotal: Number(open?.pointsTotal ?? 0),
       targetPoints: Number(open?.targetPoints ?? quotaSize),
       completedCycles: completedByEditor.get(editor.id) ?? 0,
-      totalPoints: bd.dlp + bd.cot,
-      dlpCount: bd.dlp,
-      cotCount: bd.cot,
+      totalPoints: Object.values(pointsByType).reduce((sum, p) => sum + p, 0),
+      pointsByType,
       avgTurnaroundHours: avgSeconds ? Number(avgSeconds) / 3600 : null,
       revisionRate: rev && rev.submitted > 0 ? rev.revised / rev.submitted : null,
     };

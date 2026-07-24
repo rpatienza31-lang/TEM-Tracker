@@ -86,29 +86,47 @@ describe("transitionWorkItem", () => {
     if (!r3.ok) expect(r3.error.code).toBe("wip_limit");
   });
 
-  it("requires a PPT link to submit a DLP item, but not a COT item", async () => {
+  it("requires a file link to submit, for every deliverable type", async () => {
     const term = await makeTerm();
     const subject = await makeSubject();
     const editor = await makeUser("editor", "Editor One");
-    const dlpItem = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "DLP" });
-    await transitionWorkItem({ action: "claim", itemId: dlpItem.id, actor: editor });
+    const item = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "DLP" });
+    await transitionWorkItem({ action: "claim", itemId: item.id, actor: editor });
 
-    const missingPpt = await transitionWorkItem({ action: "submit", itemId: dlpItem.id, actor: editor, dlpUrl: "https://x.test/dlp" });
-    expect(missingPpt.ok).toBe(false);
+    const missingLink = await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, fileUrl: "" });
+    expect(missingLink.ok).toBe(false);
 
-    const withPpt = await transitionWorkItem({
-      action: "submit",
-      itemId: dlpItem.id,
-      actor: editor,
-      dlpUrl: "https://x.test/dlp",
-      pptUrl: "https://x.test/ppt",
-    });
-    expect(withPpt.ok).toBe(true);
+    const withLink = await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, fileUrl: "https://x.test/dlp" });
+    expect(withLink.ok).toBe(true);
+  });
 
-    const cotItem = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "COT", weekNumber: 2 });
-    await transitionWorkItem({ action: "claim", itemId: cotItem.id, actor: editor });
-    const cotSubmit = await transitionWorkItem({ action: "submit", itemId: cotItem.id, actor: editor, dlpUrl: "https://x.test/cot" });
-    expect(cotSubmit.ok).toBe(true);
+  it("treats DLP, PPT, COT-DLP, and COT-PPT as four independently claimable items for the same subject/week", async () => {
+    const term = await makeTerm();
+    const subject = await makeSubject();
+    const editorA = await makeUser("editor", "Editor A");
+    const editorB = await makeUser("editor", "Editor B");
+
+    const dlp = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "DLP" });
+    const ppt = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "PPT" });
+    const cotDlp = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "COT_DLP" });
+    const cotPpt = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "COT_PPT" });
+
+    expect(Number(dlp.pointsValue)).toBe(1);
+    expect(Number(ppt.pointsValue)).toBe(1);
+    expect(Number(cotDlp.pointsValue)).toBe(0.5);
+    expect(Number(cotPpt.pointsValue)).toBe(0.5);
+
+    // Different editors can claim the PPT and the COT-PPT for the same
+    // subject/week independently of the DLP claim.
+    const claimDlp = await transitionWorkItem({ action: "claim", itemId: dlp.id, actor: editorA });
+    const claimPpt = await transitionWorkItem({ action: "claim", itemId: ppt.id, actor: editorB });
+    const claimCotDlp = await transitionWorkItem({ action: "claim", itemId: cotDlp.id, actor: editorA });
+    const claimCotPpt = await transitionWorkItem({ action: "claim", itemId: cotPpt.id, actor: editorB });
+
+    expect(claimDlp.ok).toBe(true);
+    expect(claimPpt.ok).toBe(true);
+    expect(claimCotDlp.ok).toBe(true);
+    expect(claimCotPpt.ok).toBe(true);
   });
 
   it("walks the full lifecycle: claim -> submit -> approve -> upload, logging every step", async () => {
@@ -116,10 +134,10 @@ describe("transitionWorkItem", () => {
     const subject = await makeSubject();
     const editor = await makeUser("editor", "Editor One");
     const admin = await makeUser("admin", "Admin One");
-    const item = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "COT" });
+    const item = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "COT_DLP" });
 
     await transitionWorkItem({ action: "claim", itemId: item.id, actor: editor });
-    await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, dlpUrl: "https://x.test/f" });
+    await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, fileUrl: "https://x.test/f" });
     const approved = await transitionWorkItem({ action: "approve", itemId: item.id, actor: admin });
     expect(approved.ok).toBe(true);
     const uploaded = await transitionWorkItem({ action: "upload", itemId: item.id, actor: admin });
@@ -139,9 +157,9 @@ describe("transitionWorkItem", () => {
     const subject = await makeSubject();
     const editor = await makeUser("editor", "Editor One");
     const admin = await makeUser("admin", "Admin One");
-    const item = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "COT" });
+    const item = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "COT_DLP" });
     await transitionWorkItem({ action: "claim", itemId: item.id, actor: editor });
-    await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, dlpUrl: "https://x.test/f" });
+    await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, fileUrl: "https://x.test/f" });
 
     const noNote = await transitionWorkItem({ action: "request_revision", itemId: item.id, actor: admin, note: "" });
     expect(noNote.ok).toBe(false);
@@ -161,7 +179,7 @@ describe("transitionWorkItem", () => {
     const editor = await makeUser("editor", "Editor One");
     const item = await makeWorkItem({ termId: term.id, subjectId: subject.id });
     await transitionWorkItem({ action: "claim", itemId: item.id, actor: editor });
-    await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, dlpUrl: "https://x.test/f", pptUrl: "https://x.test/p" });
+    await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, fileUrl: "https://x.test/f" });
 
     const approveAttempt = await transitionWorkItem({ action: "approve", itemId: item.id, actor: editor });
     expect(approveAttempt.ok).toBe(false);
