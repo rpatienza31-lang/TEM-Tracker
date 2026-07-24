@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { quotaCycles, quotaCycleItems } from "@/db/schema";
@@ -129,4 +129,35 @@ export async function reverseApprovalPoints(tx: Tx, workItemId: string) {
 
   await tx.delete(quotaCycleItems).where(eq(quotaCycleItems.workItemId, workItemId));
   await reverseFromCycle(tx, row.cycleId, Number(row.points));
+}
+
+export type EditorCycleClosures = { editorId: string; cyclesCompleted: number; remainderCarried: number };
+
+/**
+ * Cycles that closed within [from, to], per editor — the payroll report's
+ * "cycles completed in the period" and "remainder carried" columns
+ * (spec §9 Phase 3). Reconciles with the Productivity screen because both
+ * read the same quota_cycles/quota_cycle_items rows.
+ */
+export async function getCyclesClosedInPeriod(from: string, to: string): Promise<EditorCycleClosures[]> {
+  // The overflow a closed cycle pushed forward is (points_total - target), not
+  // its own carried_in column — that column holds what *it* received when it
+  // was opened, not what it produced on closing.
+  const rows = await db
+    .select({
+      editorId: quotaCycles.editorId,
+      cyclesCompleted: sql<number>`count(*)::int`,
+      remainderCarried: sql<string>`sum(${quotaCycles.pointsTotal} - ${quotaCycles.targetPoints})`,
+    })
+    .from(quotaCycles)
+    .where(
+      and(
+        eq(quotaCycles.isClosed, true),
+        gte(quotaCycles.closedAt, new Date(from)),
+        lte(quotaCycles.closedAt, new Date(`${to}T23:59:59`)),
+      ),
+    )
+    .groupBy(quotaCycles.editorId);
+
+  return rows.map((r) => ({ editorId: r.editorId, cyclesCompleted: r.cyclesCompleted, remainderCarried: Number(r.remainderCarried) }));
 }

@@ -13,6 +13,7 @@ import { signOut } from "@/app/logout/actions";
 type NavUser = {
   fullName: string;
   role: "owner" | "admin" | "sales" | "editor";
+  payType: "hourly" | "quota";
 };
 
 const NAV = [
@@ -22,6 +23,7 @@ const NAV = [
   { href: "/my-work", label: "My Work", roles: ["editor"] },
   { href: "/review", label: "Review Queue", roles: ["owner", "admin"] },
   { href: "/productivity", label: "Productivity & Quota", roles: ["owner", "admin", "editor"] },
+  { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales"], payTypes: ["hourly"] },
   { href: "/payroll", label: "Payroll Period", roles: ["owner", "admin"] },
   { href: "/admin", label: "Admin / Setup", roles: ["owner", "admin"] },
 ] as const;
@@ -38,7 +40,11 @@ function initials(name: string) {
 export function AppShell({ user, children }: { user: NavUser; children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const items = NAV.filter((item) => (item.roles as readonly string[]).includes(user.role));
+  const items = NAV.filter(
+    (item) =>
+      (item.roles as readonly string[]).includes(user.role) &&
+      (!("payTypes" in item) || (item.payTypes as readonly string[]).includes(user.payType)),
+  );
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
