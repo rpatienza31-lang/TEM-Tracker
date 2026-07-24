@@ -1,8 +1,8 @@
 # TEM Tracker
 
 Lesson Plan Production Tracker for Teacher Eva & Manuel Educational Services. See `SPEC.md`-equivalent context in the
-project brief for the full product spec — this README covers local setup for **Phases 1–3** (foundation & the board;
-deadlines & quota; payroll & hourly time logs).
+project brief for the full product spec — this README covers local setup for **Phases 1–4** (foundation & the board;
+deadlines & quota; payroll & hourly time logs; in-app notifications + direct file upload).
 
 ## Stack
 
@@ -15,9 +15,12 @@ written by hand to match its conventions), Supabase (Postgres, Auth, Realtime), 
 1. Create a Supabase project. Copy `.env.example` to `.env` and fill in `NEXT_PUBLIC_SUPABASE_URL`,
    `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `DATABASE_URL` (Settings → Database → Connection
    string).
-2. Apply the schema: `npm run db:push` (or run `drizzle/0000_init.sql` directly in the Supabase SQL editor).
-3. Apply Row Level Security: run `supabase/sql/001_rls.sql` then `supabase/sql/002_seed_settings.sql` in the Supabase
-   SQL editor (these aren't Drizzle-managed since Drizzle doesn't model policies).
+2. Apply the schema: `npm run db:push` (or run the files in `drizzle/` directly in the Supabase SQL editor, in order).
+3. Apply Row Level Security and storage: run `supabase/sql/001_rls.sql`, then `002_seed_settings.sql`, then
+   `003_storage.sql` in the Supabase SQL editor (these aren't Drizzle-managed — RLS policies and storage buckets
+   aren't part of Drizzle's schema model). `003_storage.sql` creates the public `work-item-files` bucket that backs
+   direct file upload in the submit dialog; without it, that dialog's "Upload" button fails gracefully and staff can
+   still paste a link.
 4. Seed sample data: `npm run db:seed`. This creates one owner, one admin, two sales, six editors, the subject master
    list, Term 1 (active) + Term 2 with weekly deadlines, and a realistic spread of work-item statuses so the board
    and matrix look real on first run. Seeded users get a random `auth_user_id` placeholder and can't log in until
@@ -47,6 +50,10 @@ written by hand to match its conventions), Supabase (Postgres, Auth, Realtime), 
 - `src/lib/time-logs/` — hourly staff self-service time entry + admin approval. `src/lib/payroll/report.ts` builds the
   payroll-period report (reuses the same quota data the Productivity screen reads, so the two always reconcile) and
   its CSV rendering, served by `src/app/api/payroll/export/route.ts`.
+- `src/lib/notifications/` — event-driven notifications (revision requested / approved / unapproved) plus computed
+  "live alerts" (overdue, unclaimed-at-risk, due-soon), surfaced by the bell in `src/components/notification-bell.tsx`.
+- `src/lib/storage/upload.ts` — direct file upload to Supabase Storage from the submit dialog; falls back to the
+  paste-a-link flow on any error (e.g. the bucket isn't configured).
 - `src/app/(app)/` — authenticated screens: dashboard, board, matrix, my-work, review, productivity, time-logs,
   payroll, admin/*.
 - `scripts/seed.ts` — the seed script described above.
@@ -61,7 +68,11 @@ single link per item (no more paired `dlp_url`/`ppt_url`). The catalog generator
 selected subject, with COT-DLP and COT-PPT as independent per-subject opt-ins (mirroring the original "COT optional"
 behavior, just doubled).
 
-## What's not in Phase 1/2/3 yet
+## What's not in Phase 1/2/3/4 yet
 
-Notifications, direct file upload to storage, and sales inquiry tracking are Phase 4 per the spec's phased build
-plan and haven't been started.
+- **Scheduled email reminders.** The spec's Phase 4 notification goal includes deadline reminders on a schedule;
+  what's built is event-driven in-app notifications plus alerts computed on page load. A scheduled digest would need
+  a cron job (e.g. Vercel Cron) and an email provider (Resend, SendGrid, …) — nothing in this environment has
+  credentials for either, so it's left as a follow-up once the owner picks a provider.
+- **Sales inquiry tracking.** Listed as an optional Phase 4 item, but §3 of the spec explicitly calls CRM/inquiry
+  management a v1 non-goal, so it was skipped rather than guessed at.
