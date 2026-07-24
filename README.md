@@ -1,7 +1,8 @@
 # TEM Tracker
 
 Lesson Plan Production Tracker for Teacher Eva & Manuel Educational Services. See `SPEC.md`-equivalent context in the
-project brief for the full product spec — this README covers local setup for **Phase 1** (foundation & the board).
+project brief for the full product spec — this README covers local setup for **Phases 1–2** (foundation & the board;
+deadlines & quota).
 
 ## Stack
 
@@ -26,8 +27,9 @@ written by hand to match its conventions), Supabase (Postgres, Auth, Realtime), 
 ## Testing
 
 - `npm test` — Vitest business-logic suite (transition service, WIP limit, atomic-claim race, catalog-generator
-  idempotency). Requires `TEST_DATABASE_URL` in `.env`, pointed at a **disposable** Postgres database (must contain
-  "test" in its name — the suite truncates tables between runs). Never point this at your dev/prod database.
+  idempotency, quota-cycle math incl. carry-over/reversal, deadline buckets). Requires `TEST_DATABASE_URL` in `.env`,
+  pointed at a **disposable** Postgres database (must contain "test" in its name — the suite truncates tables between
+  runs). Never point this at your dev/prod database.
 - `npm run test:e2e` — Playwright concurrency test (`e2e/concurrency.spec.ts`). This drives two real authenticated
   browser sessions, so it needs a real Supabase project (not a placeholder) with `SUPABASE_SERVICE_ROLE_KEY` set and
   the database seeded (`npm run db:seed`) — it mints login links via the Supabase admin API instead of real email.
@@ -40,10 +42,12 @@ written by hand to match its conventions), Supabase (Postgres, Auth, Realtime), 
   (atomic claim guard, WIP limit, event log). `src/lib/work-items/actions.ts` wraps it as Server Actions.
 - `src/lib/catalog/generator.ts` — the catalog generator's preview/generate logic (idempotent via
   `ON CONFLICT DO NOTHING` against the natural-key unique constraint on `work_items`).
-- `src/app/(app)/` — authenticated screens: dashboard, board, matrix, my-work, review, admin/*.
+- `src/lib/quota/cycles.ts` — quota-cycle point awarding on approve, with close/carry-over and cascading
+  un-approve/release reversal (spec §6.4). `src/lib/quota/productivity.ts` backs the Productivity & Quota screen.
+- `src/app/(app)/` — authenticated screens: dashboard, board, matrix, my-work, review, productivity, admin/*.
 - `scripts/seed.ts` — the seed script described above.
 
-## What's not in Phase 1
+## What's not in Phase 1/2 yet
 
-Quota-cycle point awarding, payroll, hourly time logs, and notifications are Phase 2/3 per the spec's phased build
-plan — the schema and screen stubs are in place, but the business logic isn't wired up yet.
+Payroll, hourly time logs, and notifications are Phase 3/4 per the spec's phased build plan — the schema and screen
+stubs are in place, but the business logic isn't wired up yet.

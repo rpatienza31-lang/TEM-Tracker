@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { RequestRevisionDialog } from "@/components/work-items/request-revision-dialog";
-import { approveItemAction, uploadItemAction } from "@/lib/work-items/actions";
+import { approveItemAction, unapproveItemAction, uploadItemAction } from "@/lib/work-items/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import type { BoardItem } from "@/lib/work-items/queries";
 
@@ -123,6 +123,7 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
               <TableHead>Type</TableHead>
               <TableHead>Editor</TableHead>
               <TableHead>Approved</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -137,11 +138,20 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
                 <TableCell>{item.type}</TableCell>
                 <TableCell>{item.assigneeName}</TableCell>
                 <TableCell className="text-muted-foreground">{item.pointsValue} pts</TableCell>
+                <TableCell>
+                  <BulkActionButton
+                    itemIds={[item.id]}
+                    label="Unapprove"
+                    pendingLabel="…"
+                    action={unapproveItemAction}
+                    onDone={setBanner}
+                  />
+                </TableCell>
               </TableRow>
             ))}
             {readyToUpload.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Nothing approved and waiting to publish.
                 </TableCell>
               </TableRow>

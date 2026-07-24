@@ -10,6 +10,7 @@ function refresh() {
   revalidatePath("/matrix");
   revalidatePath("/my-work");
   revalidatePath("/review");
+  revalidatePath("/productivity");
   revalidatePath("/");
 }
 
@@ -58,6 +59,13 @@ export async function requestRevisionAction(itemId: string, note: string): Promi
 export async function approveItemAction(itemId: string): Promise<TransitionResult> {
   const actor = await requireUser();
   const result = await transitionWorkItem({ action: "approve", itemId, actor });
+  if (result.ok) refresh();
+  return result;
+}
+
+export async function unapproveItemAction(itemId: string): Promise<TransitionResult> {
+  const actor = await requireUser();
+  const result = await transitionWorkItem({ action: "unapprove", itemId, actor });
   if (result.ok) refresh();
   return result;
 }

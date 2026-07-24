@@ -1,0 +1,142 @@
+import { and, asc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
+
+import { db } from "@/db/client";
+import { quotaCycles, quotaCycleItems, users, workItems } from "@/db/schema";
+import { getQuotaSize } from "@/lib/settings";
+
+export type DateRange = { from?: string; to?: string };
+
+export type EditorProductivity = {
+  editorId: string;
+  fullName: string;
+  cycleNumber: number;
+  pointsTotal: number;
+  targetPoints: number;
+  completedCycles: number;
+  totalPoints: number;
+  dlpCount: number;
+  cotCount: number;
+  avgTurnaroundHours: number | null;
+  revisionRate: number | null;
+};
+
+function dateCondition(column: Parameters<typeof gte>[0], range?: DateRange) {
+  const clauses = [
+    range?.from ? gte(column, new Date(range.from)) : undefined,
+    range?.to ? lte(column, new Date(`${range.to}T23:59:59`)) : undefined,
+  ].filter((c): c is NonNullable<typeof c> => c !== undefined);
+  return clauses.length ? and(...clauses) : undefined;
+}
+
+export async function getProductivityStats(range?: DateRange): Promise<EditorProductivity[]> {
+  const quotaSize = await getQuotaSize();
+
+  const editors = await db
+    .select({ id: users.id, fullName: users.fullName })
+    .from(users)
+    .where(eq(users.role, "editor"))
+    .orderBy(asc(users.fullName));
+
+  const [openCycles, completedCounts, breakdown, turnaround, revision] = await Promise.all([
+    db.select().from(quotaCycles).where(eq(quotaCycles.isClosed, false)),
+    db
+      .select({ editorId: quotaCycles.editorId, count: sql<number>`count(*)::int` })
+      .from(quotaCycles)
+      .where(eq(quotaCycles.isClosed, true))
+      .groupBy(quotaCycles.editorId),
+    db
+      .select({
+        editorId: quotaCycles.editorId,
+        type: workItems.type,
+        points: sql<string>`sum(${quotaCycleItems.points})`,
+      })
+      .from(quotaCycleItems)
+      .innerJoin(quotaCycles, eq(quotaCycles.id, quotaCycleItems.cycleId))
+      .innerJoin(workItems, eq(workItems.id, quotaCycleItems.workItemId))
+      .where(dateCondition(quotaCycleItems.awardedAt, range))
+      .groupBy(quotaCycles.editorId, workItems.type),
+    db
+      .select({
+        editorId: workItems.assigneeId,
+        avgSeconds: sql<string>`avg(extract(epoch from (${workItems.approvedAt} - ${workItems.claimedAt})))`,
+      })
+      .from(workItems)
+      .where(
+        and(
+          isNotNull(workItems.approvedAt),
+          isNotNull(workItems.claimedAt),
+          isNotNull(workItems.assigneeId),
+          dateCondition(workItems.approvedAt, range),
+        ),
+      )
+      .groupBy(workItems.assigneeId),
+    db
+      .select({
+        editorId: workItems.assigneeId,
+        submitted: sql<number>`count(*) filter (where ${workItems.submittedAt} is not null)::int`,
+        revised: sql<number>`count(*) filter (where ${workItems.revisionCount} > 0)::int`,
+      })
+      .from(workItems)
+      .where(and(isNotNull(workItems.assigneeId), dateCondition(workItems.submittedAt, range)))
+      .groupBy(workItems.assigneeId),
+  ]);
+
+  const openCycleByEditor = new Map(openCycles.map((c) => [c.editorId, c]));
+  const completedByEditor = new Map(completedCounts.map((c) => [c.editorId, c.count]));
+  const turnaroundByEditor = new Map(turnaround.map((t) => [t.editorId, t.avgSeconds]));
+  const revisionByEditor = new Map(revision.map((r) => [r.editorId, r]));
+
+  const breakdownByEditor = new Map<string, { dlp: number; cot: number }>();
+  for (const row of breakdown) {
+    const entry = breakdownByEditor.get(row.editorId) ?? { dlp: 0, cot: 0 };
+    if (row.type === "DLP") entry.dlp += Number(row.points);
+    else entry.cot += Number(row.points);
+    breakdownByEditor.set(row.editorId, entry);
+  }
+
+  return editors.map((editor): EditorProductivity => {
+    const open = openCycleByEditor.get(editor.id);
+    const bd = breakdownByEditor.get(editor.id) ?? { dlp: 0, cot: 0 };
+    const rev = revisionByEditor.get(editor.id);
+    const avgSeconds = turnaroundByEditor.get(editor.id);
+
+    return {
+      editorId: editor.id,
+      fullName: editor.fullName,
+      cycleNumber: open?.cycleNumber ?? 1,
+      pointsTotal: Number(open?.pointsTotal ?? 0),
+      targetPoints: Number(open?.targetPoints ?? quotaSize),
+      completedCycles: completedByEditor.get(editor.id) ?? 0,
+      totalPoints: bd.dlp + bd.cot,
+      dlpCount: bd.dlp,
+      cotCount: bd.cot,
+      avgTurnaroundHours: avgSeconds ? Number(avgSeconds) / 3600 : null,
+      revisionRate: rev && rev.submitted > 0 ? rev.revised / rev.submitted : null,
+    };
+  });
+}
+
+export type ProductivitySort = "name" | "cycle" | "completed" | "points" | "turnaround" | "revision";
+
+export function sortProductivity(rows: EditorProductivity[], sort: ProductivitySort, dir: "asc" | "desc") {
+  const factor = dir === "asc" ? 1 : -1;
+  const sorted = [...rows].sort((a, b) => {
+    switch (sort) {
+      case "name":
+        return factor * a.fullName.localeCompare(b.fullName);
+      case "cycle":
+        return factor * (a.pointsTotal / a.targetPoints - b.pointsTotal / b.targetPoints);
+      case "completed":
+        return factor * (a.completedCycles - b.completedCycles);
+      case "points":
+        return factor * (a.totalPoints - b.totalPoints);
+      case "turnaround":
+        return factor * ((a.avgTurnaroundHours ?? -1) - (b.avgTurnaroundHours ?? -1));
+      case "revision":
+        return factor * ((a.revisionRate ?? -1) - (b.revisionRate ?? -1));
+      default:
+        return 0;
+    }
+  });
+  return sorted;
+}

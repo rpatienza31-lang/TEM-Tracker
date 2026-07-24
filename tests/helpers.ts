@@ -56,6 +56,7 @@ export async function makeWorkItem(params: {
   dueDate?: string;
   pointsValue?: string;
 }) {
+  const type = params.type ?? "DLP";
   const [item] = await db
     .insert(workItems)
     .values({
@@ -63,9 +64,9 @@ export async function makeWorkItem(params: {
       subjectId: params.subjectId,
       grade: params.grade ?? 4,
       weekNumber: params.weekNumber ?? 1,
-      type: params.type ?? "DLP",
+      type,
       dueDate: params.dueDate ?? "2099-01-01",
-      pointsValue: params.pointsValue ?? "1",
+      pointsValue: params.pointsValue ?? (type === "COT" ? "0.5" : "1"),
     })
     .returning();
   return item;

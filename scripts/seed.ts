@@ -7,6 +7,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "../src/db/schema";
 import { getPointsTable } from "../src/lib/settings";
 import { generateCatalog } from "../src/lib/catalog/generator";
+import { awardPointsForApproval } from "../src/lib/quota/cycles";
 
 const { users, terms, subjects, termWeeks, workItems, workItemEvents, settings } = schema;
 
@@ -161,8 +162,11 @@ async function main() {
     return editor;
   }
 
+  // Sequential (not concurrent): quota-cycle math reads-then-writes each
+  // editor's current open cycle, so awarding points for the same editor from
+  // two overlapping transactions would race.
   let processed = 0;
-  await runWithConcurrency(items, 25, async (item, i) => {
+  await runWithConcurrency(items, 1, async (item, i) => {
     const bucket = i % 10;
     processed += 1;
     if (processed % 100 === 0) console.log(`  ...${processed}/${items.length}`);
@@ -223,6 +227,7 @@ async function main() {
           version: 3,
         })
         .where(eq(workItems.id, item.id));
+      await db.transaction((tx) => awardPointsForApproval(tx, editor.id, item.id, pointsTable[item.type]));
       await db.insert(workItemEvents).values([
         { workItemId: item.id, actorId: editor.id, fromStatus: "available", toStatus: "claimed" },
         { workItemId: item.id, actorId: editor.id, fromStatus: "claimed", toStatus: "in_review" },
@@ -245,6 +250,7 @@ async function main() {
           version: 4,
         })
         .where(eq(workItems.id, item.id));
+      await db.transaction((tx) => awardPointsForApproval(tx, editor.id, item.id, pointsTable[item.type]));
       await db.insert(workItemEvents).values([
         { workItemId: item.id, actorId: editor.id, fromStatus: "available", toStatus: "claimed" },
         { workItemId: item.id, actorId: editor.id, fromStatus: "claimed", toStatus: "in_review" },

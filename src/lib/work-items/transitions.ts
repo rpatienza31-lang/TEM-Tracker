@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { workItems, workItemEvents, users } from "@/db/schema";
 import type { AppUser } from "@/lib/auth";
 import { getWipLimit } from "@/lib/settings";
+import { awardPointsForApproval, reverseApprovalPoints } from "@/lib/quota/cycles";
 
 type WorkItem = typeof workItems.$inferSelect;
 
@@ -41,6 +42,7 @@ type RequestRevisionInput = {
   note: string;
 };
 type ApproveInput = { action: "approve"; itemId: string; actor: AppUser };
+type UnapproveInput = { action: "unapprove"; itemId: string; actor: AppUser };
 type UploadInput = { action: "upload"; itemId: string; actor: AppUser };
 type ReleaseInput = { action: "release"; itemId: string; actor: AppUser; note?: string };
 type CancelInput = { action: "cancel"; itemId: string; actor: AppUser; note?: string };
@@ -51,6 +53,7 @@ export type TransitionInput =
   | SubmitInput
   | RequestRevisionInput
   | ApproveInput
+  | UnapproveInput
   | UploadInput
   | ReleaseInput
   | CancelInput;
@@ -233,14 +236,16 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
           if (current.status !== "in_review") {
             return invalid(`Cannot approve an item in status "${current.status}".`);
           }
+          if (!current.assigneeId) return invalid("Cannot approve an item with no assignee.");
 
-          // Quota-cycle point awarding (spec §6.4) lands in Phase 2. This
-          // transition only records the status change and approval time.
+          // Points are awarded here, not at upload (spec §6.4 DECISION): an
+          // editor's pay shouldn't depend on how fast an admin publishes.
           const [updated] = await tx
             .update(workItems)
             .set({
               status: "approved",
               approvedAt: new Date(),
+              pointsAwarded: current.pointsValue,
               version: sql`${workItems.version} + 1`,
               updatedAt: new Date(),
             })
@@ -248,7 +253,35 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
             .returning();
 
           if (!updated) return await conflictMessage(tx, input.itemId);
+          await awardPointsForApproval(tx, current.assigneeId, input.itemId, Number(current.pointsValue));
           await logEvent(tx, input.itemId, input.actor.id, "in_review", "approved");
+          return { ok: true, item: updated };
+        }
+
+        case "unapprove": {
+          if (!isAdmin(input.actor)) return forbidden("Only admins can un-approve a work item.");
+
+          const current = await tx.query.workItems.findFirst({ where: eq(workItems.id, input.itemId) });
+          if (!current) return notFound();
+          if (current.status !== "approved") {
+            return invalid(`Cannot un-approve an item in status "${current.status}".`);
+          }
+
+          const [updated] = await tx
+            .update(workItems)
+            .set({
+              status: "in_review",
+              approvedAt: null,
+              pointsAwarded: null,
+              version: sql`${workItems.version} + 1`,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(workItems.id, input.itemId), eq(workItems.version, current.version)))
+            .returning();
+
+          if (!updated) return await conflictMessage(tx, input.itemId);
+          await reverseApprovalPoints(tx, input.itemId);
+          await logEvent(tx, input.itemId, input.actor.id, "approved", "in_review", "Approval reversed.");
           return { ok: true, item: updated };
         }
 
@@ -294,6 +327,8 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
               claimedAt: null,
               submittedAt: null,
               approvedAt: null,
+              uploadedAt: null,
+              pointsAwarded: null,
               version: sql`${workItems.version} + 1`,
               updatedAt: new Date(),
             })
@@ -301,6 +336,9 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
             .returning();
 
           if (!updated) return await conflictMessage(tx, input.itemId);
+          if (current.status === "approved" || current.status === "uploaded") {
+            await reverseApprovalPoints(tx, input.itemId);
+          }
           await logEvent(tx, input.itemId, input.actor.id, current.status, "available", input.note);
           return { ok: true, item: updated };
         }

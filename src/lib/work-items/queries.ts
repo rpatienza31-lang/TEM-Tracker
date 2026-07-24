@@ -190,5 +190,5 @@ export function dueSoonCondition() {
   return sql`${workItems.dueDate} >= current_date and ${workItems.dueDate} <= current_date + interval '3 days' and ${workItems.status} not in ('uploaded','cancelled')`;
 }
 export function atRiskCondition() {
-  return sql`${workItems.status} = 'available' and ${workItems.dueDate} <= current_date + interval '5 days'`;
+  return sql`${workItems.status} = 'available' and ${workItems.dueDate} >= current_date and ${workItems.dueDate} <= current_date + interval '5 days'`;
 }

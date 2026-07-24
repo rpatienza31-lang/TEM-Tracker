@@ -5,7 +5,9 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms } from "@/db/schema";
 import { getDashboardCounts, getMyWorkItems } from "@/lib/work-items/queries";
+import { getProductivityStats } from "@/lib/quota/productivity";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProgressBar } from "@/components/progress-bar";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -13,11 +15,13 @@ export default async function DashboardPage() {
   const activeTerm = termRows.find((t) => t.isActive);
 
   if (user.role === "editor") {
-    const [active, submitted, revisions] = await Promise.all([
+    const [active, submitted, revisions, stats] = await Promise.all([
       getMyWorkItems(user.id, ["claimed"]),
       getMyWorkItems(user.id, ["in_review"]),
       getMyWorkItems(user.id, ["revision"]),
+      getProductivityStats(),
     ]);
+    const mine = stats.find((s) => s.editorId === user.id);
     return (
       <div className="flex flex-col gap-6">
         <h1 className="text-xl font-semibold">Welcome, {user.fullName.split(" ")[0]}</h1>
@@ -26,14 +30,25 @@ export default async function DashboardPage() {
           <StatCard label="Awaiting review" value={submitted.length} href="/my-work" />
           <StatCard label="Needs revision" value={revisions.length} href="/my-work" tone={revisions.length > 0 ? "warn" : undefined} />
         </div>
-        <p className="text-sm text-muted-foreground">
-          Quota-cycle progress (e.g. 14.5 / 21 · cycle #3) arrives in Phase 2.
-        </p>
+        {mine && (
+          <Card className="max-w-sm">
+            <CardHeader className="pb-2">
+              <CardDescription>Current cycle</CardDescription>
+              <CardTitle>
+                {mine.pointsTotal.toFixed(1)} / {mine.targetPoints.toFixed(0)} · cycle #{mine.cycleNumber}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProgressBar value={mine.pointsTotal} max={mine.targetPoints} />
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
 
-  const counts = await getDashboardCounts(activeTerm?.id);
+  const [counts, stats] = await Promise.all([getDashboardCounts(activeTerm?.id), getProductivityStats()]);
+  const leaderboard = [...stats].sort((a, b) => b.pointsTotal - a.pointsTotal).slice(0, 8);
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,7 +68,23 @@ export default async function DashboardPage() {
         <StatCard label="Approved" value={counts?.approved ?? 0} href="/board?status=approved" />
         <StatCard label="Uploaded" value={counts?.uploaded ?? 0} href="/board?status=uploaded" />
       </div>
-      <p className="text-sm text-muted-foreground">Editor leaderboard and quota-cycle progress arrive in Phase 2.</p>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Editor leaderboard — points this cycle</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {leaderboard.map((row) => (
+            <div key={row.editorId} className="flex items-center gap-3">
+              <span className="w-32 shrink-0 truncate text-sm">{row.fullName}</span>
+              <ProgressBar value={row.pointsTotal} max={row.targetPoints} className="flex-1" />
+              <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">
+                {row.pointsTotal.toFixed(1)}/{row.targetPoints.toFixed(0)}
+              </span>
+            </div>
+          ))}
+          {leaderboard.length === 0 && <p className="text-sm text-muted-foreground">No editors yet.</p>}
+        </CardContent>
+      </Card>
     </div>
   );
 }
