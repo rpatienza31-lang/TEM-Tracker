@@ -8,13 +8,19 @@ import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { NotificationBell } from "@/components/notification-bell";
+import { useNotificationsRealtime } from "@/hooks/use-notifications-realtime";
 import { signOut } from "@/app/logout/actions";
+import type { LiveAlert } from "@/lib/notifications/queries";
 
 type NavUser = {
+  id: string;
   fullName: string;
   role: "owner" | "admin" | "sales" | "editor";
   payType: "hourly" | "quota";
 };
+
+type NotificationItem = { id: string; message: string; readAt: Date | null; createdAt: Date };
 
 const NAV = [
   { href: "/", label: "Dashboard", roles: ["owner", "admin", "sales", "editor"] },
@@ -37,9 +43,22 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-export function AppShell({ user, children }: { user: NavUser; children: React.ReactNode }) {
+export function AppShell({
+  user,
+  notifications,
+  unreadCount,
+  liveAlerts,
+  children,
+}: {
+  user: NavUser;
+  notifications: NotificationItem[];
+  unreadCount: number;
+  liveAlerts: LiveAlert[];
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  useNotificationsRealtime(user.id);
   const items = NAV.filter(
     (item) =>
       (item.roles as readonly string[]).includes(user.role) &&
@@ -50,9 +69,12 @@ export function AppShell({ user, children }: { user: NavUser; children: React.Re
     <div className="flex min-h-screen flex-col md:flex-row">
       <div className="flex items-center justify-between border-b border-border p-3 md:hidden">
         <span className="font-semibold">TEM Tracker</span>
-        <Button variant="ghost" size="icon" onClick={() => setOpen((v) => !v)}>
-          {open ? <X /> : <Menu />}
-        </Button>
+        <div className="flex items-center gap-1">
+          <NotificationBell items={notifications} unreadCount={unreadCount} liveAlerts={liveAlerts} />
+          <Button variant="ghost" size="icon" onClick={() => setOpen((v) => !v)}>
+            {open ? <X /> : <Menu />}
+          </Button>
+        </div>
       </div>
       <aside
         className={cn(
@@ -91,7 +113,12 @@ export function AppShell({ user, children }: { user: NavUser; children: React.Re
           </form>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-hidden p-4 md:p-6">{children}</main>
+      <main className="flex-1 overflow-x-hidden">
+        <div className="hidden items-center justify-end border-b border-border p-2 md:flex">
+          <NotificationBell items={notifications} unreadCount={unreadCount} liveAlerts={liveAlerts} />
+        </div>
+        <div className="p-4 md:p-6">{children}</div>
+      </main>
     </div>
   );
 }

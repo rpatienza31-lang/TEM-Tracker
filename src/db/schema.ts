@@ -28,6 +28,7 @@ export const itemStatus = pgEnum("item_status", [
   "uploaded",
   "cancelled",
 ]);
+export const notificationType = pgEnum("notification_type", ["revision_requested", "approved", "unapproved"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -194,3 +195,19 @@ export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),
 });
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: notificationType("type").notNull(),
+    message: text("message").notNull(),
+    workItemId: uuid("work_item_id").references(() => workItems.id, { onDelete: "cascade" }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("notifications_user_unread_idx").on(t.userId, t.readAt)],
+);

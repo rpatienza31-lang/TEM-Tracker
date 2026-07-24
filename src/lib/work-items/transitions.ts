@@ -5,6 +5,12 @@ import { workItems, workItemEvents, users } from "@/db/schema";
 import type { AppUser } from "@/lib/auth";
 import { getWipLimit } from "@/lib/settings";
 import { awardPointsForApproval, reverseApprovalPoints } from "@/lib/quota/cycles";
+import { createNotification } from "@/lib/notifications/create";
+import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
+
+function itemLabel(item: { grade: number; weekNumber: number; type: WorkItem["type"] }) {
+  return `Grade ${item.grade} Week ${item.weekNumber} ${DELIVERABLE_TYPE_LABELS[item.type]}`;
+}
 
 type WorkItem = typeof workItems.$inferSelect;
 
@@ -219,6 +225,15 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
             .returning();
 
           if (!updated) return await conflictMessage(tx, input.itemId);
+          if (current.assigneeId) {
+            await createNotification(
+              tx,
+              current.assigneeId,
+              "revision_requested",
+              `Revision requested on your ${itemLabel(current)}: ${input.note}`,
+              input.itemId,
+            );
+          }
           await logEvent(tx, input.itemId, input.actor.id, "in_review", "revision", input.note);
           return { ok: true, item: updated };
         }
@@ -249,6 +264,13 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
 
           if (!updated) return await conflictMessage(tx, input.itemId);
           await awardPointsForApproval(tx, current.assigneeId, input.itemId, Number(current.pointsValue));
+          await createNotification(
+            tx,
+            current.assigneeId,
+            "approved",
+            `Your ${itemLabel(current)} was approved (+${current.pointsValue} pts).`,
+            input.itemId,
+          );
           await logEvent(tx, input.itemId, input.actor.id, "in_review", "approved");
           return { ok: true, item: updated };
         }
@@ -276,6 +298,15 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
 
           if (!updated) return await conflictMessage(tx, input.itemId);
           await reverseApprovalPoints(tx, input.itemId);
+          if (current.assigneeId) {
+            await createNotification(
+              tx,
+              current.assigneeId,
+              "unapproved",
+              `Approval reversed on your ${itemLabel(current)}. It's back in review.`,
+              input.itemId,
+            );
+          }
           await logEvent(tx, input.itemId, input.actor.id, "approved", "in_review", "Approval reversed.");
           return { ok: true, item: updated };
         }

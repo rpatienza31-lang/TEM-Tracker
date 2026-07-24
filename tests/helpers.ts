@@ -7,7 +7,7 @@ import { DELIVERABLE_POINTS, type DeliverableType } from "@/lib/constants";
 
 export async function resetDb() {
   await db.execute(sql`truncate table
-    quota_cycle_items, quota_cycles, time_logs, work_item_events, work_items,
+    notifications, quota_cycle_items, quota_cycles, time_logs, work_item_events, work_items,
     term_weeks, term_offerings, terms, subjects, users, settings
     restart identity cascade`);
 }

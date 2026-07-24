@@ -172,3 +172,17 @@ create policy time_logs_all_admin on time_logs
 create policy settings_all_owner on settings
   for all using (app_role() = 'owner')
   with check (app_role() = 'owner');
+
+-- ---------------------------------------------------------------------------
+-- notifications: a user reads and marks only their own as read. Rows are
+-- created server-side (revision requested / approved / unapproved), so
+-- there's no client insert policy; owner/admin get full access for support.
+-- ---------------------------------------------------------------------------
+create policy notifications_select_self on notifications
+  for select using (user_id = app_user_id());
+create policy notifications_update_self on notifications
+  for update using (user_id = app_user_id())
+  with check (user_id = app_user_id());
+create policy notifications_all_admin on notifications
+  for all using (app_role() in ('owner','admin'))
+  with check (app_role() in ('owner','admin'));

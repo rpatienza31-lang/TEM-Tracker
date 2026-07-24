@@ -7,3 +7,4 @@ insert into settings (key, value) values
 on conflict (key) do nothing;
 
 alter publication supabase_realtime add table work_items;
+alter publication supabase_realtime add table notifications;
