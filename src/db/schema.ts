@@ -1,0 +1,197 @@
+import { sql } from "drizzle-orm";
+import {
+  pgEnum,
+  pgTable,
+  uuid,
+  text,
+  integer,
+  numeric,
+  boolean,
+  date,
+  timestamp,
+  jsonb,
+  unique,
+  index,
+  primaryKey,
+  check,
+} from "drizzle-orm/pg-core";
+
+export const userRole = pgEnum("user_role", ["owner", "admin", "sales", "editor"]);
+export const payType = pgEnum("pay_type", ["hourly", "quota"]);
+export const deliverableType = pgEnum("deliverable_type", ["DLP", "COT"]);
+export const itemStatus = pgEnum("item_status", [
+  "available",
+  "claimed",
+  "in_review",
+  "revision",
+  "approved",
+  "uploaded",
+  "cancelled",
+]);
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  authUserId: uuid("auth_user_id").unique(),
+  fullName: text("full_name").notNull(),
+  email: text("email").notNull().unique(),
+  role: userRole("role").notNull(),
+  payType: payType("pay_type").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const terms = pgTable("terms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  schoolYear: text("school_year").notNull(),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  isActive: boolean("is_active").notNull().default(false),
+});
+
+export const subjects = pgTable("subjects", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  shortCode: text("short_code").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+export const termOfferings = pgTable(
+  "term_offerings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    termId: uuid("term_id")
+      .notNull()
+      .references(() => terms.id, { onDelete: "cascade" }),
+    grade: integer("grade").notNull(),
+    subjectId: uuid("subject_id")
+      .notNull()
+      .references(() => subjects.id),
+  },
+  (t) => [
+    unique("term_offerings_term_grade_subject_key").on(t.termId, t.grade, t.subjectId),
+    check("term_offerings_grade_check", sql`${t.grade} between 1 and 12`),
+  ],
+);
+
+export const termWeeks = pgTable(
+  "term_weeks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    termId: uuid("term_id")
+      .notNull()
+      .references(() => terms.id, { onDelete: "cascade" }),
+    weekNumber: integer("week_number").notNull(),
+    uploadDeadline: date("upload_deadline").notNull(),
+  },
+  (t) => [
+    unique("term_weeks_term_week_key").on(t.termId, t.weekNumber),
+    check("term_weeks_week_number_check", sql`${t.weekNumber} between 1 and 10`),
+  ],
+);
+
+export const workItems = pgTable(
+  "work_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    termId: uuid("term_id")
+      .notNull()
+      .references(() => terms.id, { onDelete: "cascade" }),
+    grade: integer("grade").notNull(),
+    subjectId: uuid("subject_id")
+      .notNull()
+      .references(() => subjects.id),
+    weekNumber: integer("week_number").notNull(),
+    type: deliverableType("type").notNull(),
+    status: itemStatus("status").notNull().default("available"),
+    assigneeId: uuid("assignee_id").references(() => users.id),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }),
+    dueDate: date("due_date").notNull(),
+    pointsValue: numeric("points_value", { precision: 4, scale: 2 }).notNull(),
+    pointsAwarded: numeric("points_awarded", { precision: 4, scale: 2 }),
+    dlpUrl: text("dlp_url"),
+    pptUrl: text("ppt_url"),
+    notes: text("notes"),
+    revisionCount: integer("revision_count").notNull().default(0),
+    version: integer("version").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("work_items_natural_key").on(t.termId, t.grade, t.subjectId, t.weekNumber, t.type),
+    index("work_items_term_status_idx").on(t.termId, t.status),
+    index("work_items_assignee_status_idx").on(t.assigneeId, t.status),
+    index("work_items_term_week_grade_idx").on(t.termId, t.weekNumber, t.grade),
+    check("work_items_week_number_check", sql`${t.weekNumber} between 1 and 10`),
+  ],
+);
+
+export const workItemEvents = pgTable("work_item_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workItemId: uuid("work_item_id")
+    .notNull()
+    .references(() => workItems.id, { onDelete: "cascade" }),
+  actorId: uuid("actor_id").references(() => users.id),
+  fromStatus: itemStatus("from_status"),
+  toStatus: itemStatus("to_status").notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const quotaCycles = pgTable(
+  "quota_cycles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => users.id),
+    cycleNumber: integer("cycle_number").notNull(),
+    targetPoints: numeric("target_points", { precision: 5, scale: 2 }).notNull().default("21"),
+    pointsTotal: numeric("points_total", { precision: 5, scale: 2 }).notNull().default("0"),
+    carriedIn: numeric("carried_in", { precision: 5, scale: 2 }).notNull().default("0"),
+    openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    isClosed: boolean("is_closed").notNull().default(false),
+  },
+  (t) => [unique("quota_cycles_editor_cycle_key").on(t.editorId, t.cycleNumber)],
+);
+
+export const quotaCycleItems = pgTable(
+  "quota_cycle_items",
+  {
+    cycleId: uuid("cycle_id")
+      .notNull()
+      .references(() => quotaCycles.id, { onDelete: "cascade" }),
+    workItemId: uuid("work_item_id")
+      .notNull()
+      .references(() => workItems.id, { onDelete: "cascade" }),
+    points: numeric("points", { precision: 4, scale: 2 }).notNull(),
+    awardedAt: timestamp("awarded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.workItemId] })],
+);
+
+export const timeLogs = pgTable(
+  "time_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    workDate: date("work_date").notNull(),
+    hours: numeric("hours", { precision: 5, scale: 2 }).notNull(),
+    note: text("note"),
+    approvedBy: uuid("approved_by").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("time_logs_hours_check", sql`${t.hours} > 0 and ${t.hours} <= 24`)],
+);
+
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+});
