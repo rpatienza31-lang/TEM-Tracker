@@ -1,7 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { DEV_PREVIEW_ENABLED } from "@/lib/dev-preview";
+
 export async function updateSession(request: NextRequest) {
+  // Dev preview mode impersonates a seeded user, so there's no Supabase
+  // session to refresh or gate on (see src/lib/dev-preview.ts).
+  if (DEV_PREVIEW_ENABLED) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
