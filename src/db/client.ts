@@ -13,12 +13,12 @@ function createClient() {
     throw new Error("DATABASE_URL is not set");
   }
   // Serverless (Vercel) runs many short-lived instances against Supabase's
-  // connection pooler. Cap each instance to a single connection and let idle
-  // ones close quickly so the pool is never exhausted; `prepare: false` is
-  // required for the transaction-mode pooler (port 6543).
+  // connection pooler. Keep a small per-instance pool so dashboard queries
+  // (fired concurrently via Promise.all) still run in parallel, while idle
+  // connections close quickly so the pool is never exhausted under real load.
   return postgres(url, {
     prepare: false,
-    max: 1,
+    max: 3,
     idle_timeout: 20,
     connect_timeout: 10,
   });
