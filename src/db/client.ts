@@ -12,7 +12,16 @@ function createClient() {
   if (!url) {
     throw new Error("DATABASE_URL is not set");
   }
-  return postgres(url, { prepare: false });
+  // Serverless (Vercel) runs many short-lived instances against Supabase's
+  // connection pooler. Cap each instance to a single connection and let idle
+  // ones close quickly so the pool is never exhausted; `prepare: false` is
+  // required for the transaction-mode pooler (port 6543).
+  return postgres(url, {
+    prepare: false,
+    max: 1,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
 }
 
 const client = global.__temTrackerSql ?? createClient();
