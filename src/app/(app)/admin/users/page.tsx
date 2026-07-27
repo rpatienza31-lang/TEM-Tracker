@@ -28,6 +28,7 @@ export default async function UsersAdminPage() {
             <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Pay type</TableHead>
+            <TableHead>Password</TableHead>
             <TableHead />
           </TableRow>
         </TableHeader>
@@ -37,7 +38,7 @@ export default async function UsersAdminPage() {
           ))}
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground">
+              <TableCell colSpan={6} className="text-center text-muted-foreground">
                 No users yet.
               </TableCell>
             </TableRow>

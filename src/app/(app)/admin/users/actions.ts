@@ -17,9 +17,13 @@ export async function inviteUserAction(_prev: InviteUserState, formData: FormDat
   const fullName = String(formData.get("fullName") ?? "").trim();
   const role = String(formData.get("role") ?? "editor") as (typeof users.$inferSelect)["role"];
   const payType = String(formData.get("payType") ?? "quota") as (typeof users.$inferSelect)["payType"];
+  const password = String(formData.get("password") ?? "");
 
   if (!email || !fullName) {
     return { status: "error", message: "Name and email are required." };
+  }
+  if (password && password.length < 6) {
+    return { status: "error", message: "Password must be at least 6 characters." };
   }
 
   try {
@@ -27,10 +31,14 @@ export async function inviteUserAction(_prev: InviteUserState, formData: FormDat
 
     // Create the auth account directly instead of emailing an invite. Invite
     // emails go through the SMTP provider, which fails opaquely when the mail
-    // service is rate-limited or bounces; creating the user is reliable, and
-    // the owner then shares a sign-in link with `npm run login-link`.
+    // service is rate-limited or bounces; creating the account is reliable.
+    // A password lets staff sign in immediately with no link to expire.
     let authUserId: string;
-    const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      ...(password ? { password } : {}),
+    });
 
     if (error) {
       // The email may already exist as an auth user (from an earlier attempt
@@ -63,7 +71,46 @@ export async function inviteUserAction(_prev: InviteUserState, formData: FormDat
   }
 
   revalidatePath("/admin/users");
-  return { status: "ok", message: `Added ${email}. Send them a sign-in link: npm run login-link -- ${email}` };
+  return {
+    status: "ok",
+    message: password
+      ? `Added ${email}. They can sign in now with the password you set.`
+      : `Added ${email}. Set a password for them below so they can sign in.`,
+  };
+}
+
+export type SetPasswordState = { status: "idle" | "ok" | "error"; message?: string };
+
+/**
+ * Sets or resets a staff member's login password. Owner or admin only — lets
+ * staff sign in with email + password instead of a magic link, which avoids
+ * link expiry and single-use consumption by email/chat link previews.
+ */
+export async function setUserPasswordAction(_prev: SetPasswordState, formData: FormData): Promise<SetPasswordState> {
+  await requireRole("owner", "admin");
+
+  const userId = String(formData.get("userId") ?? "");
+  const password = String(formData.get("password") ?? "");
+
+  if (!userId) {
+    return { status: "error", message: "Missing staff id." };
+  }
+  if (password.length < 6) {
+    return { status: "error", message: "Password must be at least 6 characters." };
+  }
+
+  const [target] = await db.select({ authUserId: users.authUserId }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!target?.authUserId) {
+    return { status: "error", message: "This user has no login account yet." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(target.authUserId, { password });
+  if (error) {
+    return { status: "error", message: error.message || "Could not set the password." };
+  }
+
+  return { status: "ok", message: "Password set." };
 }
 
 /** Looks up an existing Supabase auth user id by email (small teams fit one page). */

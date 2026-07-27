@@ -6,6 +6,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { deleteUserAction, updateUserAction } from "./actions";
+import { SetPasswordCell } from "./set-password-cell";
 
 type Row = {
   id: string;
@@ -74,6 +75,9 @@ export function UserRow({ user, canDelete = false, isSelf = false }: { user: Row
             <SelectItem value="hourly">Hourly</SelectItem>
           </SelectContent>
         </Select>
+      </TableCell>
+      <TableCell>
+        <SetPasswordCell userId={user.id} />
       </TableCell>
       <TableCell>
         <div className="flex flex-col items-start gap-1">

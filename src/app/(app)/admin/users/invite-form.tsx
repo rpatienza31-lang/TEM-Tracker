@@ -26,6 +26,10 @@ export function InviteForm() {
         <Input id="email" name="email" type="email" required className="w-56" />
       </div>
       <div className="flex flex-col gap-1">
+        <Label htmlFor="password">Password</Label>
+        <Input id="password" name="password" type="text" minLength={6} placeholder="min 6 characters" className="w-44" />
+      </div>
+      <div className="flex flex-col gap-1">
         <Label>Role</Label>
         <Select value={role} onValueChange={setRole}>
           <SelectTrigger className="w-32">
