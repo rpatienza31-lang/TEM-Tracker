@@ -1,5 +1,11 @@
-import "dotenv/config";
+import { config } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+
+// Load .env first, then let .env.local override it (matching Next.js's own
+// precedence) so the generated link uses the production NEXT_PUBLIC_SITE_URL
+// rather than falling back to localhost.
+config({ path: ".env" });
+config({ path: ".env.local", override: true });
 
 /**
  * Prints a ready-to-click login link for a given email WITHOUT sending an
