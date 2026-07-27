@@ -24,26 +24,56 @@ export async function inviteUserAction(_prev: InviteUserState, formData: FormDat
 
   try {
     const admin = createAdminClient();
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/auth/confirm`,
-    });
+
+    // Create the auth account directly instead of emailing an invite. Invite
+    // emails go through the SMTP provider, which fails opaquely when the mail
+    // service is rate-limited or bounces; creating the user is reliable, and
+    // the owner then shares a sign-in link with `npm run login-link`.
+    let authUserId: string;
+    const { data, error } = await admin.auth.admin.createUser({ email, email_confirm: true });
+
     if (error) {
-      return { status: "error", message: error.message };
+      // The email may already exist as an auth user (from an earlier attempt
+      // or a login try). Reuse that account rather than failing.
+      if (/registered|already|exists/i.test(error.message)) {
+        const existingId = await findAuthUserIdByEmail(admin, email);
+        if (!existingId) {
+          return { status: "error", message: "That email is already in use but its account could not be found." };
+        }
+        authUserId = existingId;
+      } else {
+        return { status: "error", message: error.message?.trim() || "Could not create the account. Please try again." };
+      }
+    } else {
+      authUserId = data.user.id;
     }
 
-    await db.insert(users).values({
-      authUserId: data.user.id,
-      email,
-      fullName,
-      role,
-      payType,
-    });
+    const [existingAppUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.authUserId, authUserId))
+      .limit(1);
+    if (existingAppUser) {
+      return { status: "error", message: "This person is already added as a user." };
+    }
+
+    await db.insert(users).values({ authUserId, email, fullName, role, payType });
   } catch (err) {
-    return { status: "error", message: err instanceof Error ? err.message : "Failed to invite user." };
+    return { status: "error", message: err instanceof Error ? err.message : "Failed to add user." };
   }
 
   revalidatePath("/admin/users");
-  return { status: "ok", message: `Invited ${email}.` };
+  return { status: "ok", message: `Added ${email}. Send them a sign-in link: npm run login-link -- ${email}` };
+}
+
+/** Looks up an existing Supabase auth user id by email (small teams fit one page). */
+async function findAuthUserIdByEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+): Promise<string | null> {
+  const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const match = data?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+  return match?.id ?? null;
 }
 
 export async function updateUserAction(
