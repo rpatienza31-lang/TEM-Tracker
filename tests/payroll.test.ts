@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { eq } from "drizzle-orm";
+
 import { db } from "@/db/client";
-import { timeLogs } from "@/db/schema";
+import { timeLogs, users } from "@/db/schema";
 import { transitionWorkItem } from "@/lib/work-items/transitions";
 import { getProductivityStats } from "@/lib/quota/productivity";
-import { getPayrollReport } from "@/lib/payroll/report";
+import { getPayrollReport, payrollReportToCsv } from "@/lib/payroll/report";
 import { makeSubject, makeTerm, makeUser, makeWorkItem, resetDb, seedSettings } from "./helpers";
 
 const RANGE = { from: "2020-01-01", to: "2020-01-31" };
@@ -64,5 +66,39 @@ describe("payroll report", () => {
 
     expect(row).toBeDefined();
     expect(row!.approvedHours).toBe(8);
+  });
+
+  it("computes hourly salary from the staff rate and totals it", async () => {
+    const staff = await makeUser("admin", "Hourly Rate");
+    await db.update(users).set({ rate: "50.00" }).where(eq(users.id, staff.id));
+
+    await db.insert(timeLogs).values([
+      { userId: staff.id, workDate: "2020-01-10", hours: "8", approvedBy: staff.id, approvedAt: new Date() },
+    ]);
+
+    const report = await getPayrollReport(RANGE.from, RANGE.to);
+    const row = report.hourlyRows.find((r) => r.userId === staff.id);
+
+    expect(row!.rate).toBe(50);
+    expect(row!.salary).toBe(400); // 8 hours * ₱50
+    expect(report.totalSalary).toBe(400);
+  });
+
+  it("omits salary and rate columns from the CSV unless salary is included", async () => {
+    const staff = await makeUser("admin", "Csv Staff");
+    await db.update(users).set({ rate: "50.00" }).where(eq(users.id, staff.id));
+    await db.insert(timeLogs).values([
+      { userId: staff.id, workDate: "2020-01-10", hours: "8", approvedBy: staff.id, approvedAt: new Date() },
+    ]);
+
+    const report = await getPayrollReport(RANGE.from, RANGE.to);
+
+    const withoutSalary = payrollReportToCsv(report);
+    expect(withoutSalary).not.toContain("Salary");
+    expect(withoutSalary).not.toContain("Total salary");
+
+    const withSalary = payrollReportToCsv(report, true);
+    expect(withSalary).toContain("Rate per hour,Salary");
+    expect(withSalary).toContain("Total salary,400.00");
   });
 });

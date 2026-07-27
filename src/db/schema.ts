@@ -37,6 +37,9 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   role: userRole("role").notNull(),
   payType: payType("pay_type").notNull(),
+  // Pay rate in PHP. For hourly staff it is pesos per approved hour; for quota
+  // staff it is pesos per completed 21-point cycle. Visible to the owner only.
+  rate: numeric("rate", { precision: 10, scale: 2 }).notNull().default("0"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

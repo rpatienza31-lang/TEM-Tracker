@@ -4,9 +4,13 @@ import { getPayrollReport } from "@/lib/payroll/report";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PendingApprovals } from "./pending-approvals";
+import { RateCell } from "./rate-cell";
 
 type SearchParams = { from?: string; to?: string };
+
+const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
 function defaultRange() {
   const to = new Date();
@@ -16,7 +20,8 @@ function defaultRange() {
 }
 
 export default async function PayrollPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requireRole("owner", "admin");
+  const user = await requireRole("owner", "admin");
+  const isOwner = user.role === "owner";
   const sp = await searchParams;
   const defaults = defaultRange();
   const from = sp.from || defaults.from;
@@ -30,6 +35,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         <h1 className="text-xl font-semibold">Payroll Period</h1>
         <p className="text-sm text-muted-foreground">
           Quota staff show cycles completed, points earned, and remainder carried; hourly staff show approved hours.
+          {isOwner && " Salary is computed from each staff member's rate."}
         </p>
       </div>
 
@@ -41,7 +47,21 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold">Payroll report</h2>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="text-lg font-semibold">Payroll report</h2>
+          {isOwner && (
+            <Card className="min-w-[180px]">
+              <CardHeader className="pb-1">
+                <CardDescription>Total salary this period</CardDescription>
+                <CardTitle className="text-2xl tabular-nums">{peso.format(report.totalSalary)}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 text-xs text-muted-foreground">
+                {from} → {to}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
         <form className="flex flex-wrap items-end gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium" htmlFor="from">
@@ -72,6 +92,8 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                 <TableHead>Cycles completed</TableHead>
                 <TableHead>Points earned</TableHead>
                 <TableHead>Remainder carried</TableHead>
+                {isOwner && <TableHead>Rate (₱ / cycle)</TableHead>}
+                {isOwner && <TableHead className="text-right">Salary</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -81,11 +103,17 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                   <TableCell>{row.cyclesCompleted}</TableCell>
                   <TableCell>{row.pointsEarned.toFixed(1)}</TableCell>
                   <TableCell>{row.remainderCarried.toFixed(1)}</TableCell>
+                  {isOwner && (
+                    <TableCell>
+                      <RateCell userId={row.userId} rate={row.rate} />
+                    </TableCell>
+                  )}
+                  {isOwner && <TableCell className="text-right font-medium tabular-nums">{peso.format(row.salary)}</TableCell>}
                 </TableRow>
               ))}
               {report.quotaRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={isOwner ? 6 : 4} className="text-center text-muted-foreground">
                     No editors yet.
                   </TableCell>
                 </TableRow>
@@ -101,6 +129,8 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Approved hours</TableHead>
+                {isOwner && <TableHead>Rate (₱ / hour)</TableHead>}
+                {isOwner && <TableHead className="text-right">Salary</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -108,11 +138,17 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                 <TableRow key={row.userId}>
                   <TableCell>{row.fullName}</TableCell>
                   <TableCell>{row.approvedHours.toFixed(2)}</TableCell>
+                  {isOwner && (
+                    <TableCell>
+                      <RateCell userId={row.userId} rate={row.rate} />
+                    </TableCell>
+                  )}
+                  {isOwner && <TableCell className="text-right font-medium tabular-nums">{peso.format(row.salary)}</TableCell>}
                 </TableRow>
               ))}
               {report.hourlyRows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={2} className="text-center text-muted-foreground">
+                  <TableCell colSpan={isOwner ? 4 : 2} className="text-center text-muted-foreground">
                     No hourly staff yet.
                   </TableCell>
                 </TableRow>

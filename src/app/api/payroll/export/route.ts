@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { getPayrollReport, payrollReportToCsv } from "@/lib/payroll/report";
 
 export async function GET(request: NextRequest) {
-  await requireRole("owner", "admin");
+  const user = await requireRole("owner", "admin");
 
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from");
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   }
 
   const report = await getPayrollReport(from, to);
-  const csv = payrollReportToCsv(report);
+  const csv = payrollReportToCsv(report, user.role === "owner");
 
   return new NextResponse(csv, {
     headers: {
