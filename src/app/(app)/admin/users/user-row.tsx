@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { updateUserAction } from "./actions";
+import { deleteUserAction, updateUserAction } from "./actions";
 
 type Row = {
   id: string;
@@ -16,11 +16,24 @@ type Row = {
   isActive: boolean;
 };
 
-export function UserRow({ user }: { user: Row }) {
+export function UserRow({ user, canDelete = false, isSelf = false }: { user: Row; canDelete?: boolean; isSelf?: boolean }) {
   const [role, setRole] = useState(user.role);
   const [payType, setPayType] = useState(user.payType);
   const [isActive, setIsActive] = useState(user.isActive);
   const [isPending, startTransition] = useTransition();
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  function handleDelete() {
+    setDeleteError(null);
+    const confirmed = window.confirm(
+      `Permanently delete ${user.fullName} (${user.email})? This removes their login and cannot be undone.`,
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      const result = await deleteUserAction(user.id);
+      if (!result.ok) setDeleteError(result.message ?? "Could not delete this user.");
+    });
+  }
 
   return (
     <TableRow className={!isActive ? "opacity-50" : undefined}>
@@ -63,18 +76,34 @@ export function UserRow({ user }: { user: Row }) {
         </Select>
       </TableCell>
       <TableCell>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={isPending}
-          onClick={() => {
-            const next = !isActive;
-            setIsActive(next);
-            startTransition(() => updateUserAction(user.id, { isActive: next }));
-          }}
-        >
-          {isActive ? "Deactivate" : "Reactivate"}
-        </Button>
+        <div className="flex flex-col items-start gap-1">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={() => {
+                const next = !isActive;
+                setIsActive(next);
+                startTransition(() => updateUserAction(user.id, { isActive: next }));
+              }}
+            >
+              {isActive ? "Deactivate" : "Reactivate"}
+            </Button>
+            {canDelete && !isSelf && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isPending}
+                onClick={handleDelete}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                Delete
+              </Button>
+            )}
+          </div>
+          {deleteError && <span className="max-w-xs text-xs text-destructive">{deleteError}</span>}
+        </div>
       </TableCell>
     </TableRow>
   );

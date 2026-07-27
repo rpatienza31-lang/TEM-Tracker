@@ -8,7 +8,8 @@ import { InviteForm } from "./invite-form";
 import { UserRow } from "./user-row";
 
 export default async function UsersAdminPage() {
-  await requireRole("owner", "admin");
+  const me = await requireRole("owner", "admin");
+  const canDelete = me.role === "owner";
   const rows = await db.select().from(users).orderBy(asc(users.fullName));
 
   return (
@@ -32,7 +33,7 @@ export default async function UsersAdminPage() {
         </TableHeader>
         <TableBody>
           {rows.map((user) => (
-            <UserRow key={user.id} user={user} />
+            <UserRow key={user.id} user={user} canDelete={canDelete} isSelf={user.id === me.id} />
           ))}
           {rows.length === 0 && (
             <TableRow>
