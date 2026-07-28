@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { type CotOrderView } from "@/lib/cot/queries";
 import { type PriorityLevel } from "@/lib/cot/deadline";
 import { CotItemControls, type EditorOption } from "./cot-item-controls";
+import { CotOrderEdit } from "./cot-order-edit";
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
@@ -117,6 +118,12 @@ export function CotOrderList({
               )}
             </dl>
             {o.notes && <p className="text-sm text-muted-foreground">Note: {o.notes}</p>}
+
+            {isAdmin && (
+              <CotOrderEdit
+                order={{ id: o.id, orderType: o.orderType, grade: o.grade, subjectName: o.subjectName, topic: o.topic }}
+              />
+            )}
 
             <div className="grid gap-3 sm:grid-cols-2">
               {o.items.map((item) => (

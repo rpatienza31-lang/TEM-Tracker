@@ -8,10 +8,13 @@ import {
   assignCotItem,
   claimCotItem,
   releaseCotItem,
+  setCotOrderType,
   submitCotItem,
   unapproveCotItem,
+  updateCotOrderDetails,
   type CotResult,
 } from "@/lib/cot/service";
+import { type OrderType } from "@/lib/cot/deadline";
 
 function actorOf(user: Awaited<ReturnType<typeof requireUser>>) {
   return { id: user.id, role: user.role };
@@ -20,6 +23,25 @@ function actorOf(user: Awaited<ReturnType<typeof requireUser>>) {
 export async function claimCotAction(itemId: string): Promise<CotResult> {
   const user = await requireUser();
   const result = await claimCotItem(itemId, actorOf(user));
+  if (result.ok) revalidatePath("/cot");
+  return result;
+}
+
+export async function setCotOrderTypeAction(orderId: string, type: OrderType): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await setCotOrderType(orderId, type, actorOf(user));
+  if (result.ok) revalidatePath("/cot");
+  return result;
+}
+
+export async function updateCotOrderAction(
+  orderId: string,
+  grade: number | null,
+  subjectName: string | null,
+  topic: string | null,
+): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await updateCotOrderDetails(orderId, { grade, subjectName, topic }, actorOf(user));
   if (result.ok) revalidatePath("/cot");
   return result;
 }

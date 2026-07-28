@@ -89,6 +89,35 @@ export async function claimCotItem(itemId: string, actor: CotActor): Promise<Cot
   return { ok: true };
 }
 
+/** Owner/admin switches an order between Rush and Regular, recomputing the deadline. */
+export async function setCotOrderType(orderId: string, type: OrderType, actor: CotActor): Promise<CotResult> {
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can change the order type." };
+
+  const [order] = await db.select().from(customOrders).where(eq(customOrders.id, orderId)).limit(1);
+  if (!order) return { ok: false, message: "Order not found." };
+
+  await db
+    .update(customOrders)
+    .set({ orderType: type, deadline: computeDeadline(order.orderDate, type) })
+    .where(eq(customOrders.id, orderId));
+  return { ok: true };
+}
+
+/** Owner/admin edits an order's grade, subject, and topic (customers sometimes revise). */
+export async function updateCotOrderDetails(
+  orderId: string,
+  patch: { grade: number | null; subjectName: string | null; topic: string | null },
+  actor: CotActor,
+): Promise<CotResult> {
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can edit an order." };
+
+  await db
+    .update(customOrders)
+    .set({ grade: patch.grade, subjectName: patch.subjectName, topic: patch.topic })
+    .where(eq(customOrders.id, orderId));
+  return { ok: true };
+}
+
 /** Owner/admin assigns (or reassigns) an editor to a COT item directly. */
 export async function assignCotItem(itemId: string, editorId: string, actor: CotActor): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can assign." };
