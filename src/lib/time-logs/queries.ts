@@ -11,6 +11,17 @@ export async function getMyTimeLogs(userId: string) {
     .orderBy(desc(timeLogs.workDate), desc(timeLogs.createdAt));
 }
 
+/** The user's currently-open clock-in session (clocked in, not yet out), if any. */
+export async function getActiveTimeLog(userId: string) {
+  const [open] = await db
+    .select()
+    .from(timeLogs)
+    .where(and(eq(timeLogs.userId, userId), isNotNull(timeLogs.clockIn), isNull(timeLogs.clockOut)))
+    .orderBy(desc(timeLogs.clockIn))
+    .limit(1);
+  return open ?? null;
+}
+
 export async function getPendingTimeLogs() {
   return db
     .select({
@@ -24,7 +35,8 @@ export async function getPendingTimeLogs() {
     })
     .from(timeLogs)
     .innerJoin(users, eq(users.id, timeLogs.userId))
-    .where(isNull(timeLogs.approvedAt))
+    // Only completed logs await approval — an open clock-in has hours = null.
+    .where(and(isNull(timeLogs.approvedAt), isNotNull(timeLogs.hours)))
     .orderBy(asc(timeLogs.workDate));
 }
 

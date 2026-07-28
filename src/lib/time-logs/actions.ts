@@ -1,19 +1,75 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { formatInTimeZone } from "date-fns-tz";
 
 import { db } from "@/db/client";
 import { timeLogs } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 
 const ADMIN_ROLES = ["owner", "admin"] as const;
+const PH_TZ = "Asia/Manila";
 
 function isAdmin(role: string) {
   return (ADMIN_ROLES as readonly string[]).includes(role);
 }
 
+/** The user's currently-open clock-in session, if any (clocked in, not out). */
+async function getOpenSession(userId: string) {
+  const [open] = await db
+    .select()
+    .from(timeLogs)
+    .where(and(eq(timeLogs.userId, userId), isNotNull(timeLogs.clockIn), isNull(timeLogs.clockOut)))
+    .orderBy(desc(timeLogs.clockIn))
+    .limit(1);
+  return open ?? null;
+}
+
 export type TimeLogActionResult = { ok: true } | { ok: false; message: string };
+
+/** Starts a shift. Records the server's current time (stored UTC, shown in PH time). */
+export async function clockInAction(): Promise<TimeLogActionResult> {
+  const actor = await requireUser();
+  if (actor.payType !== "hourly") {
+    return { ok: false, message: "Only hourly staff use the time clock." };
+  }
+  if (await getOpenSession(actor.id)) {
+    return { ok: false, message: "You're already clocked in. Clock out first." };
+  }
+
+  const now = new Date();
+  await db.insert(timeLogs).values({
+    userId: actor.id,
+    workDate: formatInTimeZone(now, PH_TZ, "yyyy-MM-dd"),
+    clockIn: now,
+    hours: null,
+  });
+
+  revalidatePath("/time-logs");
+  return { ok: true };
+}
+
+/** Ends the open shift and computes hours from the elapsed clock-in→clock-out time. */
+export async function clockOutAction(): Promise<TimeLogActionResult> {
+  const actor = await requireUser();
+  const open = await getOpenSession(actor.id);
+  if (!open || !open.clockIn) {
+    return { ok: false, message: "You're not clocked in." };
+  }
+
+  const now = new Date();
+  const elapsedHours = (now.getTime() - new Date(open.clockIn).getTime()) / 3_600_000;
+  // Clamp into the column's valid range: a tiny minimum for near-instant
+  // clock-outs, and 24h max for a shift someone forgot to close (admin reviews).
+  const hours = Math.min(24, Math.max(0.01, Math.round(elapsedHours * 100) / 100));
+
+  await db.update(timeLogs).set({ clockOut: now, hours: String(hours) }).where(eq(timeLogs.id, open.id));
+
+  revalidatePath("/time-logs");
+  revalidatePath("/payroll");
+  return { ok: true };
+}
 
 export async function createTimeLogAction(
   workDate: string,

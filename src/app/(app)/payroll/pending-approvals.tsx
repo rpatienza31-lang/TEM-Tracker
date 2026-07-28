@@ -10,7 +10,7 @@ type PendingLog = {
   id: string;
   userName: string;
   workDate: string;
-  hours: string;
+  hours: string | null;
   note: string | null;
 };
 
@@ -36,7 +36,7 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
           <TableRow key={log.id}>
             <TableCell>{log.userName}</TableCell>
             <TableCell>{log.workDate}</TableCell>
-            <TableCell>{log.hours}</TableCell>
+            <TableCell>{log.hours ?? "—"}</TableCell>
             <TableCell className="text-muted-foreground">{log.note}</TableCell>
             <TableCell>
               <Button

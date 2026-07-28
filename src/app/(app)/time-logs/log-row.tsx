@@ -10,8 +10,9 @@ import { deleteTimeLogAction } from "@/lib/time-logs/actions";
 type Log = {
   id: string;
   workDate: string;
-  hours: string;
-  note: string | null;
+  hours: string | null;
+  timeIn: string | null;
+  timeOut: string | null;
   approvedAt: Date | null;
 };
 
@@ -21,16 +22,25 @@ export function LogRow({ log }: { log: Log }) {
 
   if (deleted) return null;
 
+  const inProgress = log.hours === null;
+
   return (
     <TableRow>
       <TableCell>{log.workDate}</TableCell>
-      <TableCell>{log.hours}</TableCell>
-      <TableCell className="text-muted-foreground">{log.note}</TableCell>
+      <TableCell className="text-muted-foreground">{log.timeIn ?? "—"}</TableCell>
+      <TableCell className="text-muted-foreground">{log.timeOut ?? "—"}</TableCell>
+      <TableCell className="tabular-nums">{log.hours ?? "—"}</TableCell>
       <TableCell>
-        {log.approvedAt ? <Badge>Approved</Badge> : <Badge variant="outline">Pending</Badge>}
+        {inProgress ? (
+          <Badge variant="outline">In progress</Badge>
+        ) : log.approvedAt ? (
+          <Badge>Approved</Badge>
+        ) : (
+          <Badge variant="outline">Pending</Badge>
+        )}
       </TableCell>
       <TableCell>
-        {!log.approvedAt && (
+        {!log.approvedAt && !inProgress && (
           <Button
             size="sm"
             variant="outline"

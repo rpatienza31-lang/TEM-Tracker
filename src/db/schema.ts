@@ -185,13 +185,17 @@ export const timeLogs = pgTable(
       .notNull()
       .references(() => users.id),
     workDate: date("work_date").notNull(),
-    hours: numeric("hours", { precision: 5, scale: 2 }).notNull(),
+    // Null while a clock-in session is still open; set from the clock-out
+    // timestamp minus clock-in. Legacy manual entries set it directly.
+    hours: numeric("hours", { precision: 5, scale: 2 }),
+    clockIn: timestamp("clock_in", { withTimezone: true }),
+    clockOut: timestamp("clock_out", { withTimezone: true }),
     note: text("note"),
     approvedBy: uuid("approved_by").references(() => users.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("time_logs_hours_check", sql`${t.hours} > 0 and ${t.hours} <= 24`)],
+  (t) => [check("time_logs_hours_check", sql`${t.hours} is null or (${t.hours} > 0 and ${t.hours} <= 24)`)],
 );
 
 export const settings = pgTable("settings", {
