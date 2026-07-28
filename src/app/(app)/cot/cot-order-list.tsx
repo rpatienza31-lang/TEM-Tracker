@@ -121,7 +121,14 @@ export function CotOrderList({
 
             {isAdmin && (
               <CotOrderEdit
-                order={{ id: o.id, orderType: o.orderType, grade: o.grade, subjectName: o.subjectName, topic: o.topic }}
+                order={{
+                  id: o.id,
+                  orderType: o.orderType,
+                  grade: o.grade,
+                  subjectName: o.subjectName,
+                  topic: o.topic,
+                  customerName: o.customerName,
+                }}
               />
             )}
 

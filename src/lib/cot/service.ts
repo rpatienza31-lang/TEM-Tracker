@@ -89,6 +89,23 @@ export async function claimCotItem(itemId: string, actor: CotActor): Promise<Cot
   return { ok: true };
 }
 
+/** Owner/admin deletes an order (and its two items). Any awarded points are reversed first. */
+export async function deleteCotOrder(orderId: string, actor: CotActor): Promise<CotResult> {
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can delete an order." };
+
+  return db.transaction(async (tx) => {
+    const items = await tx.select().from(customOrderItems).where(eq(customOrderItems.orderId, orderId));
+    for (const it of items) {
+      if (it.status === "approved" && it.awardedCycleId && it.pointsAwarded) {
+        await reverseCotItemPoints(tx, it.awardedCycleId, Number(it.pointsAwarded));
+      }
+    }
+    // custom_order_items rows cascade away with the order.
+    await tx.delete(customOrders).where(eq(customOrders.id, orderId));
+    return { ok: true };
+  });
+}
+
 /** Owner/admin switches an order between Rush and Regular, recomputing the deadline. */
 export async function setCotOrderType(orderId: string, type: OrderType, actor: CotActor): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can change the order type." };

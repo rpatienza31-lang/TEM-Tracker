@@ -7,6 +7,7 @@ import {
   approveCotItem,
   assignCotItem,
   claimCotItem,
+  deleteCotOrder,
   releaseCotItem,
   setCotOrderType,
   submitCotItem,
@@ -24,6 +25,17 @@ export async function claimCotAction(itemId: string): Promise<CotResult> {
   const user = await requireUser();
   const result = await claimCotItem(itemId, actorOf(user));
   if (result.ok) revalidatePath("/cot");
+  return result;
+}
+
+export async function deleteCotOrderAction(orderId: string): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await deleteCotOrder(orderId, actorOf(user));
+  if (result.ok) {
+    revalidatePath("/cot");
+    revalidatePath("/cot/library");
+    revalidatePath("/productivity");
+  }
   return result;
 }
 

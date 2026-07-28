@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { setCotOrderTypeAction, updateCotOrderAction } from "./actions";
+import { deleteCotOrderAction, setCotOrderTypeAction, updateCotOrderAction } from "./actions";
 
 type Order = {
   id: string;
@@ -13,6 +13,7 @@ type Order = {
   grade: number | null;
   subjectName: string | null;
   topic: string | null;
+  customerName: string;
 };
 
 export function CotOrderEdit({ order }: { order: Order }) {
@@ -48,6 +49,19 @@ export function CotOrderEdit({ order }: { order: Order }) {
         </Button>
         <Button size="sm" variant="ghost" disabled={pending} onClick={() => setOpen((v) => !v)}>
           {open ? "Cancel" : "Edit details"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          onClick={() => {
+            if (window.confirm(`Delete the COT order for ${order.customerName}? This cannot be undone.`)) {
+              run(() => deleteCotOrderAction(order.id));
+            }
+          }}
+        >
+          Delete
         </Button>
       </div>
 
