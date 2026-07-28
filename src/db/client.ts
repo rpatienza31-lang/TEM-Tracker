@@ -24,14 +24,13 @@ function createClient() {
   // run without starving the instance's other queries. With the function
   // co-located with the database, queries are fast and connections are
   // released quickly, so this stays well under the cap in practice.
-  // lock_timeout makes a query that's blocked on a stuck row lock fail in 8s
-  // instead of hanging until the statement timeout (~2 min).
+  // NOTE: no custom `connection` startup params — Supabase's pooler rejects
+  // non-whitelisted ones (e.g. lock_timeout), which fails every connection.
   return postgres(url, {
     prepare: false,
     max: process.env.NODE_ENV === "production" ? 3 : 5,
     idle_timeout: 20,
     connect_timeout: 10,
-    connection: { lock_timeout: 8000 },
   });
 }
 
