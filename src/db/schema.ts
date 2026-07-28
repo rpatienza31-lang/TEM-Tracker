@@ -29,6 +29,7 @@ export const itemStatus = pgEnum("item_status", [
   "cancelled",
 ]);
 export const notificationType = pgEnum("notification_type", ["revision_requested", "approved", "unapproved"]);
+export const orderType = pgEnum("order_type", ["rush", "regular"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -217,4 +218,53 @@ export const notifications = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("notifications_user_unread_idx").on(t.userId, t.readAt)],
+);
+
+/**
+ * Customized-order (COT) requests captured from the customer Google Form.
+ * Each order spawns two independent deliverables (COT_DLP and COT_PPT) in
+ * custom_order_items. Kept separate from the term/week catalog in work_items.
+ */
+export const customOrders = pgTable("custom_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // Dedupe key from the form (e.g. response timestamp) so re-posts don't double.
+  externalId: text("external_id").unique(),
+  customerName: text("customer_name").notNull(),
+  grade: integer("grade"),
+  subjectName: text("subject_name"),
+  topic: text("topic"),
+  competency: text("competency"),
+  indicator: text("indicator"),
+  notes: text("notes"),
+  payment: numeric("payment", { precision: 10, scale: 2 }),
+  orderType: orderType("order_type").notNull().default("regular"),
+  orderDate: date("order_date").notNull(),
+  deadline: date("deadline").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const customOrderItems = pgTable(
+  "custom_order_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => customOrders.id, { onDelete: "cascade" }),
+    type: deliverableType("type").notNull(),
+    status: itemStatus("status").notNull().default("available"),
+    assigneeId: uuid("assignee_id").references(() => users.id),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    fileUrl: text("file_url"),
+    pointsValue: numeric("points_value", { precision: 4, scale: 2 }).notNull().default("0.5"),
+    pointsAwarded: numeric("points_awarded", { precision: 4, scale: 2 }),
+    // Which quota cycle the approval points landed in, so an un-approval can
+    // reverse them from the right cycle.
+    awardedCycleId: uuid("awarded_cycle_id").references(() => quotaCycles.id),
+    version: integer("version").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("custom_order_items_order_type_key").on(t.orderId, t.type)],
 );

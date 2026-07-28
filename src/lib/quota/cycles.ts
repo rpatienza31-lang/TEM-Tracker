@@ -51,11 +51,15 @@ async function findCycleByNumber(tx: Tx, editorId: string, cycleNumber: number) 
  * overflow forward, when the target is crossed. Runs inside the caller's
  * transaction so the status change, event log, and point award are atomic.
  */
-export async function awardPointsForApproval(tx: Tx, editorId: string, workItemId: string, points: number) {
+/**
+ * Applies `points` to the editor's open quota cycle, rolling the cycle over
+ * (close + open next, carrying overflow) when the target is crossed. Returns
+ * the id of the cycle the points were recorded against, so a later reversal
+ * can target it. Shared by catalog work items and COT order items.
+ */
+async function applyPointsToCycle(tx: Tx, editorId: string, points: number): Promise<string> {
   const quotaSize = await getQuotaSize();
   const cycle = await getOrCreateOpenCycle(tx, editorId, quotaSize);
-
-  await tx.insert(quotaCycleItems).values({ cycleId: cycle.id, workItemId, points: String(points) });
 
   const target = Number(cycle.targetPoints);
   const newTotal = Number(cycle.pointsTotal) + points;
@@ -76,6 +80,32 @@ export async function awardPointsForApproval(tx: Tx, editorId: string, workItemI
   } else {
     await tx.update(quotaCycles).set({ pointsTotal: String(newTotal) }).where(eq(quotaCycles.id, cycle.id));
   }
+
+  return cycle.id;
+}
+
+/**
+ * Records an approval's points against the assignee's open quota cycle
+ * (spec §6.4). Runs inside the caller's transaction so the status change,
+ * event log, and point award are atomic.
+ */
+export async function awardPointsForApproval(tx: Tx, editorId: string, workItemId: string, points: number) {
+  const cycleId = await applyPointsToCycle(tx, editorId, points);
+  await tx.insert(quotaCycleItems).values({ cycleId, workItemId, points: String(points) });
+}
+
+/**
+ * Awards a COT order item's points into the same quota cycle as regular work,
+ * returning the cycle id to store on the item for later reversal. COT items
+ * are not catalog work items, so they don't use the quota_cycle_items ledger.
+ */
+export async function awardPointsForCotItem(tx: Tx, editorId: string, points: number): Promise<string> {
+  return applyPointsToCycle(tx, editorId, points);
+}
+
+/** Reverses a COT item's previously-awarded points from the cycle they landed in. */
+export async function reverseCotItemPoints(tx: Tx, cycleId: string, points: number) {
+  await reverseFromCycle(tx, cycleId, points);
 }
 
 /**
