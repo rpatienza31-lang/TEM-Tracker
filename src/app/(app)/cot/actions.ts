@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import {
   approveCotItem,
+  assignCotItem,
   claimCotItem,
   releaseCotItem,
   submitCotItem,
@@ -19,6 +20,13 @@ function actorOf(user: Awaited<ReturnType<typeof requireUser>>) {
 export async function claimCotAction(itemId: string): Promise<CotResult> {
   const user = await requireUser();
   const result = await claimCotItem(itemId, actorOf(user));
+  if (result.ok) revalidatePath("/cot");
+  return result;
+}
+
+export async function assignCotAction(itemId: string, editorId: string): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await assignCotItem(itemId, editorId, actorOf(user));
   if (result.ok) revalidatePath("/cot");
   return result;
 }

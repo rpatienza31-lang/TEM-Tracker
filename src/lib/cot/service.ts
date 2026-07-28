@@ -89,6 +89,22 @@ export async function claimCotItem(itemId: string, actor: CotActor): Promise<Cot
   return { ok: true };
 }
 
+/** Owner/admin assigns (or reassigns) an editor to a COT item directly. */
+export async function assignCotItem(itemId: string, editorId: string, actor: CotActor): Promise<CotResult> {
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can assign." };
+  if (!editorId) return { ok: false, message: "Choose an editor to assign." };
+
+  const [item] = await db.select().from(customOrderItems).where(eq(customOrderItems.id, itemId)).limit(1);
+  if (!item) return { ok: false, message: "Item not found." };
+  if (item.status === "approved") return { ok: false, message: "This item is already approved." };
+
+  await db
+    .update(customOrderItems)
+    .set({ status: "claimed", assigneeId: editorId, claimedAt: new Date(), updatedAt: new Date() })
+    .where(eq(customOrderItems.id, itemId));
+  return { ok: true };
+}
+
 /** Releases a claimed item back to available (assignee or admin). */
 export async function releaseCotItem(itemId: string, actor: CotActor): Promise<CotResult> {
   const [item] = await db.select().from(customOrderItems).where(eq(customOrderItems.id, itemId)).limit(1);

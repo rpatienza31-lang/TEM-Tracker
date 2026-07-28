@@ -5,8 +5,9 @@ import { useState, useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_BADGE_CLASS, STATUS_LABELS, DELIVERABLE_TYPE_LABELS, type ItemStatus, type DeliverableType } from "@/lib/constants";
-import { approveCotAction, claimCotAction, releaseCotAction, submitCotAction, unapproveCotAction } from "./actions";
+import { approveCotAction, assignCotAction, claimCotAction, releaseCotAction, submitCotAction, unapproveCotAction } from "./actions";
 
 type Item = {
   id: string;
@@ -16,18 +17,23 @@ type Item = {
   fileUrl: string | null;
 };
 
+export type EditorOption = { id: string; fullName: string };
+
 export function CotItemControls({
   item,
   isAdmin,
   canClaim,
+  editors,
 }: {
   item: Item;
   isAdmin: boolean;
   canClaim: boolean;
+  editors: EditorOption[];
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [fileUrl, setFileUrl] = useState("");
+  const [assignTo, setAssignTo] = useState("");
   const status = item.status as ItemStatus;
 
   function run(action: () => Promise<{ ok: boolean; message?: string }>) {
@@ -79,6 +85,31 @@ export function CotItemControls({
                 Release
               </Button>
             </div>
+          </div>
+        )}
+
+        {isAdmin && status !== "approved" && (
+          <div className="flex w-full items-center gap-2">
+            <Select value={assignTo} onValueChange={setAssignTo}>
+              <SelectTrigger className="h-8 w-40">
+                <SelectValue placeholder="Assign editor…" />
+              </SelectTrigger>
+              <SelectContent>
+                {editors.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={pending || !assignTo}
+              onClick={() => run(() => assignCotAction(item.id, assignTo))}
+            >
+              Assign
+            </Button>
           </div>
         )}
 
