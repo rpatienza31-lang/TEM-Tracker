@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
@@ -17,6 +17,7 @@ import { SubmitDialog } from "@/components/work-items/submit-dialog";
 import { AssignDialog } from "@/components/work-items/assign-dialog";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { releaseItemAction, uploadItemAction } from "@/lib/work-items/actions";
+import { removeSubjectFromGradeAction } from "./actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import { ALL_DELIVERABLE_TYPES, DELIVERABLE_TYPE_LABELS, WEEK_NUMBERS, type DeliverableType, type ItemStatus } from "@/lib/constants";
 import type { BoardItem } from "@/lib/work-items/queries";
@@ -75,10 +76,28 @@ export function MatrixClient({
   const searchParams = useSearchParams();
   const [selectedItem, setSelectedItem] = useState<BoardItem | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [removing, startRemoving] = useTransition();
 
   useWorkItemsRealtime(termId);
 
   const isAdmin = currentUser.role === "owner" || currentUser.role === "admin";
+
+  function removeSubject(subjectId: string, subjectName: string) {
+    if (!termId || grade === undefined) return;
+    if (!window.confirm(`Remove ${subjectName} from Grade ${grade}? This deletes its work items for all weeks and types.`)) {
+      return;
+    }
+    setBanner(null);
+    startRemoving(async () => {
+      const result = await removeSubjectFromGradeAction(termId, grade, subjectId);
+      if (result.ok) {
+        setBanner(`Removed ${subjectName} from Grade ${grade}.`);
+        router.refresh();
+      } else {
+        setBanner(result.message);
+      }
+    });
+  }
 
   const grid = useMemo(() => {
     const map = new Map<string, BoardItem>();
@@ -168,7 +187,22 @@ export function MatrixClient({
           <tbody>
             {subjects.map((subject) => (
               <tr key={subject.id}>
-                <td className="sticky left-0 whitespace-nowrap bg-background p-2 font-medium">{subject.name}</td>
+                <td className="sticky left-0 whitespace-nowrap bg-background p-2 font-medium">
+                  <span className="flex items-center gap-2">
+                    {subject.name}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        disabled={removing}
+                        onClick={() => removeSubject(subject.id, subject.name)}
+                        title={`Remove ${subject.name} from Grade ${grade}`}
+                        className="text-xs text-muted-foreground hover:text-destructive"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                </td>
                 {WEEK_NUMBERS.map((week) => {
                   const item = grid.get(`${subject.id}|${week}`);
                   if (!item) {
