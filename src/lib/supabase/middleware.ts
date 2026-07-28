@@ -37,7 +37,10 @@ export async function updateSession(request: NextRequest) {
 
   const isPublicPath =
     request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/auth");
+    request.nextUrl.pathname.startsWith("/auth") ||
+    // The COT intake webhook authenticates with its own shared secret and is
+    // called server-to-server (no user session), so it must not be gated.
+    request.nextUrl.pathname.startsWith("/api/cot/intake");
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
