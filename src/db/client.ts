@@ -19,14 +19,19 @@ function createClient() {
   // so serializing a page's handful of queries over one connection is fast and
   // safe from "max clients reached in session mode" exhaustion. `prepare:false`
   // keeps it pooler-compatible; idle connections close quickly.
-  // Production keeps a single connection per instance to stay under the free
-  // tier session pooler's 15-client cap; dev/test use a larger pool so the
-  // concurrency suite can exercise real parallel transactions.
+  // A small pool per instance keeps us under the free-tier session pooler's
+  // 15-client cap, while leaving headroom for a transaction (e.g. approval) to
+  // run without starving the instance's other queries. With the function
+  // co-located with the database, queries are fast and connections are
+  // released quickly, so this stays well under the cap in practice.
+  // lock_timeout makes a query that's blocked on a stuck row lock fail in 8s
+  // instead of hanging until the statement timeout (~2 min).
   return postgres(url, {
     prepare: false,
-    max: process.env.NODE_ENV === "production" ? 1 : 5,
+    max: process.env.NODE_ENV === "production" ? 3 : 5,
     idle_timeout: 20,
     connect_timeout: 10,
+    connection: { lock_timeout: 8000 },
   });
 }
 
