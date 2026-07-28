@@ -33,12 +33,13 @@ function daysLabel(level: PriorityLevel, daysLeft: number) {
   return `${daysLeft} days left`;
 }
 
-type Filter = "all" | PriorityLevel | "unclaimed";
+type Filter = "all" | PriorityLevel | "due2" | "unclaimed";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "overdue", label: "Overdue" },
   { key: "red", label: "Due now" },
+  { key: "due2", label: "≤2 days" },
   { key: "alert", label: "Soon" },
   { key: "normal", label: "On track" },
   { key: "unclaimed", label: "Unclaimed" },
@@ -46,6 +47,18 @@ const FILTERS: { key: Filter; label: string }[] = [
 
 function isUnclaimed(o: CotOrderView) {
   return o.items.some((i) => i.status === "available");
+}
+
+/** Due within the next two days (today, tomorrow, or the day after) — not yet overdue. */
+function isDueWithin2(o: CotOrderView) {
+  return o.daysLeft >= 0 && o.daysLeft <= 2;
+}
+
+function matchesFilter(o: CotOrderView, filter: Filter) {
+  if (filter === "all") return true;
+  if (filter === "unclaimed") return isUnclaimed(o);
+  if (filter === "due2") return isDueWithin2(o);
+  return o.priority === filter;
 }
 
 export function CotOrderList({
@@ -65,9 +78,11 @@ export function CotOrderList({
   const [filter, setFilter] = useState<Filter>("all");
 
   const counts = useMemo(() => {
-    const c = { total: orders.length, overdue: 0, red: 0, alert: 0, normal: 0, unclaimed: 0 };
+    const c = { total: orders.length, overdue: 0, due2: 0, alert: 0, unclaimed: 0 };
     for (const o of orders) {
-      c[o.priority] += 1;
+      if (o.priority === "overdue") c.overdue += 1;
+      if (isDueWithin2(o)) c.due2 += 1;
+      if (o.priority === "alert") c.alert += 1;
       if (isUnclaimed(o)) c.unclaimed += 1;
     }
     return c;
@@ -76,11 +91,7 @@ export function CotOrderList({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return orders
-      .filter((o) => {
-        if (filter === "unclaimed") return isUnclaimed(o);
-        if (filter !== "all") return o.priority === filter;
-        return true;
-      })
+      .filter((o) => matchesFilter(o, filter))
       .filter((o) => {
         if (!q) return true;
         return [o.customerName, o.subjectName, o.topic, o.competency, o.indicator, o.grade ? `grade ${o.grade}` : ""]
@@ -91,7 +102,7 @@ export function CotOrderList({
 
   const tiles: { key: Filter; label: string; value: number; className: string }[] = [
     { key: "overdue", label: "Overdue", value: counts.overdue, className: "text-red-600" },
-    { key: "red", label: "Due today / tomorrow", value: counts.red, className: "text-red-500" },
+    { key: "due2", label: "Due within 2 days", value: counts.due2, className: "text-red-500" },
     { key: "alert", label: "Due within 3 days", value: counts.alert, className: "text-amber-500" },
     { key: "unclaimed", label: "Needs an editor", value: counts.unclaimed, className: "text-foreground" },
   ];
