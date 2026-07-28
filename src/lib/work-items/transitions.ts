@@ -90,7 +90,7 @@ async function assertUnderWipLimit(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   editorId: string,
 ) {
-  const limit = await getWipLimit();
+  const limit = await getWipLimit(tx);
   const [{ count }] = await tx
     .select({ count: sql<number>`count(*)::int` })
     .from(workItems)

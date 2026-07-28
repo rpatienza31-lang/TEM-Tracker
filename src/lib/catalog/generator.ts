@@ -99,7 +99,7 @@ export async function generateCatalog(input: CatalogGeneratorInput) {
       );
     const deadlineByWeek = new Map(weekRows.map((w) => [w.weekNumber, w.uploadDeadline]));
 
-    const pointsTable = await getPointsTable();
+    const pointsTable = await getPointsTable(tx);
     const planned = planItems(input);
 
     const itemRows = planned

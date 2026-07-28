@@ -58,7 +58,7 @@ async function findCycleByNumber(tx: Tx, editorId: string, cycleNumber: number) 
  * can target it. Shared by catalog work items and COT order items.
  */
 async function applyPointsToCycle(tx: Tx, editorId: string, points: number): Promise<string> {
-  const quotaSize = await getQuotaSize();
+  const quotaSize = await getQuotaSize(tx);
   const cycle = await getOrCreateOpenCycle(tx, editorId, quotaSize);
 
   const target = Number(cycle.targetPoints);
