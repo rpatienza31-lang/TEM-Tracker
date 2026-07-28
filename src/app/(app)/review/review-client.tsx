@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { RequestRevisionDialog } from "@/components/work-items/request-revision-dialog";
 import { approveItemAction, unapproveItemAction, uploadItemAction } from "@/lib/work-items/actions";
@@ -11,10 +12,41 @@ import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import type { BoardItem } from "@/lib/work-items/queries";
 import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 
+function uniqueSorted<T>(values: T[]): T[] {
+  return [...new Set(values)].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+}
+
 export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[]; readyToUpload: BoardItem[] }) {
   const [banner, setBanner] = useState<string | null>(null);
   const [selectedUploads, setSelectedUploads] = useState<Set<string>>(new Set());
+  const [q, setQ] = useState("");
+  const [grade, setGrade] = useState("");
+  const [subject, setSubject] = useState("");
+  const [week, setWeek] = useState("");
+  const [type, setType] = useState("");
   useWorkItemsRealtime();
+
+  const options = useMemo(
+    () => ({
+      grades: uniqueSorted(inReview.map((i) => String(i.grade))),
+      subjects: uniqueSorted(inReview.map((i) => i.subjectName)),
+      weeks: uniqueSorted(inReview.map((i) => String(i.weekNumber))),
+      types: uniqueSorted(inReview.map((i) => i.type)),
+    }),
+    [inReview],
+  );
+
+  const filteredInReview = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return inReview.filter(
+      (i) =>
+        (!query || (i.assigneeName ?? "").toLowerCase().includes(query)) &&
+        (!grade || String(i.grade) === grade) &&
+        (!subject || i.subjectName === subject) &&
+        (!week || String(i.weekNumber) === week) &&
+        (!type || i.type === type),
+    );
+  }, [inReview, q, grade, subject, week, type]);
 
   function toggleUpload(id: string, checked: boolean) {
     setSelectedUploads((prev) => {
@@ -42,7 +74,44 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold">In review ({inReview.length})</h2>
+        <h2 className="text-lg font-semibold">
+          In review ({filteredInReview.length}
+          {filteredInReview.length !== inReview.length ? ` of ${inReview.length}` : ""})
+        </h2>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            placeholder="Search staff name…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-9 w-48"
+          />
+          <FilterSelect label="Grade" value={grade} onChange={setGrade} options={options.grades} render={(g) => `Grade ${g}`} />
+          <FilterSelect label="Subject" value={subject} onChange={setSubject} options={options.subjects} />
+          <FilterSelect label="Week" value={week} onChange={setWeek} options={options.weeks} render={(w) => `Wk ${w}`} />
+          <FilterSelect
+            label="Type"
+            value={type}
+            onChange={setType}
+            options={options.types}
+            render={(t) => DELIVERABLE_TYPE_LABELS[t as keyof typeof DELIVERABLE_TYPE_LABELS] ?? t}
+          />
+          {(q || grade || subject || week || type) && (
+            <button
+              className="text-sm text-muted-foreground underline"
+              onClick={() => {
+                setQ("");
+                setGrade("");
+                setSubject("");
+                setWeek("");
+                setType("");
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         <Table>
           <TableHeader>
             <TableRow>
@@ -56,7 +125,7 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
             </TableRow>
           </TableHeader>
           <TableBody>
-            {inReview.map((item) => (
+            {filteredInReview.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
@@ -83,10 +152,10 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
                 </TableCell>
               </TableRow>
             ))}
-            {inReview.length === 0 && (
+            {filteredInReview.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground">
-                  Nothing waiting on review.
+                  {inReview.length === 0 ? "Nothing waiting on review." : "No items match these filters."}
                 </TableCell>
               </TableRow>
             )}
@@ -153,5 +222,35 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
         </Table>
       </section>
     </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+  render,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  render?: (v: string) => string;
+}) {
+  return (
+    <select
+      aria-label={label}
+      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">All {label.toLowerCase()}</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {render ? render(o) : o}
+        </option>
+      ))}
+    </select>
   );
 }

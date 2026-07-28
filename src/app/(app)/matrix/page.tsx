@@ -24,7 +24,7 @@ export default async function MatrixPage({ searchParams }: { searchParams: Promi
   const [subjects, items, editors] = await Promise.all([
     termId && grade ? getGradeSubjects(termId, grade) : Promise.resolve([]),
     termId && grade ? getMatrixItems(termId, grade, type) : Promise.resolve([]),
-    db.select().from(users).where(eq(users.role, "editor")).orderBy(asc(users.fullName)),
+    db.select().from(users).where(eq(users.isActive, true)).orderBy(asc(users.fullName)),
   ]);
 
   return (

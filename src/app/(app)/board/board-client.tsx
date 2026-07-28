@@ -47,7 +47,8 @@ export function BoardClient({
   useWorkItemsRealtime(searchParams.get("term") ?? undefined);
 
   const isAdmin = currentUser.role === "owner" || currentUser.role === "admin";
-  const editors = useMemo(() => staff.filter((s) => s.role === "editor"), [staff]);
+  // Any active user can be assigned work, not just those with the editor role.
+  const editors = useMemo(() => staff, [staff]);
 
   function setParam(key: string, value: string | null) {
     const params = new URLSearchParams(searchParams.toString());
