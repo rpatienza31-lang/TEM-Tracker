@@ -19,16 +19,18 @@ function createClient() {
   // so serializing a page's handful of queries over one connection is fast and
   // safe from "max clients reached in session mode" exhaustion. `prepare:false`
   // keeps it pooler-compatible; idle connections close quickly.
-  // A small pool per instance keeps us under the free-tier session pooler's
-  // 15-client cap, while leaving headroom for a transaction (e.g. approval) to
-  // run without starving the instance's other queries. With the function
-  // co-located with the database, queries are fast and connections are
-  // released quickly, so this stays well under the cap in practice.
-  // NOTE: no custom `connection` startup params — Supabase's pooler rejects
-  // non-whitelisted ones (e.g. lock_timeout), which fails every connection.
+  // The free-tier session pooler caps total clients at 15. Vercel can run
+  // several function instances at once, so production holds a single
+  // connection per instance to stay well under the cap. A page's queries
+  // serialize over that one connection, and a single approval transaction
+  // uses it exclusively for ~tens of ms — fast, because the function is
+  // co-located with the database, and safe from exhaustion. Dev/test use a
+  // larger pool so the concurrency suite can run real parallel transactions.
+  // No custom `connection` startup params — the pooler rejects non-whitelisted
+  // ones (e.g. lock_timeout), which fails every connection.
   return postgres(url, {
     prepare: false,
-    max: process.env.NODE_ENV === "production" ? 3 : 5,
+    max: process.env.NODE_ENV === "production" ? 1 : 5,
     idle_timeout: 20,
     connect_timeout: 10,
   });
