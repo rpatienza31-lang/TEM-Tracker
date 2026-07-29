@@ -10,14 +10,28 @@ export type CatalogWeekInput = { weekNumber: number; uploadDeadline: string };
 export type CatalogGeneratorInput = {
   termId: string;
   grades: number[];
-  /** grade -> subject ids offered that grade this term (always get DLP + PPT) */
-  subjectsByGrade: Record<number, string[]>;
-  /** grade -> subject ids that also get a COT-DLP item (subset of subjectsByGrade[grade]) */
+  /** grade -> subject ids that get a DLP item each week */
+  dlpByGrade: Record<number, string[]>;
+  /** grade -> subject ids that get a PPT item each week */
+  pptByGrade: Record<number, string[]>;
+  /** grade -> subject ids that get a COT-DLP item each week */
   cotDlpByGrade: Record<number, string[]>;
-  /** grade -> subject ids that also get a COT-PPT item (subset of subjectsByGrade[grade]) */
+  /** grade -> subject ids that get a COT-PPT item each week */
   cotPptByGrade: Record<number, string[]>;
   weeks: CatalogWeekInput[];
 };
+
+/** All subject ids offered for a grade — the union across every deliverable type. */
+function offeredSubjects(input: CatalogGeneratorInput, grade: number): string[] {
+  return [
+    ...new Set([
+      ...(input.dlpByGrade[grade] ?? []),
+      ...(input.pptByGrade[grade] ?? []),
+      ...(input.cotDlpByGrade[grade] ?? []),
+      ...(input.cotPptByGrade[grade] ?? []),
+    ]),
+  ];
+}
 
 type PlannedItem = {
   grade: number;
@@ -33,19 +47,16 @@ function naturalKey(item: { grade: number; subjectId: string; weekNumber: number
 function planItems(input: CatalogGeneratorInput): PlannedItem[] {
   const items: PlannedItem[] = [];
   for (const grade of input.grades) {
-    const subjectIds = input.subjectsByGrade[grade] ?? [];
-    const cotDlpSubjectIds = new Set(input.cotDlpByGrade[grade] ?? []);
-    const cotPptSubjectIds = new Set(input.cotPptByGrade[grade] ?? []);
-    for (const subjectId of subjectIds) {
+    const dlp = new Set(input.dlpByGrade[grade] ?? []);
+    const ppt = new Set(input.pptByGrade[grade] ?? []);
+    const cotDlp = new Set(input.cotDlpByGrade[grade] ?? []);
+    const cotPpt = new Set(input.cotPptByGrade[grade] ?? []);
+    for (const subjectId of offeredSubjects(input, grade)) {
       for (const week of input.weeks) {
-        items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "DLP" });
-        items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "PPT" });
-        if (cotDlpSubjectIds.has(subjectId)) {
-          items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "COT_DLP" });
-        }
-        if (cotPptSubjectIds.has(subjectId)) {
-          items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "COT_PPT" });
-        }
+        if (dlp.has(subjectId)) items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "DLP" });
+        if (ppt.has(subjectId)) items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "PPT" });
+        if (cotDlp.has(subjectId)) items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "COT_DLP" });
+        if (cotPpt.has(subjectId)) items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "COT_PPT" });
       }
     }
   }
@@ -71,7 +82,7 @@ export async function generateCatalog(input: CatalogGeneratorInput) {
   return db.transaction(async (tx) => {
     if (input.grades.length) {
       const offeringRows = input.grades.flatMap((grade) =>
-        (input.subjectsByGrade[grade] ?? []).map((subjectId) => ({ termId: input.termId, grade, subjectId })),
+        offeredSubjects(input, grade).map((subjectId) => ({ termId: input.termId, grade, subjectId })),
       );
       if (offeringRows.length) {
         await tx.insert(termOfferings).values(offeringRows).onConflictDoNothing();

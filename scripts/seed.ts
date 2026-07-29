@@ -130,7 +130,8 @@ async function main() {
   const term1CotResult = await generateCatalog({
     termId: term1.id,
     grades: TERM1_GRADES,
-    subjectsByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
+    dlpByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
+    pptByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
     cotDlpByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, cotSubjectIds])),
     cotPptByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, cotSubjectIds])),
     weeks: term1Weeks.filter((w) => w.weekNumber === 4 || w.weekNumber === 8),
@@ -140,7 +141,8 @@ async function main() {
   const term1DlpPptResult = await generateCatalog({
     termId: term1.id,
     grades: TERM1_GRADES,
-    subjectsByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
+    dlpByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
+    pptByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
     cotDlpByGrade: {},
     cotPptByGrade: {},
     weeks: term1Weeks,

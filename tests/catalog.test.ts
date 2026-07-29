@@ -20,7 +20,8 @@ describe("catalog generator", () => {
     const input = {
       termId: term.id,
       grades: [3, 4],
-      subjectsByGrade: { 3: [math.id, science.id], 4: [math.id, science.id] },
+      dlpByGrade: { 3: [math.id, science.id], 4: [math.id, science.id] },
+      pptByGrade: { 3: [math.id, science.id], 4: [math.id, science.id] },
       cotDlpByGrade: {},
       cotPptByGrade: {},
       weeks: Array.from({ length: 10 }, (_, i) => ({ weekNumber: i + 1, uploadDeadline: "2099-01-01" })),
@@ -55,7 +56,8 @@ describe("catalog generator", () => {
     await generateCatalog({
       termId: term.id,
       grades: [4],
-      subjectsByGrade: { 4: [math.id] },
+      dlpByGrade: { 4: [math.id] },
+      pptByGrade: { 4: [math.id] },
       cotDlpByGrade: {},
       cotPptByGrade: {},
       weeks,
@@ -65,7 +67,8 @@ describe("catalog generator", () => {
     const result = await generateCatalog({
       termId: term.id,
       grades: [4],
-      subjectsByGrade: { 4: [math.id, science.id] },
+      dlpByGrade: { 4: [math.id, science.id] },
+      pptByGrade: { 4: [math.id, science.id] },
       cotDlpByGrade: {},
       cotPptByGrade: {},
       weeks,
@@ -83,7 +86,8 @@ describe("catalog generator", () => {
     const result = await generateCatalog({
       termId: term.id,
       grades: [4],
-      subjectsByGrade: { 4: [math.id, science.id] },
+      dlpByGrade: { 4: [math.id, science.id] },
+      pptByGrade: { 4: [math.id, science.id] },
       cotDlpByGrade: { 4: [math.id] }, // only Math gets COT-DLP
       cotPptByGrade: { 4: [science.id] }, // only Science gets COT-PPT
       weeks: [{ weekNumber: 1, uploadDeadline: "2099-01-01" }],

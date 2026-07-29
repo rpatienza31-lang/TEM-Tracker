@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import type { CatalogGeneratorInput } from "@/lib/catalog/generator";
 
 type Term = { id: string; name: string; schoolYear: string };
 type Subject = { id: string; name: string; shortCode: string };
+type GradeMap = Record<number, Set<string>>;
 
 function addDays(iso: string, days: number) {
   const d = new Date(iso + "T00:00:00Z");
@@ -22,12 +23,17 @@ function addDays(iso: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+function toArrays(map: GradeMap): Record<number, string[]> {
+  return Object.fromEntries(Object.entries(map).map(([g, s]) => [g, [...s]]));
+}
+
 export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Subject[] }) {
   const [termId, setTermId] = useState(terms[0]?.id ?? "");
   const [grades, setGrades] = useState<Set<number>>(new Set());
-  const [subjectsByGrade, setSubjectsByGrade] = useState<Record<number, Set<string>>>({});
-  const [cotDlpByGrade, setCotDlpByGrade] = useState<Record<number, Set<string>>>({});
-  const [cotPptByGrade, setCotPptByGrade] = useState<Record<number, Set<string>>>({});
+  const [dlpByGrade, setDlpByGrade] = useState<GradeMap>({});
+  const [pptByGrade, setPptByGrade] = useState<GradeMap>({});
+  const [cotDlpByGrade, setCotDlpByGrade] = useState<GradeMap>({});
+  const [cotPptByGrade, setCotPptByGrade] = useState<GradeMap>({});
   const [weeks, setWeeks] = useState<Set<number>>(new Set(WEEK_NUMBERS));
   const [startDate, setStartDate] = useState("");
   const [deadlines, setDeadlines] = useState<Record<number, string>>({});
@@ -38,52 +44,35 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
 
   const sortedGrades = useMemo(() => [...grades].sort((a, b) => a - b), [grades]);
 
+  function clearOutput() {
+    setPreview(null);
+    setResult(null);
+  }
+
   function toggleGrade(grade: number, checked: boolean) {
     setGrades((prev) => {
       const next = new Set(prev);
-      if (checked) {
-        next.add(grade);
-        setSubjectsByGrade((s) => ({ ...s, [grade]: s[grade] ?? new Set(subjects.map((sub) => sub.id)) }));
-      } else {
-        next.delete(grade);
-      }
+      if (checked) next.add(grade);
+      else next.delete(grade);
       return next;
     });
-    setPreview(null);
-    setResult(null);
+    if (checked) {
+      // Default: every subject gets a DLP and a PPT (adjust per subject below).
+      const all = () => new Set(subjects.map((s) => s.id));
+      setDlpByGrade((s) => ({ ...s, [grade]: s[grade] ?? all() }));
+      setPptByGrade((s) => ({ ...s, [grade]: s[grade] ?? all() }));
+    }
+    clearOutput();
   }
 
-  function toggleSubject(grade: number, subjectId: string, checked: boolean) {
-    setSubjectsByGrade((prev) => {
+  function toggleIn(setter: Dispatch<SetStateAction<GradeMap>>, grade: number, subjectId: string, checked: boolean) {
+    setter((prev) => {
       const set = new Set(prev[grade] ?? []);
       if (checked) set.add(subjectId);
       else set.delete(subjectId);
       return { ...prev, [grade]: set };
     });
-    setPreview(null);
-    setResult(null);
-  }
-
-  function toggleCotDlp(grade: number, subjectId: string, checked: boolean) {
-    setCotDlpByGrade((prev) => {
-      const set = new Set(prev[grade] ?? []);
-      if (checked) set.add(subjectId);
-      else set.delete(subjectId);
-      return { ...prev, [grade]: set };
-    });
-    setPreview(null);
-    setResult(null);
-  }
-
-  function toggleCotPpt(grade: number, subjectId: string, checked: boolean) {
-    setCotPptByGrade((prev) => {
-      const set = new Set(prev[grade] ?? []);
-      if (checked) set.add(subjectId);
-      else set.delete(subjectId);
-      return { ...prev, [grade]: set };
-    });
-    setPreview(null);
-    setResult(null);
+    clearOutput();
   }
 
   function toggleWeek(week: number, checked: boolean) {
@@ -93,8 +82,7 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
       else next.delete(week);
       return next;
     });
-    setPreview(null);
-    setResult(null);
+    clearOutput();
   }
 
   function autofillDeadlines() {
@@ -115,9 +103,10 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
     return {
       termId,
       grades: sortedGrades,
-      subjectsByGrade: Object.fromEntries(Object.entries(subjectsByGrade).map(([g, s]) => [g, [...s]])),
-      cotDlpByGrade: Object.fromEntries(Object.entries(cotDlpByGrade).map(([g, s]) => [g, [...s]])),
-      cotPptByGrade: Object.fromEntries(Object.entries(cotPptByGrade).map(([g, s]) => [g, [...s]])),
+      dlpByGrade: toArrays(dlpByGrade),
+      pptByGrade: toArrays(pptByGrade),
+      cotDlpByGrade: toArrays(cotDlpByGrade),
+      cotPptByGrade: toArrays(cotPptByGrade),
       weeks: selectedWeeks.map((weekNumber) => ({ weekNumber, uploadDeadline: deadlines[weekNumber] })),
     };
   }
@@ -182,8 +171,9 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
         <CardHeader>
           <CardTitle>2–3. Grades &amp; subjects per grade</CardTitle>
           <CardDescription>
-            Default: all active subjects for each selected grade get a DLP and a PPT item every week. Check COT DLP /
-            COT PPT for subjects that also need a classroom observation tool.
+            For each subject, tick exactly the deliverables it needs — DLP, PPT, COT DLP, COT PPT. Selecting a grade
+            pre-ticks DLP and PPT for every subject; adjust as needed. Untick both DLP and PPT to leave a subject out
+            (unless it still has a COT item).
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -200,39 +190,37 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
 
           {sortedGrades.map((grade) => (
             <div key={grade} className="rounded-md border border-border p-3">
-              <p className="mb-2 text-sm font-medium">Grade {grade}</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {subjects.map((subject) => {
-                  const checked = subjectsByGrade[grade]?.has(subject.id) ?? false;
-                  const cotDlpChecked = cotDlpByGrade[grade]?.has(subject.id) ?? false;
-                  const cotPptChecked = cotPptByGrade[grade]?.has(subject.id) ?? false;
-                  return (
-                    <div key={subject.id} className="flex items-center justify-between gap-2 text-sm">
-                      <label className="flex items-center gap-2">
-                        <Checkbox checked={checked} onCheckedChange={(c) => toggleSubject(grade, subject.id, c === true)} />
-                        {subject.name}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Checkbox
-                            disabled={!checked}
-                            checked={cotDlpChecked}
-                            onCheckedChange={(c) => toggleCotDlp(grade, subject.id, c === true)}
-                          />
-                          + COT DLP
-                        </label>
-                        <label className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Checkbox
-                            disabled={!checked}
-                            checked={cotPptChecked}
-                            onCheckedChange={(c) => toggleCotPpt(grade, subject.id, c === true)}
-                          />
-                          + COT PPT
-                        </label>
-                      </div>
+              <p className="mb-3 text-sm font-medium">Grade {grade}</p>
+              <div className="flex flex-col gap-2">
+                {subjects.map((subject) => (
+                  <div key={subject.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border/50 pb-2 text-sm last:border-b-0">
+                    <span className="min-w-32 font-medium">{subject.name}</span>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <TypeCheck
+                        label="DLP"
+                        checked={dlpByGrade[grade]?.has(subject.id) ?? false}
+                        onChange={(c) => toggleIn(setDlpByGrade, grade, subject.id, c)}
+                      />
+                      <TypeCheck
+                        label="PPT"
+                        checked={pptByGrade[grade]?.has(subject.id) ?? false}
+                        onChange={(c) => toggleIn(setPptByGrade, grade, subject.id, c)}
+                      />
+                      <TypeCheck
+                        label="COT DLP"
+                        muted
+                        checked={cotDlpByGrade[grade]?.has(subject.id) ?? false}
+                        onChange={(c) => toggleIn(setCotDlpByGrade, grade, subject.id, c)}
+                      />
+                      <TypeCheck
+                        label="COT PPT"
+                        muted
+                        checked={cotPptByGrade[grade]?.has(subject.id) ?? false}
+                        onChange={(c) => toggleIn(setCotPptByGrade, grade, subject.id, c)}
+                      />
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </div>
           ))}
@@ -295,5 +283,24 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
         )}
       </div>
     </div>
+  );
+}
+
+function TypeCheck({
+  label,
+  checked,
+  muted,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  muted?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={`flex items-center gap-1 ${muted ? "text-xs text-muted-foreground" : "text-sm"}`}>
+      <Checkbox checked={checked} onCheckedChange={(c) => onChange(c === true)} />
+      {label}
+    </label>
   );
 }
