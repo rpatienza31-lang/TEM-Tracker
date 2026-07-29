@@ -6,6 +6,7 @@ import { getMyCotItems } from "@/lib/cot/queries";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/work-items/status-badge";
 import { SubmitDialog } from "@/components/work-items/submit-dialog";
+import { CotSubmitDialog } from "./cot-submit-dialog";
 import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 
 function isOverdue(dueDate: string, status: string) {
@@ -96,9 +97,11 @@ export default async function MyWorkPage() {
                 </TableCell>
                 <TableCell>{item.deadline}</TableCell>
                 <TableCell>
-                  <Link href="/cot" className="text-sm text-primary underline">
-                    Open in COT Orders
-                  </Link>
+                  {item.status === "claimed" || item.status === "revision" ? (
+                    <CotSubmitDialog itemId={item.id} />
+                  ) : (
+                    <span className="text-sm text-muted-foreground">Submitted — awaiting review</span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
