@@ -1,22 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { RequestRevisionDialog } from "@/components/work-items/request-revision-dialog";
 import { approveItemAction, unapproveItemAction, uploadItemAction } from "@/lib/work-items/actions";
+import { approveCotAction, requestCotRevisionAction } from "@/app/(app)/cot/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import type { BoardItem } from "@/lib/work-items/queries";
+import type { CotReviewItem } from "@/lib/cot/queries";
 import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 
 function uniqueSorted<T>(values: T[]): T[] {
   return [...new Set(values)].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 }
 
-export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[]; readyToUpload: BoardItem[] }) {
+export function ReviewClient({
+  inReview,
+  readyToUpload,
+  cotInReview,
+}: {
+  inReview: BoardItem[];
+  readyToUpload: BoardItem[];
+  cotInReview: CotReviewItem[];
+}) {
   const [banner, setBanner] = useState<string | null>(null);
   const [selectedUploads, setSelectedUploads] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
@@ -164,6 +175,51 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
       </section>
 
       <section className="flex flex-col gap-2">
+        <h2 className="text-lg font-semibold">COT deliverables in review ({cotInReview.length})</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Customer</TableHead>
+              <TableHead>Subject / Topic</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Editor</TableHead>
+              <TableHead>Deadline</TableHead>
+              <TableHead>File</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {cotInReview.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell>{item.customerName}</TableCell>
+                <TableCell>{[item.subjectName, item.topic].filter(Boolean).join(" · ") || "—"}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
+                <TableCell>{item.assigneeName}</TableCell>
+                <TableCell>{item.deadline}</TableCell>
+                <TableCell>
+                  {item.fileUrl && (
+                    <a className="text-primary underline" href={item.fileUrl} target="_blank" rel="noreferrer">
+                      File
+                    </a>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <CotReviewActions itemId={item.id} onDone={setBanner} />
+                </TableCell>
+              </TableRow>
+            ))}
+            {cotInReview.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  No COT deliverables awaiting review.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+
+      <section className="flex flex-col gap-2">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">Ready to upload ({readyToUpload.length})</h2>
           <BulkActionButton
@@ -221,6 +277,33 @@ export function ReviewClient({ inReview, readyToUpload }: { inReview: BoardItem[
           </TableBody>
         </Table>
       </section>
+    </div>
+  );
+}
+
+function CotReviewActions({ itemId, onDone }: { itemId: string; onDone: (m: string) => void }) {
+  const [pending, startTransition] = useTransition();
+
+  function run(action: () => Promise<{ ok: boolean; message?: string }>, okMessage: string) {
+    startTransition(async () => {
+      const result = await action();
+      onDone(result.ok ? okMessage : (result.message ?? "Something went wrong."));
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      <Button size="sm" disabled={pending} onClick={() => run(() => approveCotAction(itemId), "COT deliverable approved.")}>
+        Approve
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={pending}
+        onClick={() => run(() => requestCotRevisionAction(itemId), "Sent back for revision.")}
+      >
+        Request revision
+      </Button>
     </div>
   );
 }

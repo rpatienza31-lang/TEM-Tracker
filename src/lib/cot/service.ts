@@ -214,6 +214,18 @@ export async function approveCotItem(itemId: string, actor: CotActor): Promise<C
   });
 }
 
+/** Sends a submitted COT deliverable back to its assignee for revision (admin only). */
+export async function requestCotRevisionItem(itemId: string, actor: CotActor): Promise<CotResult> {
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can request revisions." };
+
+  const [item] = await db.select().from(customOrderItems).where(eq(customOrderItems.id, itemId)).limit(1);
+  if (!item) return { ok: false, message: "Item not found." };
+  if (item.status !== "in_review") return { ok: false, message: "Only a submitted item can be sent back." };
+
+  await db.update(customOrderItems).set({ status: "revision", updatedAt: new Date() }).where(eq(customOrderItems.id, itemId));
+  return { ok: true };
+}
+
 /** Reverses an approval and its points (admin only). */
 export async function unapproveCotItem(itemId: string, actor: CotActor): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can un-approve." };

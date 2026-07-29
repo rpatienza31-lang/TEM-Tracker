@@ -9,6 +9,7 @@ import {
   claimCotItem,
   deleteCotOrder,
   releaseCotItem,
+  requestCotRevisionItem,
   setCotOrderType,
   submitCotItem,
   unapproveCotItem,
@@ -86,6 +87,17 @@ export async function approveCotAction(itemId: string): Promise<CotResult> {
     revalidatePath("/cot");
     revalidatePath("/cot/library");
     revalidatePath("/productivity");
+    revalidatePath("/review");
+  }
+  return result;
+}
+
+export async function requestCotRevisionAction(itemId: string): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await requestCotRevisionItem(itemId, actorOf(user));
+  if (result.ok) {
+    revalidatePath("/cot");
+    revalidatePath("/review");
   }
   return result;
 }

@@ -16,6 +16,38 @@ export type MyCotItem = {
   orderType: "rush" | "regular";
 };
 
+export type CotReviewItem = {
+  id: string;
+  type: DeliverableType;
+  customerName: string;
+  subjectName: string | null;
+  topic: string | null;
+  deadline: string;
+  assigneeName: string | null;
+  fileUrl: string | null;
+};
+
+/** Submitted COT deliverables awaiting admin review, soonest deadline first. */
+export async function getCotItemsInReview(): Promise<CotReviewItem[]> {
+  const assignee = aliasedTable(users, "assignee");
+  return db
+    .select({
+      id: customOrderItems.id,
+      type: customOrderItems.type,
+      customerName: customOrders.customerName,
+      subjectName: customOrders.subjectName,
+      topic: customOrders.topic,
+      deadline: customOrders.deadline,
+      assigneeName: assignee.fullName,
+      fileUrl: customOrderItems.fileUrl,
+    })
+    .from(customOrderItems)
+    .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
+    .leftJoin(assignee, eq(assignee.id, customOrderItems.assigneeId))
+    .where(eq(customOrderItems.status, "in_review"))
+    .orderBy(asc(customOrders.deadline));
+}
+
 /** COT deliverables assigned to a user, filtered by status, soonest deadline first. */
 export async function getMyCotItems(userId: string, statuses: ItemStatus[]): Promise<MyCotItem[]> {
   if (statuses.length === 0) return [];
