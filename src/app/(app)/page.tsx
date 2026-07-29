@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms } from "@/db/schema";
 import { getDashboardCounts, getMyWorkItems } from "@/lib/work-items/queries";
+import { getMyCotItems } from "@/lib/cot/queries";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressBar } from "@/components/progress-bar";
@@ -15,20 +16,22 @@ export default async function DashboardPage() {
   const activeTerm = termRows.find((t) => t.isActive);
 
   if (user.role === "editor") {
-    const [active, submitted, revisions, stats] = await Promise.all([
+    const [active, submitted, revisions, cot, stats] = await Promise.all([
       getMyWorkItems(user.id, ["claimed"]),
       getMyWorkItems(user.id, ["in_review"]),
       getMyWorkItems(user.id, ["revision"]),
+      getMyCotItems(user.id, ["claimed", "in_review", "revision"]),
       getProductivityStats(),
     ]);
     const mine = stats.find((s) => s.editorId === user.id);
     return (
       <div className="flex flex-col gap-6">
         <h1 className="text-xl font-semibold">Welcome, {user.fullName.split(" ")[0]}</h1>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <StatCard label="Claimed" value={active.length} href="/my-work" />
           <StatCard label="Awaiting review" value={submitted.length} href="/my-work" />
           <StatCard label="Needs revision" value={revisions.length} href="/my-work" tone={revisions.length > 0 ? "warn" : undefined} />
+          <StatCard label="COT orders" value={cot.length} href="/my-work" />
         </div>
         {mine && (
           <Card className="max-w-sm">
@@ -47,15 +50,16 @@ export default async function DashboardPage() {
     );
   }
 
-  const [counts, stats, myClaimed, mySubmitted, myRevisions] = await Promise.all([
+  const [counts, stats, myClaimed, mySubmitted, myRevisions, myCot] = await Promise.all([
     getDashboardCounts(activeTerm?.id),
     getProductivityStats(),
     getMyWorkItems(user.id, ["claimed"]),
     getMyWorkItems(user.id, ["in_review"]),
     getMyWorkItems(user.id, ["revision"]),
+    getMyCotItems(user.id, ["claimed", "in_review", "revision"]),
   ]);
   const leaderboard = [...stats].sort((a, b) => b.pointsTotal - a.pointsTotal).slice(0, 8);
-  const myAssignedTotal = myClaimed.length + mySubmitted.length + myRevisions.length;
+  const myAssignedTotal = myClaimed.length + mySubmitted.length + myRevisions.length + myCot.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,7 +73,7 @@ export default async function DashboardPage() {
       {myAssignedTotal > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold text-muted-foreground">Assigned to you</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard label="Claimed" value={myClaimed.length} href="/my-work" />
             <StatCard label="Awaiting review" value={mySubmitted.length} href="/my-work" />
             <StatCard
@@ -78,6 +82,7 @@ export default async function DashboardPage() {
               href="/my-work"
               tone={myRevisions.length > 0 ? "warn" : undefined}
             />
+            <StatCard label="COT orders" value={myCot.length} href="/my-work" />
           </div>
         </section>
       )}

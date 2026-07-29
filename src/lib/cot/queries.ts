@@ -1,8 +1,41 @@
-import { aliasedTable, asc, eq, inArray } from "drizzle-orm";
+import { aliasedTable, and, asc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { customOrders, customOrderItems, users } from "@/db/schema";
 import { priorityFor, type PriorityLevel } from "@/lib/cot/deadline";
+import type { DeliverableType, ItemStatus } from "@/lib/constants";
+
+export type MyCotItem = {
+  id: string;
+  type: DeliverableType;
+  status: ItemStatus;
+  customerName: string;
+  subjectName: string | null;
+  topic: string | null;
+  deadline: string;
+  orderType: "rush" | "regular";
+};
+
+/** COT deliverables assigned to a user, filtered by status, soonest deadline first. */
+export async function getMyCotItems(userId: string, statuses: ItemStatus[]): Promise<MyCotItem[]> {
+  if (statuses.length === 0) return [];
+  const rows = await db
+    .select({
+      id: customOrderItems.id,
+      type: customOrderItems.type,
+      status: customOrderItems.status,
+      customerName: customOrders.customerName,
+      subjectName: customOrders.subjectName,
+      topic: customOrders.topic,
+      deadline: customOrders.deadline,
+      orderType: customOrders.orderType,
+    })
+    .from(customOrderItems)
+    .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
+    .where(and(eq(customOrderItems.assigneeId, userId), inArray(customOrderItems.status, statuses)))
+    .orderBy(asc(customOrders.deadline));
+  return rows;
+}
 
 export type CotItemView = {
   id: string;

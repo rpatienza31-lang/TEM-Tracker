@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireUser } from "@/lib/auth";
 import { getMyWorkItems } from "@/lib/work-items/queries";
+import { getMyCotItems } from "@/lib/cot/queries";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/work-items/status-badge";
 import { SubmitDialog } from "@/components/work-items/submit-dialog";
@@ -14,10 +15,11 @@ function isOverdue(dueDate: string, status: string) {
 export default async function MyWorkPage() {
   const user = await requireUser();
 
-  const [active, submitted, history] = await Promise.all([
+  const [active, submitted, history, cotItems] = await Promise.all([
     getMyWorkItems(user.id, ["claimed", "revision"]),
     getMyWorkItems(user.id, ["in_review"]),
     getMyWorkItems(user.id, ["approved", "uploaded"]),
+    getMyCotItems(user.id, ["claimed", "in_review", "revision"]),
   ]);
 
   return (
@@ -63,6 +65,47 @@ export default async function MyWorkPage() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground">
                   Nothing claimed right now — grab an item from the Work Board.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-lg font-semibold">COT orders assigned to you ({cotItems.length})</h2>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Customer</TableHead>
+              <TableHead>Grade / Subject / Topic</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Deadline</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {cotItems.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell>{item.customerName}</TableCell>
+                <TableCell>{[item.subjectName, item.topic].filter(Boolean).join(" · ") || "—"}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
+                <TableCell>
+                  <StatusBadge status={item.status} overdue={isOverdue(item.deadline, item.status)} />
+                </TableCell>
+                <TableCell>{item.deadline}</TableCell>
+                <TableCell>
+                  <Link href="/cot" className="text-sm text-primary underline">
+                    Open in COT Orders
+                  </Link>
+                </TableCell>
+              </TableRow>
+            ))}
+            {cotItems.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  No COT orders assigned to you.
                 </TableCell>
               </TableRow>
             )}
