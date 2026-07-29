@@ -10,6 +10,8 @@ type PendingLog = {
   id: string;
   userName: string;
   workDate: string;
+  timeIn: string | null;
+  timeOut: string | null;
   hours: string | null;
   note: string | null;
 };
@@ -26,6 +28,8 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
         <TableRow>
           <TableHead>Staff</TableHead>
           <TableHead>Date</TableHead>
+          <TableHead>Time in</TableHead>
+          <TableHead>Time out</TableHead>
           <TableHead>Hours</TableHead>
           <TableHead>Note</TableHead>
           <TableHead />
@@ -36,6 +40,8 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
           <TableRow key={log.id}>
             <TableCell>{log.userName}</TableCell>
             <TableCell>{log.workDate}</TableCell>
+            <TableCell className="text-muted-foreground">{log.timeIn ?? "—"}</TableCell>
+            <TableCell className="text-muted-foreground">{log.timeOut ?? "—"}</TableCell>
             <TableCell>{log.hours ?? "—"}</TableCell>
             <TableCell className="text-muted-foreground">{log.note}</TableCell>
             <TableCell>
@@ -56,7 +62,7 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
         ))}
         {visible.length === 0 && (
           <TableRow>
-            <TableCell colSpan={5} className="text-center text-muted-foreground">
+            <TableCell colSpan={7} className="text-center text-muted-foreground">
               Nothing pending approval.
             </TableCell>
           </TableRow>

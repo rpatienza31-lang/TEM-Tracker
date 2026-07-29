@@ -30,6 +30,8 @@ export async function getPendingTimeLogs() {
       userName: users.fullName,
       workDate: timeLogs.workDate,
       hours: timeLogs.hours,
+      clockIn: timeLogs.clockIn,
+      clockOut: timeLogs.clockOut,
       note: timeLogs.note,
       createdAt: timeLogs.createdAt,
     })
@@ -38,6 +40,20 @@ export async function getPendingTimeLogs() {
     // Only completed logs await approval — an open clock-in has hours = null.
     .where(and(isNull(timeLogs.approvedAt), isNotNull(timeLogs.hours)))
     .orderBy(asc(timeLogs.workDate));
+}
+
+/** Staff currently clocked in (open session), with when they started. */
+export async function getActiveClockIns() {
+  return db
+    .select({
+      id: timeLogs.id,
+      userName: users.fullName,
+      clockIn: timeLogs.clockIn,
+    })
+    .from(timeLogs)
+    .innerJoin(users, eq(users.id, timeLogs.userId))
+    .where(and(isNotNull(timeLogs.clockIn), isNull(timeLogs.clockOut)))
+    .orderBy(asc(timeLogs.clockIn));
 }
 
 export type ApprovedHours = { userId: string; hours: number };

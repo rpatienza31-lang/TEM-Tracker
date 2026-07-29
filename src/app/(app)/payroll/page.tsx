@@ -1,16 +1,21 @@
+import { formatInTimeZone } from "date-fns-tz";
+
 import { requireRole } from "@/lib/auth";
-import { getPendingTimeLogs } from "@/lib/time-logs/queries";
+import { getActiveClockIns, getPendingTimeLogs } from "@/lib/time-logs/queries";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PendingApprovals } from "./pending-approvals";
+import { ActiveClockIns } from "./active-clock-ins";
 import { RateCell } from "./rate-cell";
 
 type SearchParams = { from?: string; to?: string };
 
+const PH_TZ = "Asia/Manila";
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+const phTime = (d: Date | null) => (d ? formatInTimeZone(new Date(d), PH_TZ, "h:mm a") : null);
 
 function defaultRange() {
   const to = new Date();
@@ -27,7 +32,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   const from = sp.from || defaults.from;
   const to = sp.to || defaults.to;
 
-  const [pending, report] = await Promise.all([getPendingTimeLogs(), getPayrollReport(from, to)]);
+  const [pending, report, activeClockIns] = await Promise.all([
+    getPendingTimeLogs(),
+    getPayrollReport(from, to),
+    getActiveClockIns(),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -39,10 +48,29 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         </p>
       </div>
 
+      <ActiveClockIns
+        active={activeClockIns
+          .filter((a) => a.clockIn)
+          .map((a) => ({
+            id: a.id,
+            userName: a.userName,
+            clockInIso: new Date(a.clockIn as Date).toISOString(),
+            clockInLabel: formatInTimeZone(new Date(a.clockIn as Date), PH_TZ, "MMM d, h:mm a"),
+          }))}
+      />
+
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">Time logs awaiting approval ({pending.length})</h2>
         <PendingApprovals
-          logs={pending.map((p) => ({ id: p.id, userName: p.userName, workDate: p.workDate, hours: p.hours, note: p.note }))}
+          logs={pending.map((p) => ({
+            id: p.id,
+            userName: p.userName,
+            workDate: p.workDate,
+            timeIn: phTime(p.clockIn),
+            timeOut: phTime(p.clockOut),
+            hours: p.hours,
+            note: p.note,
+          }))}
         />
       </section>
 
