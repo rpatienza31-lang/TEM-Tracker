@@ -97,6 +97,21 @@ describe("payroll report", () => {
     expect(row!.salary).toBe(200); // 5 hours * ₱40
   });
 
+  it("builds a payslip with the cash advance deducted from gross", async () => {
+    const staff = await makeUser("admin", "Payslip Staff");
+    await db.update(users).set({ hourlyRate: "50.00", cashAdvance: "100.00" }).where(eq(users.id, staff.id));
+    await db.insert(timeLogs).values([
+      { userId: staff.id, workDate: "2020-01-10", hours: "8", approvedBy: staff.id, approvedAt: new Date() },
+    ]);
+
+    const report = await getPayrollReport(RANGE.from, RANGE.to);
+    const slip = report.payslips.find((p) => p.userId === staff.id);
+    expect(slip).toBeDefined();
+    expect(slip!.gross).toBe(400); // 8h * ₱50
+    expect(slip!.cashAdvance).toBe(100);
+    expect(slip!.net).toBe(300); // 400 − 100
+  });
+
   it("omits salary and rate columns from the CSV unless salary is included", async () => {
     const staff = await makeUser("admin", "Csv Staff");
     await db.update(users).set({ hourlyRate: "50.00" }).where(eq(users.id, staff.id));

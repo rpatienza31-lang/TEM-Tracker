@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { PendingApprovals } from "./pending-approvals";
 import { ActiveClockIns } from "./active-clock-ins";
 import { RateCell } from "./rate-cell";
+import { CashAdvanceCell } from "./cash-advance-cell";
 
 type SearchParams = { from?: string; to?: string };
 
@@ -185,6 +186,72 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
           </Table>
         </div>
       </section>
+
+      {isOwner && (
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Payslips</h2>
+              <p className="text-sm text-muted-foreground">
+                Gross combines quota and hourly pay; net is gross minus the editable cash advance (CA).
+              </p>
+            </div>
+            <Card className="min-w-[180px]">
+              <CardHeader className="pb-1">
+                <CardDescription>Total net this period</CardDescription>
+                <CardTitle className="text-2xl tabular-nums">{peso.format(report.totalNet)}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 text-xs text-muted-foreground">
+                {from} → {to}
+              </CardContent>
+            </Card>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead className="text-right">Quota</TableHead>
+                <TableHead className="text-right">Hourly</TableHead>
+                <TableHead className="text-right">Gross</TableHead>
+                <TableHead>Cash advance (CA)</TableHead>
+                <TableHead className="text-right">Net pay</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {report.payslips.map((p) => (
+                <TableRow key={p.userId}>
+                  <TableCell>{p.fullName}</TableCell>
+                  <TableCell className="text-right tabular-nums">{peso.format(p.quotaSalary)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{peso.format(p.hourlySalary)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{peso.format(p.gross)}</TableCell>
+                  <TableCell>
+                    <CashAdvanceCell userId={p.userId} amount={p.cashAdvance} />
+                  </TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{peso.format(p.net)}</TableCell>
+                  <TableCell>
+                    <a
+                      href={`/payroll/payslip/${p.userId}?from=${from}&to=${to}`}
+                      target="_blank"
+                      rel="noopener"
+                      className="text-sm text-primary underline"
+                    >
+                      Payslip
+                    </a>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {report.payslips.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    No payslips for this period yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </section>
+      )}
     </div>
   );
 }

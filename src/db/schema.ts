@@ -43,6 +43,8 @@ export const users = pgTable("users", {
   // (quota/both staff). A "both" staff member earns from both.
   hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull().default("0"),
   cycleRate: numeric("cycle_rate", { precision: 10, scale: 2 }).notNull().default("0"),
+  // Cash advance to deduct from this payout, editable by the owner. Owner-only.
+  cashAdvance: numeric("cash_advance", { precision: 10, scale: 2 }).notNull().default("0"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

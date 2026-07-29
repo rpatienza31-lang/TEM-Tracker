@@ -24,12 +24,24 @@ export type HourlyPayrollRow = {
   salary: number;
 };
 
+export type PayslipRow = {
+  userId: string;
+  fullName: string;
+  quotaSalary: number;
+  hourlySalary: number;
+  gross: number;
+  cashAdvance: number;
+  net: number;
+};
+
 export type PayrollReport = {
   from: string;
   to: string;
   quotaRows: QuotaPayrollRow[];
   hourlyRows: HourlyPayrollRow[];
+  payslips: PayslipRow[];
   totalSalary: number;
+  totalNet: number;
 };
 
 /**
@@ -48,12 +60,22 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
       .from(users)
       .where(inArray(users.payType, ["hourly", "both"]))
       .orderBy(asc(users.fullName)),
-    db.select({ id: users.id, hourlyRate: users.hourlyRate, cycleRate: users.cycleRate }).from(users),
+    db
+      .select({
+        id: users.id,
+        fullName: users.fullName,
+        hourlyRate: users.hourlyRate,
+        cycleRate: users.cycleRate,
+        cashAdvance: users.cashAdvance,
+      })
+      .from(users),
   ]);
 
   const closuresByEditor = new Map(closures.map((c) => [c.editorId, c]));
   const hourlyRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.hourlyRate)]));
   const cycleRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.cycleRate)]));
+  const cashAdvanceByUser = new Map(rateRows.map((r) => [r.id, Number(r.cashAdvance)]));
+  const nameByUser = new Map(rateRows.map((r) => [r.id, r.fullName]));
 
   const quotaRows: QuotaPayrollRow[] = productivity.map((p) => {
     const closure = closuresByEditor.get(p.editorId);
@@ -86,7 +108,43 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   const totalSalary =
     quotaRows.reduce((sum, r) => sum + r.salary, 0) + hourlyRows.reduce((sum, r) => sum + r.salary, 0);
 
-  return { from, to, quotaRows, hourlyRows, totalSalary };
+  // One payslip per staff member with any earnings or cash advance, combining
+  // their quota and hourly pay, less the cash advance to deduct this payout.
+  const bySalary = new Map<string, { quota: number; hourly: number }>();
+  for (const r of quotaRows) {
+    const e = bySalary.get(r.userId) ?? { quota: 0, hourly: 0 };
+    e.quota += r.salary;
+    bySalary.set(r.userId, e);
+  }
+  for (const r of hourlyRows) {
+    const e = bySalary.get(r.userId) ?? { quota: 0, hourly: 0 };
+    e.hourly += r.salary;
+    bySalary.set(r.userId, e);
+  }
+  const payslipUserIds = new Set<string>([...bySalary.keys()]);
+  for (const [id, ca] of cashAdvanceByUser) if (ca > 0) payslipUserIds.add(id);
+
+  const payslips: PayslipRow[] = [...payslipUserIds]
+    .map((userId) => {
+      const e = bySalary.get(userId) ?? { quota: 0, hourly: 0 };
+      const gross = e.quota + e.hourly;
+      const cashAdvance = cashAdvanceByUser.get(userId) ?? 0;
+      return {
+        userId,
+        fullName: nameByUser.get(userId) ?? "",
+        quotaSalary: e.quota,
+        hourlySalary: e.hourly,
+        gross,
+        cashAdvance,
+        net: gross - cashAdvance,
+      };
+    })
+    .filter((p) => p.gross > 0 || p.cashAdvance > 0)
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
+
+  const totalNet = payslips.reduce((sum, p) => sum + p.net, 0);
+
+  return { from, to, quotaRows, hourlyRows, payslips, totalSalary, totalNet };
 }
 
 /**
