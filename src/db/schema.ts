@@ -17,7 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const userRole = pgEnum("user_role", ["owner", "admin", "sales", "editor"]);
-export const payType = pgEnum("pay_type", ["hourly", "quota"]);
+export const payType = pgEnum("pay_type", ["hourly", "quota", "both"]);
 export const deliverableType = pgEnum("deliverable_type", ["DLP", "PPT", "COT_DLP", "COT_PPT"]);
 export const itemStatus = pgEnum("item_status", [
   "available",
@@ -38,9 +38,11 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   role: userRole("role").notNull(),
   payType: payType("pay_type").notNull(),
-  // Pay rate in PHP. For hourly staff it is pesos per approved hour; for quota
-  // staff it is pesos per completed 21-point cycle. Visible to the owner only.
-  rate: numeric("rate", { precision: 10, scale: 2 }).notNull().default("0"),
+  // Pay rates in PHP, owner-visible only. hourlyRate applies to approved hours
+  // (hourly/both staff); cycleRate applies to each completed 21-point cycle
+  // (quota/both staff). A "both" staff member earns from both.
+  hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull().default("0"),
+  cycleRate: numeric("cycle_rate", { precision: 10, scale: 2 }).notNull().default("0"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

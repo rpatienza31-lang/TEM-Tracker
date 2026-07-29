@@ -105,7 +105,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                   <TableCell>{row.remainderCarried.toFixed(1)}</TableCell>
                   {isOwner && (
                     <TableCell>
-                      <RateCell userId={row.userId} rate={row.rate} />
+                      <RateCell userId={row.userId} rate={row.rate} field="cycle" />
                     </TableCell>
                   )}
                   {isOwner && <TableCell className="text-right font-medium tabular-nums">{peso.format(row.salary)}</TableCell>}
@@ -140,7 +140,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                   <TableCell>{row.approvedHours.toFixed(2)}</TableCell>
                   {isOwner && (
                     <TableCell>
-                      <RateCell userId={row.userId} rate={row.rate} />
+                      <RateCell userId={row.userId} rate={row.rate} field="hourly" />
                     </TableCell>
                   )}
                   {isOwner && <TableCell className="text-right font-medium tabular-nums">{peso.format(row.salary)}</TableCell>}

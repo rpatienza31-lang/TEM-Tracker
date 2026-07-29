@@ -53,6 +53,7 @@ export function InviteForm() {
           <SelectContent>
             <SelectItem value="quota">Quota</SelectItem>
             <SelectItem value="hourly">Hourly</SelectItem>
+            <SelectItem value="both">Both (quota + hourly)</SelectItem>
           </SelectContent>
         </Select>
         <input type="hidden" name="payType" value={payType} />

@@ -70,7 +70,7 @@ describe("payroll report", () => {
 
   it("computes hourly salary from the staff rate and totals it", async () => {
     const staff = await makeUser("admin", "Hourly Rate");
-    await db.update(users).set({ rate: "50.00" }).where(eq(users.id, staff.id));
+    await db.update(users).set({ hourlyRate: "50.00" }).where(eq(users.id, staff.id));
 
     await db.insert(timeLogs).values([
       { userId: staff.id, workDate: "2020-01-10", hours: "8", approvedBy: staff.id, approvedAt: new Date() },
@@ -84,9 +84,22 @@ describe("payroll report", () => {
     expect(report.totalSalary).toBe(400);
   });
 
+  it("includes 'both' staff in the hourly section, paid from their hourly rate", async () => {
+    const staff = await makeUser("editor", "Both Staff"); // editor default payType is quota
+    await db.update(users).set({ payType: "both", hourlyRate: "40.00" }).where(eq(users.id, staff.id));
+    await db.insert(timeLogs).values([
+      { userId: staff.id, workDate: "2020-01-10", hours: "5", approvedBy: staff.id, approvedAt: new Date() },
+    ]);
+
+    const report = await getPayrollReport(RANGE.from, RANGE.to);
+    const row = report.hourlyRows.find((r) => r.userId === staff.id);
+    expect(row).toBeDefined();
+    expect(row!.salary).toBe(200); // 5 hours * ₱40
+  });
+
   it("omits salary and rate columns from the CSV unless salary is included", async () => {
     const staff = await makeUser("admin", "Csv Staff");
-    await db.update(users).set({ rate: "50.00" }).where(eq(users.id, staff.id));
+    await db.update(users).set({ hourlyRate: "50.00" }).where(eq(users.id, staff.id));
     await db.insert(timeLogs).values([
       { userId: staff.id, workDate: "2020-01-10", hours: "8", approvedBy: staff.id, approvedAt: new Date() },
     ]);

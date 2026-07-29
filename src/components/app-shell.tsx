@@ -17,7 +17,7 @@ type NavUser = {
   id: string;
   fullName: string;
   role: "owner" | "admin" | "sales" | "editor";
-  payType: "hourly" | "quota";
+  payType: "hourly" | "quota" | "both";
 };
 
 type NotificationItem = { id: string; message: string; readAt: Date | null; createdAt: Date };
@@ -31,7 +31,7 @@ const NAV = [
   { href: "/my-work", label: "My Work", roles: ["owner", "admin", "sales", "editor"] },
   { href: "/review", label: "Review Queue", roles: ["owner", "admin"] },
   { href: "/productivity", label: "Productivity & Quota", roles: ["owner", "admin", "editor"] },
-  { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales"], payTypes: ["hourly"] },
+  { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales", "editor"], payTypes: ["hourly", "both"] },
   { href: "/payroll", label: "Payroll Period", roles: ["owner", "admin"] },
   { href: "/admin", label: "Admin / Setup", roles: ["owner", "admin"] },
 ] as const;

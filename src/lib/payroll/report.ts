@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, inArray } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
@@ -46,18 +46,19 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
     db
       .select({ id: users.id, fullName: users.fullName })
       .from(users)
-      .where(eq(users.payType, "hourly"))
+      .where(inArray(users.payType, ["hourly", "both"]))
       .orderBy(asc(users.fullName)),
-    db.select({ id: users.id, rate: users.rate }).from(users),
+    db.select({ id: users.id, hourlyRate: users.hourlyRate, cycleRate: users.cycleRate }).from(users),
   ]);
 
   const closuresByEditor = new Map(closures.map((c) => [c.editorId, c]));
-  const rateByUser = new Map(rateRows.map((r) => [r.id, Number(r.rate)]));
+  const hourlyRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.hourlyRate)]));
+  const cycleRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.cycleRate)]));
 
   const quotaRows: QuotaPayrollRow[] = productivity.map((p) => {
     const closure = closuresByEditor.get(p.editorId);
     const cyclesCompleted = closure?.cyclesCompleted ?? 0;
-    const rate = rateByUser.get(p.editorId) ?? 0;
+    const rate = cycleRateByUser.get(p.editorId) ?? 0;
     return {
       userId: p.editorId,
       fullName: p.fullName,
@@ -72,7 +73,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   const hoursByUser = new Map(approvedHours.map((h) => [h.userId, h.hours]));
   const hourlyRows: HourlyPayrollRow[] = hourlyStaff.map((u) => {
     const approvedHrs = hoursByUser.get(u.id) ?? 0;
-    const rate = rateByUser.get(u.id) ?? 0;
+    const rate = hourlyRateByUser.get(u.id) ?? 0;
     return {
       userId: u.id,
       fullName: u.fullName,

@@ -11,7 +11,7 @@ const PH_TZ = "Asia/Manila";
 
 export default async function TimeLogsPage() {
   const user = await requireUser();
-  if (user.payType !== "hourly") redirect("/");
+  if (user.payType !== "hourly" && user.payType !== "both") redirect("/");
 
   const [logs, active] = await Promise.all([getMyTimeLogs(user.id), getActiveTimeLog(user.id)]);
 

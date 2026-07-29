@@ -13,7 +13,7 @@ type Row = {
   fullName: string;
   email: string;
   role: "owner" | "admin" | "sales" | "editor";
-  payType: "hourly" | "quota";
+  payType: "hourly" | "quota" | "both";
   isActive: boolean;
 };
 
@@ -73,6 +73,7 @@ export function UserRow({ user, canDelete = false, isSelf = false }: { user: Row
           <SelectContent>
             <SelectItem value="quota">Quota</SelectItem>
             <SelectItem value="hourly">Hourly</SelectItem>
+            <SelectItem value="both">Both</SelectItem>
           </SelectContent>
         </Select>
       </TableCell>
