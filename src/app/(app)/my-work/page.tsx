@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
 import { getMyWorkItems } from "@/lib/work-items/queries";
@@ -14,7 +13,6 @@ function isOverdue(dueDate: string, status: string) {
 
 export default async function MyWorkPage() {
   const user = await requireUser();
-  if (user.role !== "editor") redirect("/board");
 
   const [active, submitted, history] = await Promise.all([
     getMyWorkItems(user.id, ["claimed", "revision"]),

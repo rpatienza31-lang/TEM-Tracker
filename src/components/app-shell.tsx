@@ -28,7 +28,7 @@ const NAV = [
   { href: "/matrix", label: "Matrix View", roles: ["owner", "admin", "editor"] },
   { href: "/cot", label: "COT Orders", roles: ["owner", "admin", "editor"] },
   { href: "/cot/library", label: "Available Library", roles: ["owner", "admin", "sales", "editor"] },
-  { href: "/my-work", label: "My Work", roles: ["editor"] },
+  { href: "/my-work", label: "My Work", roles: ["owner", "admin", "sales", "editor"] },
   { href: "/review", label: "Review Queue", roles: ["owner", "admin"] },
   { href: "/productivity", label: "Productivity & Quota", roles: ["owner", "admin", "editor"] },
   { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales"], payTypes: ["hourly"] },
