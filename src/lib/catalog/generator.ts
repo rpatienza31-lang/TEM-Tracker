@@ -14,23 +14,12 @@ export type CatalogGeneratorInput = {
   dlpByGrade: Record<number, string[]>;
   /** grade -> subject ids that get a PPT item each week */
   pptByGrade: Record<number, string[]>;
-  /** grade -> subject ids that get a COT-DLP item each week */
-  cotDlpByGrade: Record<number, string[]>;
-  /** grade -> subject ids that get a COT-PPT item each week */
-  cotPptByGrade: Record<number, string[]>;
   weeks: CatalogWeekInput[];
 };
 
 /** All subject ids offered for a grade — the union across every deliverable type. */
 function offeredSubjects(input: CatalogGeneratorInput, grade: number): string[] {
-  return [
-    ...new Set([
-      ...(input.dlpByGrade[grade] ?? []),
-      ...(input.pptByGrade[grade] ?? []),
-      ...(input.cotDlpByGrade[grade] ?? []),
-      ...(input.cotPptByGrade[grade] ?? []),
-    ]),
-  ];
+  return [...new Set([...(input.dlpByGrade[grade] ?? []), ...(input.pptByGrade[grade] ?? [])])];
 }
 
 type PlannedItem = {
@@ -49,14 +38,10 @@ function planItems(input: CatalogGeneratorInput): PlannedItem[] {
   for (const grade of input.grades) {
     const dlp = new Set(input.dlpByGrade[grade] ?? []);
     const ppt = new Set(input.pptByGrade[grade] ?? []);
-    const cotDlp = new Set(input.cotDlpByGrade[grade] ?? []);
-    const cotPpt = new Set(input.cotPptByGrade[grade] ?? []);
     for (const subjectId of offeredSubjects(input, grade)) {
       for (const week of input.weeks) {
         if (dlp.has(subjectId)) items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "DLP" });
         if (ppt.has(subjectId)) items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "PPT" });
-        if (cotDlp.has(subjectId)) items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "COT_DLP" });
-        if (cotPpt.has(subjectId)) items.push({ grade, subjectId, weekNumber: week.weekNumber, type: "COT_PPT" });
       }
     }
   }

@@ -10,6 +10,7 @@ import { ClaimButton } from "@/components/work-items/claim-button";
 import { SubmitDialog } from "@/components/work-items/submit-dialog";
 import { AssignDialog } from "@/components/work-items/assign-dialog";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
+import { DeleteItemButton } from "@/components/work-items/delete-item-button";
 import { releaseItemAction, uploadItemAction } from "@/lib/work-items/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import { ALL_DELIVERABLE_TYPES, ALL_GRADES, DELIVERABLE_TYPE_LABELS, STATUS_LABELS, WEEK_NUMBERS, type ItemStatus } from "@/lib/constants";
@@ -282,6 +283,14 @@ export function BoardClient({
                       pendingLabel="…"
                       action={uploadItemAction}
                       onDone={(m) => setBanner({ kind: "success", message: m })}
+                    />
+                  )}
+                  {isAdmin && (
+                    <DeleteItemButton
+                      itemId={item.id}
+                      label="Delete"
+                      onDone={(m) => setBanner({ kind: "success", message: m })}
+                      onError={(m) => setBanner({ kind: "error", message: m })}
                     />
                   )}
                 </TableCell>

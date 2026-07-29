@@ -401,6 +401,29 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
   }
 }
 
+export type DeleteResult = { ok: true } | { ok: false; error: TransitionError };
+
+/**
+ * Permanently removes a work item — used to fix catalog-generator input
+ * mistakes (wrong subject/type/week). Admin-only. Any points already awarded
+ * are reversed first so quota cycles stay correct; the row's events,
+ * notifications, and quota-cycle-item ledger rows cascade away with it.
+ */
+export async function deleteWorkItem(itemId: string, actor: AppUser): Promise<DeleteResult> {
+  if (!isAdmin(actor)) {
+    return { ok: false, error: { code: "forbidden", message: "Only admins can delete a work item." } };
+  }
+  return await db.transaction(async (tx) => {
+    const current = await tx.query.workItems.findFirst({ where: eq(workItems.id, itemId) });
+    if (!current) return { ok: false, error: { code: "not_found", message: "Work item not found." } };
+    if (current.status === "approved" || current.status === "uploaded") {
+      await reverseApprovalPoints(tx, itemId);
+    }
+    await tx.delete(workItems).where(eq(workItems.id, itemId));
+    return { ok: true };
+  });
+}
+
 function forbidden(message: string): TransitionResult {
   return { ok: false, error: { code: "forbidden", message } };
 }

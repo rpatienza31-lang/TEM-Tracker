@@ -32,8 +32,6 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
   const [grades, setGrades] = useState<Set<number>>(new Set());
   const [dlpByGrade, setDlpByGrade] = useState<GradeMap>({});
   const [pptByGrade, setPptByGrade] = useState<GradeMap>({});
-  const [cotDlpByGrade, setCotDlpByGrade] = useState<GradeMap>({});
-  const [cotPptByGrade, setCotPptByGrade] = useState<GradeMap>({});
   const [weeks, setWeeks] = useState<Set<number>>(new Set(WEEK_NUMBERS));
   const [startDate, setStartDate] = useState("");
   const [deadlines, setDeadlines] = useState<Record<number, string>>({});
@@ -105,8 +103,6 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
       grades: sortedGrades,
       dlpByGrade: toArrays(dlpByGrade),
       pptByGrade: toArrays(pptByGrade),
-      cotDlpByGrade: toArrays(cotDlpByGrade),
-      cotPptByGrade: toArrays(cotPptByGrade),
       weeks: selectedWeeks.map((weekNumber) => ({ weekNumber, uploadDeadline: deadlines[weekNumber] })),
     };
   }
@@ -171,9 +167,9 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
         <CardHeader>
           <CardTitle>2–3. Grades &amp; subjects per grade</CardTitle>
           <CardDescription>
-            For each subject, tick exactly the deliverables it needs — DLP, PPT, COT DLP, COT PPT. Selecting a grade
-            pre-ticks DLP and PPT for every subject; adjust as needed. Untick both DLP and PPT to leave a subject out
-            (unless it still has a COT item).
+            For each subject, tick the deliverables it needs — DLP, PPT, or both. Selecting a grade pre-ticks DLP and
+            PPT for every subject; adjust as needed. Untick both to leave a subject out. (Customized orders are handled
+            in the COT module, not here.)
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -205,18 +201,6 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
                         label="PPT"
                         checked={pptByGrade[grade]?.has(subject.id) ?? false}
                         onChange={(c) => toggleIn(setPptByGrade, grade, subject.id, c)}
-                      />
-                      <TypeCheck
-                        label="COT DLP"
-                        muted
-                        checked={cotDlpByGrade[grade]?.has(subject.id) ?? false}
-                        onChange={(c) => toggleIn(setCotDlpByGrade, grade, subject.id, c)}
-                      />
-                      <TypeCheck
-                        label="COT PPT"
-                        muted
-                        checked={cotPptByGrade[grade]?.has(subject.id) ?? false}
-                        onChange={(c) => toggleIn(setCotPptByGrade, grade, subject.id, c)}
                       />
                     </div>
                   </div>
@@ -289,16 +273,14 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
 function TypeCheck({
   label,
   checked,
-  muted,
   onChange,
 }: {
   label: string;
   checked: boolean;
-  muted?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className={`flex items-center gap-1 ${muted ? "text-xs text-muted-foreground" : "text-sm"}`}>
+    <label className="flex items-center gap-1 text-sm">
       <Checkbox checked={checked} onCheckedChange={(c) => onChange(c === true)} />
       {label}
     </label>

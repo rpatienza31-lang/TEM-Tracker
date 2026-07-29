@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/db/client";
 import { workItems, workItemEvents } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { transitionWorkItem } from "@/lib/work-items/transitions";
+import { deleteWorkItem, transitionWorkItem } from "@/lib/work-items/transitions";
+import { quotaCycles } from "@/db/schema";
 import { makeSubject, makeTerm, makeUser, makeWorkItem, resetDb, seedSettings } from "./helpers";
 
 describe("transitionWorkItem", () => {
@@ -187,6 +188,45 @@ describe("transitionWorkItem", () => {
 
     const releaseAttempt = await transitionWorkItem({ action: "release", itemId: item.id, actor: editor });
     expect(releaseAttempt.ok).toBe(false);
+  });
+
+  it("lets an admin delete a work item, and rejects a non-admin", async () => {
+    const term = await makeTerm();
+    const subject = await makeSubject();
+    const admin = await makeUser("admin", "Admin One");
+    const editor = await makeUser("editor", "Editor One");
+    const item = await makeWorkItem({ termId: term.id, subjectId: subject.id });
+
+    const denied = await deleteWorkItem(item.id, editor);
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.error.code).toBe("forbidden");
+
+    const ok = await deleteWorkItem(item.id, admin);
+    expect(ok.ok).toBe(true);
+
+    const remaining = await db.select().from(workItems).where(eq(workItems.id, item.id));
+    expect(remaining).toHaveLength(0);
+  });
+
+  it("reverses awarded points when an approved item is deleted", async () => {
+    const term = await makeTerm();
+    const subject = await makeSubject();
+    const admin = await makeUser("admin", "Admin One");
+    const editor = await makeUser("editor", "Editor One");
+    const item = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "DLP" });
+
+    await transitionWorkItem({ action: "claim", itemId: item.id, actor: editor });
+    await transitionWorkItem({ action: "submit", itemId: item.id, actor: editor, fileUrl: "https://x.test/f" });
+    await transitionWorkItem({ action: "approve", itemId: item.id, actor: admin });
+
+    const [before] = await db.select().from(quotaCycles).where(eq(quotaCycles.editorId, editor.id));
+    expect(Number(before.pointsTotal)).toBeGreaterThan(0);
+
+    const result = await deleteWorkItem(item.id, admin);
+    expect(result.ok).toBe(true);
+
+    const [after] = await db.select().from(quotaCycles).where(eq(quotaCycles.editorId, editor.id));
+    expect(Number(after.pointsTotal)).toBe(0);
   });
 
   it("the natural-key unique constraint rejects a duplicate work item at the DB level", async () => {

@@ -22,8 +22,6 @@ describe("catalog generator", () => {
       grades: [3, 4],
       dlpByGrade: { 3: [math.id, science.id], 4: [math.id, science.id] },
       pptByGrade: { 3: [math.id, science.id], 4: [math.id, science.id] },
-      cotDlpByGrade: {},
-      cotPptByGrade: {},
       weeks: Array.from({ length: 10 }, (_, i) => ({ weekNumber: i + 1, uploadDeadline: "2099-01-01" })),
     };
 
@@ -58,8 +56,6 @@ describe("catalog generator", () => {
       grades: [4],
       dlpByGrade: { 4: [math.id] },
       pptByGrade: { 4: [math.id] },
-      cotDlpByGrade: {},
-      cotPptByGrade: {},
       weeks,
     });
 
@@ -69,34 +65,10 @@ describe("catalog generator", () => {
       grades: [4],
       dlpByGrade: { 4: [math.id, science.id] },
       pptByGrade: { 4: [math.id, science.id] },
-      cotDlpByGrade: {},
-      cotPptByGrade: {},
       weeks,
     });
 
     expect(result.created).toBe(20); // only Science's 10 weeks x (DLP + PPT) are new
     expect(result.skipped).toBe(20); // Math's 10 weeks x (DLP + PPT) already existed
-  });
-
-  it("supports independently selecting COT-DLP and COT-PPT per subject", async () => {
-    const term = await makeTerm();
-    const math = await makeSubject("Mathematics", "MATH");
-    const science = await makeSubject("Science", "SCI");
-
-    const result = await generateCatalog({
-      termId: term.id,
-      grades: [4],
-      dlpByGrade: { 4: [math.id, science.id] },
-      pptByGrade: { 4: [math.id, science.id] },
-      cotDlpByGrade: { 4: [math.id] }, // only Math gets COT-DLP
-      cotPptByGrade: { 4: [science.id] }, // only Science gets COT-PPT
-      weeks: [{ weekNumber: 1, uploadDeadline: "2099-01-01" }],
-    });
-
-    // Math: DLP + PPT + COT_DLP = 3. Science: DLP + PPT + COT_PPT = 3.
-    expect(result.created).toBe(6);
-    const rows = await db.select().from(workItems).where(eq(workItems.termId, term.id));
-    expect(rows.filter((r) => r.type === "COT_DLP")).toHaveLength(1);
-    expect(rows.filter((r) => r.type === "COT_PPT")).toHaveLength(1);
   });
 });

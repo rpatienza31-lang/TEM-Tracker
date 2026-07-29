@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/lib/auth";
-import { transitionWorkItem, type TransitionResult } from "@/lib/work-items/transitions";
+import { deleteWorkItem, transitionWorkItem, type DeleteResult, type TransitionResult } from "@/lib/work-items/transitions";
 
 function refresh() {
   revalidatePath("/board");
@@ -80,6 +80,13 @@ export async function uploadItemAction(itemId: string): Promise<TransitionResult
 export async function cancelItemAction(itemId: string, note?: string): Promise<TransitionResult> {
   const actor = await requireUser();
   const result = await transitionWorkItem({ action: "cancel", itemId, actor, note });
+  if (result.ok) refresh();
+  return result;
+}
+
+export async function deleteItemAction(itemId: string): Promise<DeleteResult> {
+  const actor = await requireUser();
+  const result = await deleteWorkItem(itemId, actor);
   if (result.ok) refresh();
   return result;
 }

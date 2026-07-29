@@ -121,30 +121,16 @@ async function main() {
   const term2 = await seedTerm("Term 2 SY 2026-27", "2026-27", false, "2026-09-07");
 
   console.log("Generating catalog for Term 1...");
-  const cotSubjectIds = subjectRows.filter((s) => ["MATH", "ENG"].includes(s.shortCode)).map((s) => s.id);
   const term1Weeks = (await db.select().from(termWeeks).where(eq(termWeeks.termId, term1.id))).map((w) => ({
     weekNumber: w.weekNumber,
     uploadDeadline: w.uploadDeadline,
   }));
-
-  const term1CotResult = await generateCatalog({
-    termId: term1.id,
-    grades: TERM1_GRADES,
-    dlpByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
-    pptByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
-    cotDlpByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, cotSubjectIds])),
-    cotPptByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, cotSubjectIds])),
-    weeks: term1Weeks.filter((w) => w.weekNumber === 4 || w.weekNumber === 8),
-  });
-  console.log(`  COT items (weeks 4 & 8, Math/English): created ${term1CotResult.created}, skipped ${term1CotResult.skipped}`);
 
   const term1DlpPptResult = await generateCatalog({
     termId: term1.id,
     grades: TERM1_GRADES,
     dlpByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
     pptByGrade: Object.fromEntries(TERM1_GRADES.map((g) => [g, subjectRows.map((s) => s.id)])),
-    cotDlpByGrade: {},
-    cotPptByGrade: {},
     weeks: term1Weeks,
   });
   console.log(`  DLP+PPT items (all weeks): created ${term1DlpPptResult.created}, skipped ${term1DlpPptResult.skipped}`);
