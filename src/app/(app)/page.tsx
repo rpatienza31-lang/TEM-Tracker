@@ -47,8 +47,15 @@ export default async function DashboardPage() {
     );
   }
 
-  const [counts, stats] = await Promise.all([getDashboardCounts(activeTerm?.id), getProductivityStats()]);
+  const [counts, stats, myClaimed, mySubmitted, myRevisions] = await Promise.all([
+    getDashboardCounts(activeTerm?.id),
+    getProductivityStats(),
+    getMyWorkItems(user.id, ["claimed"]),
+    getMyWorkItems(user.id, ["in_review"]),
+    getMyWorkItems(user.id, ["revision"]),
+  ]);
   const leaderboard = [...stats].sort((a, b) => b.pointsTotal - a.pointsTotal).slice(0, 8);
+  const myAssignedTotal = myClaimed.length + mySubmitted.length + myRevisions.length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,6 +65,22 @@ export default async function DashboardPage() {
           {activeTerm ? `Active term: ${activeTerm.name}` : "No active term set — configure one in Admin / Setup."}
         </p>
       </div>
+
+      {myAssignedTotal > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">Assigned to you</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <StatCard label="Claimed" value={myClaimed.length} href="/my-work" />
+            <StatCard label="Awaiting review" value={mySubmitted.length} href="/my-work" />
+            <StatCard
+              label="Needs revision"
+              value={myRevisions.length}
+              href="/my-work"
+              tone={myRevisions.length > 0 ? "warn" : undefined}
+            />
+          </div>
+        </section>
+      )}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard label="Overdue" value={counts?.overdue ?? 0} href="/board?overdueOnly=1" tone="danger" />
         <StatCard label="Due soon (3d)" value={counts?.dueSoon ?? 0} href="/board" tone="warn" />
