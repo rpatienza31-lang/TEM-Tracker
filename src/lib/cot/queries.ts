@@ -1,7 +1,7 @@
 import { aliasedTable, and, asc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { customOrders, customOrderItems, users } from "@/db/schema";
+import { customOrders, customOrderItems, terms, users } from "@/db/schema";
 import { priorityFor, type PriorityLevel } from "@/lib/cot/deadline";
 import type { DeliverableType, ItemStatus } from "@/lib/constants";
 
@@ -151,9 +151,32 @@ export async function getActiveCotOrders(): Promise<CotOrderView[]> {
   return all.filter((o) => !o.completed);
 }
 
-/** Completed COT orders — the available library of finished topics/indicators. */
-export async function getCotLibrary(): Promise<CotOrderView[]> {
+/** A completed COT order tagged with the term its order date falls within. */
+export type CotLibraryOrder = CotOrderView & { termName: string; termSortKey: string };
+
+/**
+ * Completed COT orders — the available library of finished topics/indicators.
+ * Each order is tagged with the school term whose date range contains its
+ * order date, so the library can be grouped per term (and then per grade).
+ */
+export async function getCotLibrary(): Promise<CotLibraryOrder[]> {
   const rows = await db.select().from(customOrders).orderBy(asc(customOrders.grade), asc(customOrders.subjectName));
   const all = await loadOrders(rows);
-  return all.filter((o) => o.completed);
+  const completed = all.filter((o) => o.completed);
+
+  const termRows = await db.select().from(terms).orderBy(asc(terms.startDate), asc(terms.name));
+
+  return completed.map((o) => {
+    // Date columns come back as "YYYY-MM-DD" strings, so lexical comparison is
+    // chronological. Prefer a closed [start, end] window; fall back to an
+    // open-ended term that has only a start date.
+    const term =
+      termRows.find((t) => t.startDate && t.endDate && o.orderDate >= t.startDate && o.orderDate <= t.endDate) ??
+      termRows.find((t) => t.startDate && !t.endDate && o.orderDate >= t.startDate);
+    return {
+      ...o,
+      termName: term ? `${term.name} · ${term.schoolYear}` : "Unscheduled",
+      termSortKey: term?.startDate ?? "9999-12-31",
+    };
+  });
 }

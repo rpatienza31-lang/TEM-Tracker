@@ -1,22 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FileText, GraduationCap, Search, Target, Flag, Download, Library } from "lucide-react";
+import { Download, FileText, Library, Search } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { CotOrderView } from "@/lib/cot/queries";
+import type { CotLibraryOrder } from "@/lib/cot/queries";
 
-export function LibraryClient({ orders }: { orders: CotOrderView[] }) {
+type GradeGroup = { grade: number | null; orders: CotLibraryOrder[] };
+type TermGroup = { termName: string; termSortKey: string; count: number; grades: GradeGroup[] };
+
+export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
   const [query, setQuery] = useState("");
-  const [grade, setGrade] = useState<number | "all">("all");
-
-  const grades = useMemo(
-    () => [...new Set(orders.map((o) => o.grade).filter((g): g is number => g != null))].sort((a, b) => a - b),
-    [orders],
-  );
 
   // One lowercased haystack per order so the search box matches across grade,
   // subject, topic, competency, and indicators at once.
@@ -34,11 +31,32 @@ export function LibraryClient({ orders }: { orders: CotOrderView[] }) {
 
   const filtered = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return indexed
-      .filter(({ order }) => grade === "all" || order.grade === grade)
-      .filter(({ haystack }) => terms.every((t) => haystack.includes(t)))
-      .map(({ order }) => order);
-  }, [indexed, query, grade]);
+    return indexed.filter(({ haystack }) => terms.every((t) => haystack.includes(t))).map(({ order }) => order);
+  }, [indexed, query]);
+
+  // Group filtered orders into Term -> Grade -> orders.
+  const termGroups = useMemo<TermGroup[]>(() => {
+    const byTerm = new Map<string, CotLibraryOrder[]>();
+    for (const o of filtered) {
+      const list = byTerm.get(o.termName) ?? [];
+      list.push(o);
+      byTerm.set(o.termName, list);
+    }
+    const groups: TermGroup[] = [...byTerm.entries()].map(([termName, list]) => {
+      const byGrade = new Map<number | null, CotLibraryOrder[]>();
+      for (const o of list) {
+        const g = o.grade ?? null;
+        const gl = byGrade.get(g) ?? [];
+        gl.push(o);
+        byGrade.set(g, gl);
+      }
+      const grades: GradeGroup[] = [...byGrade.entries()]
+        .map(([grade, orders]) => ({ grade, orders }))
+        .sort((a, b) => (a.grade ?? 999) - (b.grade ?? 999));
+      return { termName, termSortKey: list[0].termSortKey, count: list.length, grades };
+    });
+    return groups.sort((a, b) => a.termSortKey.localeCompare(b.termSortKey) || a.termName.localeCompare(b.termName));
+  }, [filtered]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,141 +66,115 @@ export function LibraryClient({ orders }: { orders: CotOrderView[] }) {
           Available Library
         </h1>
         <p className="text-sm text-muted-foreground">
-          Finished customized orders — the grades, subjects, topics, competencies, and indicators already produced.
+          Finished customized orders, organized per term and grade — the topics, competencies, and indicators already produced.
         </p>
       </div>
 
-      {/* Search + grade filter */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search grade, subject, topic, competency, or indicator…"
-            className="pl-9"
-          />
-        </div>
-        {grades.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <FilterChip active={grade === "all"} onClick={() => setGrade("all")}>
-              All grades
-            </FilterChip>
-            {grades.map((g) => (
-              <FilterChip key={g} active={grade === g} onClick={() => setGrade(g)}>
-                G{g}
-              </FilterChip>
-            ))}
-          </div>
-        )}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search grade, subject, topic, competency, or indicator…"
+          className="pl-9"
+        />
       </div>
 
       <p className="-mt-2 text-xs text-muted-foreground">
         {filtered.length} {filtered.length === 1 ? "order" : "orders"}
-        {(query || grade !== "all") && ` · ${orders.length} total`}
+        {query && ` · ${orders.length} total`}
       </p>
 
-      {/* Card grid */}
-      {filtered.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((o) => (
-            <LibraryCard key={o.id} order={o} />
+      {termGroups.length > 0 ? (
+        <div className="flex flex-col gap-8">
+          {termGroups.map((term) => (
+            <section key={term.termName} className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 border-b border-border pb-2">
+                <h2 className="text-base font-semibold">{term.termName}</h2>
+                <Badge variant="secondary" className="font-normal">
+                  {term.count}
+                </Badge>
+              </div>
+              <div className="flex flex-col gap-4">
+                {term.grades.map((g) => (
+                  <div key={String(g.grade)} className="flex flex-col gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {g.grade != null ? `Grade ${g.grade}` : "No grade"}
+                    </h3>
+                    <Card className="divide-y divide-border overflow-hidden">
+                      {g.orders.map((o) => (
+                        <OrderRow key={o.id} order={o} />
+                      ))}
+                    </Card>
+                  </div>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
-            <Search className="h-8 w-8 text-muted-foreground/50" />
-            <p className="text-sm font-medium">
-              {orders.length === 0 ? "No completed orders yet." : "No orders match your search."}
-            </p>
-            {orders.length > 0 && (
-              <button className="text-xs text-accent underline" onClick={() => { setQuery(""); setGrade("all"); }}>
-                Clear filters
-              </button>
-            )}
-          </CardContent>
+        <Card className="flex flex-col items-center gap-2 py-14 text-center">
+          <Search className="h-8 w-8 text-muted-foreground/50" />
+          <p className="text-sm font-medium">
+            {orders.length === 0 ? "No completed orders yet." : "No orders match your search."}
+          </p>
+          {orders.length > 0 && (
+            <button className="text-xs text-accent underline" onClick={() => setQuery("")}>
+              Clear search
+            </button>
+          )}
         </Card>
       )}
     </div>
   );
 }
 
-function LibraryCard({ order }: { order: CotOrderView }) {
+function OrderRow({ order }: { order: CotLibraryOrder }) {
   const files = order.items.filter((i) => i.fileUrl);
   return (
-    <Card className="flex h-full flex-col overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <CardContent className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {order.grade != null && (
-              <Badge className="gap-1 bg-status-approved/10 text-status-approved hover:bg-status-approved/10">
-                <GraduationCap className="h-3 w-3" />
-                Grade {order.grade}
-              </Badge>
+    <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className="font-medium">{order.subjectName ?? "—"}</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="font-medium">{order.topic ?? "Untitled topic"}</span>
+        </div>
+        {(order.competency || order.indicator) && (
+          <div className="mt-0.5 flex flex-col gap-0.5 text-xs text-muted-foreground sm:flex-row sm:gap-4">
+            {order.competency && (
+              <span>
+                <span className="font-medium">Competency:</span> {order.competency}
+              </span>
             )}
-            <span className="text-sm font-semibold">{order.subjectName ?? "—"}</span>
+            {order.indicator && (
+              <span>
+                <span className="font-medium">Indicator:</span> {order.indicator}
+              </span>
+            )}
           </div>
-        </div>
-
-        <p className="text-base font-semibold leading-snug">{order.topic ?? "Untitled topic"}</p>
-
-        <div className="flex flex-col gap-2 text-sm">
-          <Field icon={Target} label="Competency" value={order.competency} />
-          <Field icon={Flag} label="Indicator" value={order.indicator} />
-        </div>
-
-        <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-3">
-          {files.length > 0 ? (
-            files.map((i) => (
-              <a
-                key={i.id}
-                href={i.fileUrl!}
-                target="_blank"
-                rel="noopener"
-                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-              >
-                <Download className="h-3.5 w-3.5" />
-                {i.type === "COT_DLP" || i.type === "DLP" ? "DLP" : "PPT"}
-              </a>
-            ))
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              <FileText className="h-3.5 w-3.5" />
-              No files attached
-            </span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Field({ icon: Icon, label, value }: { icon: typeof Target; label: string; value: string | null }) {
-  return (
-    <div className="flex items-start gap-2">
-      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      <div className="min-w-0">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-        <p className={cn("leading-snug", value ? "text-foreground/90" : "text-muted-foreground")}>{value ?? "—"}</p>
+        )}
+      </div>
+      <div className="flex shrink-0 flex-wrap gap-2">
+        {files.length > 0 ? (
+          files.map((i) => (
+            <a
+              key={i.id}
+              href={i.fileUrl!}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <Download className="h-3.5 w-3.5" />
+              {i.type === "COT_DLP" || i.type === "DLP" ? "DLP" : "PPT"}
+            </a>
+          ))
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <FileText className="h-3.5 w-3.5" />
+            No files
+          </span>
+        )}
       </div>
     </div>
-  );
-}
-
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-        active
-          ? "border-transparent bg-primary text-primary-foreground"
-          : "border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-      )}
-    >
-      {children}
-    </button>
   );
 }
