@@ -8,6 +8,7 @@ import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
+import { recordPointAdjustment } from "@/lib/quota/adjustments";
 import { sendMail } from "@/lib/email/mailer";
 
 export type SetRateState = { status: "idle" | "ok" | "error"; message?: string };
@@ -91,4 +92,26 @@ export async function setUserCashAdvanceAction(_prev: SetRateState, formData: Fo
   await db.update(users).set({ cashAdvance: amount.toFixed(2) }).where(eq(users.id, userId));
   revalidatePath("/payroll");
   return { status: "ok", message: "Saved." };
+}
+
+/**
+ * Applies a manual point correction to an editor's open quota cycle and logs
+ * it for audit. `points` may be negative (dock) or positive (bonus) but not
+ * zero. Owner-only — points feed salary, so only the owner may hand-edit them.
+ */
+export async function adjustPointsAction(_prev: SetRateState, formData: FormData): Promise<SetRateState> {
+  const actor = await requireRole("owner");
+
+  const editorId = String(formData.get("editorId") ?? "");
+  const points = Number(String(formData.get("points") ?? "").trim());
+  const note = String(formData.get("note") ?? "");
+
+  if (!editorId) return { status: "error", message: "Missing editor." };
+  if (!Number.isFinite(points) || points === 0) {
+    return { status: "error", message: "Enter a non-zero amount (use a minus sign to deduct)." };
+  }
+
+  await recordPointAdjustment({ editorId, points, note, actorId: actor.id });
+  revalidatePath("/payroll");
+  return { status: "ok", message: "Adjusted." };
 }

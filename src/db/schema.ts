@@ -182,6 +182,30 @@ export const quotaCycleItems = pgTable(
   (t) => [primaryKey({ columns: [t.workItemId] })],
 );
 
+/**
+ * Owner-entered manual point corrections for an editor (e.g. bonus points, or
+ * docking points). Each row is applied to the editor's open quota cycle at the
+ * time of entry (so completion and salary stay consistent) and kept here as an
+ * audit trail: who made it, when, how much, and why. Positive adds points,
+ * negative removes them.
+ */
+export const pointAdjustments = pgTable(
+  "point_adjustments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The open cycle the correction landed in, so the record ties back to a cycle.
+    cycleId: uuid("cycle_id").references(() => quotaCycles.id, { onDelete: "set null" }),
+    points: numeric("points", { precision: 5, scale: 2 }).notNull(),
+    note: text("note"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("point_adjustments_editor_created_idx").on(t.editorId, t.createdAt)],
+);
+
 export const timeLogs = pgTable(
   "time_logs",
   {

@@ -85,6 +85,24 @@ async function applyPointsToCycle(tx: Tx, editorId: string, points: number): Pro
 }
 
 /**
+ * Applies a manual owner correction to an editor's open cycle. A positive
+ * amount flows through the normal award path (rolling the cycle over if it
+ * crosses target); a negative amount is subtracted from the open cycle's
+ * total, mirroring the reversal path (which likewise lets an open total drop
+ * below zero) so the recorded correction and the cycle stay in step. Returns
+ * the cycle the correction landed in for the audit record.
+ */
+export async function adjustPointsInCycle(tx: Tx, editorId: string, points: number): Promise<string> {
+  if (points >= 0) return applyPointsToCycle(tx, editorId, points);
+
+  const quotaSize = await getQuotaSize(tx);
+  const cycle = await getOrCreateOpenCycle(tx, editorId, quotaSize);
+  const newTotal = Number(cycle.pointsTotal) + points;
+  await tx.update(quotaCycles).set({ pointsTotal: String(newTotal) }).where(eq(quotaCycles.id, cycle.id));
+  return cycle.id;
+}
+
+/**
  * Records an approval's points against the assignee's open quota cycle
  * (spec §6.4). Runs inside the caller's transaction so the status change,
  * event log, and point award are atomic.

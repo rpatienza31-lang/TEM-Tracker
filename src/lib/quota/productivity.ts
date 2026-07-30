@@ -3,6 +3,7 @@ import { and, asc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { customOrderItems, quotaCycles, quotaCycleItems, users, workItems } from "@/db/schema";
 import { getQuotaSize } from "@/lib/settings";
+import { getAdjustmentTotals } from "@/lib/quota/adjustments";
 import { ALL_DELIVERABLE_TYPES, type DeliverableType } from "@/lib/constants";
 
 export type DateRange = { from?: string; to?: string };
@@ -15,6 +16,7 @@ export type EditorProductivity = {
   targetPoints: number;
   completedCycles: number;
   totalPoints: number;
+  adjustments: number;
   pointsByType: Record<DeliverableType, number>;
   avgTurnaroundHours: number | null;
   revisionRate: number | null;
@@ -37,7 +39,7 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
     .where(eq(users.role, "editor"))
     .orderBy(asc(users.fullName));
 
-  const [openCycles, completedCounts, breakdown, cotBreakdown, turnaround, revision] = await Promise.all([
+  const [openCycles, completedCounts, breakdown, cotBreakdown, turnaround, revision, adjustmentTotals] = await Promise.all([
     db.select().from(quotaCycles).where(eq(quotaCycles.isClosed, false)),
     db
       .select({ editorId: quotaCycles.editorId, count: sql<number>`count(*)::int` })
@@ -97,6 +99,7 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
       .from(workItems)
       .where(and(isNotNull(workItems.assigneeId), dateCondition(workItems.submittedAt, range)))
       .groupBy(workItems.assigneeId),
+    getAdjustmentTotals(range),
   ]);
 
   const openCycleByEditor = new Map(openCycles.map((c) => [c.editorId, c]));
@@ -126,6 +129,7 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
     const pointsByType = breakdownByEditor.get(editor.id) ?? emptyBreakdown();
     const rev = revisionByEditor.get(editor.id);
     const avgSeconds = turnaroundByEditor.get(editor.id);
+    const adjustments = adjustmentTotals.get(editor.id) ?? 0;
 
     return {
       editorId: editor.id,
@@ -134,7 +138,8 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
       pointsTotal: Number(open?.pointsTotal ?? 0),
       targetPoints: Number(open?.targetPoints ?? quotaSize),
       completedCycles: completedByEditor.get(editor.id) ?? 0,
-      totalPoints: Object.values(pointsByType).reduce((sum, p) => sum + p, 0),
+      totalPoints: Object.values(pointsByType).reduce((sum, p) => sum + p, 0) + adjustments,
+      adjustments,
       pointsByType,
       avgTurnaroundHours: avgSeconds ? Number(avgSeconds) / 3600 : null,
       revisionRate: rev && rev.submitted > 0 ? rev.revised / rev.submitted : null,

@@ -3,6 +3,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { requireRole } from "@/lib/auth";
 import { getActiveClockIns, getPendingTimeLogs } from "@/lib/time-logs/queries";
 import { getPayrollReport } from "@/lib/payroll/report";
+import { getPointsBreakdown } from "@/lib/payroll/breakdown";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { PendingApprovals } from "./pending-approvals";
 import { ActiveClockIns } from "./active-clock-ins";
 import { RateCell } from "./rate-cell";
 import { CashAdvanceCell } from "./cash-advance-cell";
+import { QuotaStaffTable } from "./quota-staff-table";
 
 type SearchParams = { from?: string; to?: string };
 
@@ -33,11 +35,13 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   const from = sp.from || defaults.from;
   const to = sp.to || defaults.to;
 
-  const [pending, report, activeClockIns] = await Promise.all([
+  const [pending, report, activeClockIns, breakdownMap] = await Promise.all([
     getPendingTimeLogs(),
     getPayrollReport(from, to),
     getActiveClockIns(),
+    getPointsBreakdown(from, to),
   ]);
+  const breakdown = Object.fromEntries(breakdownMap);
 
   return (
     <div className="flex flex-col gap-8">
@@ -114,41 +118,10 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
 
         <div>
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Quota staff</h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Cycles completed</TableHead>
-                <TableHead>Points earned</TableHead>
-                <TableHead>Remainder carried</TableHead>
-                {isOwner && <TableHead>Rate (₱ / cycle)</TableHead>}
-                {isOwner && <TableHead className="text-right">Salary</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {report.quotaRows.map((row) => (
-                <TableRow key={row.userId}>
-                  <TableCell>{row.fullName}</TableCell>
-                  <TableCell>{row.cyclesCompleted}</TableCell>
-                  <TableCell>{row.pointsEarned.toFixed(1)}</TableCell>
-                  <TableCell>{row.remainderCarried.toFixed(1)}</TableCell>
-                  {isOwner && (
-                    <TableCell>
-                      <RateCell userId={row.userId} rate={row.rate} field="cycle" />
-                    </TableCell>
-                  )}
-                  {isOwner && <TableCell className="text-right font-medium tabular-nums">{peso.format(row.salary)}</TableCell>}
-                </TableRow>
-              ))}
-              {report.quotaRows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={isOwner ? 6 : 4} className="text-center text-muted-foreground">
-                    No editors yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Click a points figure to see the projects behind it{isOwner && " or to adjust it"}.
+          </p>
+          <QuotaStaffTable rows={report.quotaRows} breakdown={breakdown} isOwner={isOwner} />
         </div>
 
         <div>
