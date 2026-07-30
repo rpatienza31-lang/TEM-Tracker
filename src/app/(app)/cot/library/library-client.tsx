@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, FileText, Library, Search } from "lucide-react";
+import { Download, FileText, Library, Search, User } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
   const [subject, setSubject] = useState("");
   const [indicator, setIndicator] = useState("");
   const [lessonFor, setLessonFor] = useState("");
+  const [editor, setEditor] = useState("");
 
   // Distinct option lists for the dropdown filters.
   const gradeOptions = useMemo(
@@ -30,6 +31,15 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
   );
   const indicatorOptions = useMemo(
     () => [...new Set(orders.map((o) => o.indicator).filter((i): i is string => !!i))].sort((a, b) => a.localeCompare(b)),
+    [orders],
+  );
+  const editorOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          orders.flatMap((o) => o.items.map((i) => i.assigneeName).filter((n): n is string => !!n)),
+        ),
+      ].sort((a, b) => a.localeCompare(b)),
     [orders],
   );
   const lessonForOptions = useMemo(
@@ -51,6 +61,7 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
           o.indicator,
           o.lessonFor,
           o.customerName,
+          ...o.items.map((i) => i.assigneeName),
         ]
           .filter(Boolean)
           .join(" ")
@@ -66,17 +77,20 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
       .filter(({ order }) => subject === "" || order.subjectName === subject)
       .filter(({ order }) => indicator === "" || order.indicator === indicator)
       .filter(({ order }) => lessonFor === "" || order.lessonFor === lessonFor)
+      .filter(({ order }) => editor === "" || order.items.some((i) => i.assigneeName === editor))
       .filter(({ haystack }) => terms.every((t) => haystack.includes(t)))
       .map(({ order }) => order);
-  }, [indexed, query, grade, subject, indicator, lessonFor]);
+  }, [indexed, query, grade, subject, indicator, lessonFor, editor]);
 
-  const hasActiveFilter = query !== "" || grade !== "" || subject !== "" || indicator !== "" || lessonFor !== "";
+  const hasActiveFilter =
+    query !== "" || grade !== "" || subject !== "" || indicator !== "" || lessonFor !== "" || editor !== "";
   function clearFilters() {
     setQuery("");
     setGrade("");
     setSubject("");
     setIndicator("");
     setLessonFor("");
+    setEditor("");
   }
 
   // Group filtered orders into Term -> Grade -> orders.
@@ -154,6 +168,15 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
               {lessonForOptions.map((l) => (
                 <option key={l} value={l}>
                   {l}
+                </option>
+              ))}
+            </FilterSelect>
+          )}
+          {editorOptions.length > 0 && (
+            <FilterSelect value={editor} onChange={setEditor} allLabel="All editors">
+              {editorOptions.map((e) => (
+                <option key={e} value={e}>
+                  {e}
                 </option>
               ))}
             </FilterSelect>
@@ -239,7 +262,6 @@ function FilterSelect({
 }
 
 function OrderRow({ order }: { order: CotLibraryOrder }) {
-  const files = order.items.filter((i) => i.fileUrl);
   return (
     <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0 flex-1">
@@ -276,20 +298,35 @@ function OrderRow({ order }: { order: CotLibraryOrder }) {
           </div>
         )}
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
-        {files.length > 0 ? (
-          files.map((i) => (
-            <a
-              key={i.id}
-              href={i.fileUrl!}
-              target="_blank"
-              rel="noopener"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <Download className="h-3.5 w-3.5" />
-              {i.type === "COT_DLP" || i.type === "DLP" ? "DLP" : "PPT"}
-            </a>
-          ))
+      <div className="flex shrink-0 flex-col gap-1.5">
+        {order.items.length > 0 ? (
+          order.items.map((i) => {
+            const label = i.type === "COT_DLP" || i.type === "DLP" ? "DLP" : "PPT";
+            return (
+              <div key={i.id} className="flex items-center justify-end gap-2 text-xs">
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <User className="h-3 w-3" />
+                  {i.assigneeName ?? "—"}
+                </span>
+                {i.fileUrl ? (
+                  <a
+                    href={i.fileUrl}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex w-16 items-center justify-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {label}
+                  </a>
+                ) : (
+                  <span className="inline-flex w-16 items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-2.5 py-1 text-muted-foreground">
+                    <FileText className="h-3.5 w-3.5" />
+                    {label}
+                  </span>
+                )}
+              </div>
+            );
+          })
         ) : (
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <FileText className="h-3.5 w-3.5" />
