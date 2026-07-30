@@ -16,6 +16,7 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
   const [query, setQuery] = useState("");
   const [grade, setGrade] = useState("");
   const [subject, setSubject] = useState("");
+  const [indicator, setIndicator] = useState("");
   const [lessonFor, setLessonFor] = useState("");
 
   // Distinct option lists for the dropdown filters.
@@ -25,6 +26,10 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
   );
   const subjectOptions = useMemo(
     () => [...new Set(orders.map((o) => o.subjectName).filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b)),
+    [orders],
+  );
+  const indicatorOptions = useMemo(
+    () => [...new Set(orders.map((o) => o.indicator).filter((i): i is string => !!i))].sort((a, b) => a.localeCompare(b)),
     [orders],
   );
   const lessonForOptions = useMemo(
@@ -59,16 +64,18 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
     return indexed
       .filter(({ order }) => grade === "" || order.grade === Number(grade))
       .filter(({ order }) => subject === "" || order.subjectName === subject)
+      .filter(({ order }) => indicator === "" || order.indicator === indicator)
       .filter(({ order }) => lessonFor === "" || order.lessonFor === lessonFor)
       .filter(({ haystack }) => terms.every((t) => haystack.includes(t)))
       .map(({ order }) => order);
-  }, [indexed, query, grade, subject, lessonFor]);
+  }, [indexed, query, grade, subject, indicator, lessonFor]);
 
-  const hasActiveFilter = query !== "" || grade !== "" || subject !== "" || lessonFor !== "";
+  const hasActiveFilter = query !== "" || grade !== "" || subject !== "" || indicator !== "" || lessonFor !== "";
   function clearFilters() {
     setQuery("");
     setGrade("");
     setSubject("");
+    setIndicator("");
     setLessonFor("");
   }
 
@@ -133,8 +140,17 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
               </option>
             ))}
           </FilterSelect>
+          {indicatorOptions.length > 0 && (
+            <FilterSelect value={indicator} onChange={setIndicator} allLabel="All indicators">
+              {indicatorOptions.map((i) => (
+                <option key={i} value={i}>
+                  {i}
+                </option>
+              ))}
+            </FilterSelect>
+          )}
           {lessonForOptions.length > 0 && (
-            <FilterSelect value={lessonFor} onChange={setLessonFor} allLabel="Reclass & Demo">
+            <FilterSelect value={lessonFor} onChange={setLessonFor} allLabel="All lesson-for">
               {lessonForOptions.map((l) => (
                 <option key={l} value={l}>
                   {l}

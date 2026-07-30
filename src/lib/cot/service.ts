@@ -43,7 +43,17 @@ export async function createCotOrder(input: CreateCotOrderInput): Promise<CotRes
       .from(customOrders)
       .where(eq(customOrders.externalId, input.externalId))
       .limit(1);
-    if (existing) return { ok: true, id: existing.id }; // already imported
+    if (existing) {
+      // Already imported. Re-running the backfill after adding a new form
+      // column (e.g. "Lesson For") should fill that value in on existing
+      // orders — but must NOT disturb the deliverables, their statuses, or
+      // any admin edits to grade/subject/topic. So we only sync lessonFor.
+      await db
+        .update(customOrders)
+        .set({ lessonFor: input.lessonFor ?? null })
+        .where(eq(customOrders.id, existing.id));
+      return { ok: true, id: existing.id };
+    }
   }
 
   const deadline = computeDeadline(input.orderDate, input.orderType);
