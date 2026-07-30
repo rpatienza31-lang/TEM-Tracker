@@ -52,10 +52,14 @@ export async function updateCotOrderAction(
   grade: number | null,
   subjectName: string | null,
   topic: string | null,
+  lessonFor: string | null,
 ): Promise<CotResult> {
   const user = await requireUser();
-  const result = await updateCotOrderDetails(orderId, { grade, subjectName, topic }, actorOf(user));
-  if (result.ok) revalidatePath("/cot");
+  const result = await updateCotOrderDetails(orderId, { grade, subjectName, topic, lessonFor }, actorOf(user));
+  if (result.ok) {
+    revalidatePath("/cot");
+    revalidatePath("/cot/library");
+  }
   return result;
 }
 

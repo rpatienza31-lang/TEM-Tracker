@@ -14,14 +14,39 @@ type TermGroup = { termName: string; termSortKey: string; count: number; grades:
 
 export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
   const [query, setQuery] = useState("");
+  const [grade, setGrade] = useState("");
+  const [subject, setSubject] = useState("");
+  const [lessonFor, setLessonFor] = useState("");
+
+  // Distinct option lists for the dropdown filters.
+  const gradeOptions = useMemo(
+    () => [...new Set(orders.map((o) => o.grade).filter((g): g is number => g != null))].sort((a, b) => a - b),
+    [orders],
+  );
+  const subjectOptions = useMemo(
+    () => [...new Set(orders.map((o) => o.subjectName).filter((s): s is string => !!s))].sort((a, b) => a.localeCompare(b)),
+    [orders],
+  );
+  const lessonForOptions = useMemo(
+    () => [...new Set(orders.map((o) => o.lessonFor).filter((l): l is string => !!l))].sort((a, b) => a.localeCompare(b)),
+    [orders],
+  );
 
   // One lowercased haystack per order so the search box matches across grade,
-  // subject, topic, competency, and indicators at once.
+  // subject, topic, competency, indicators, and lesson-for at once.
   const indexed = useMemo(
     () =>
       orders.map((o) => ({
         order: o,
-        haystack: [o.grade != null ? `grade ${o.grade}` : "", o.subjectName, o.topic, o.competency, o.indicator, o.customerName]
+        haystack: [
+          o.grade != null ? `grade ${o.grade}` : "",
+          o.subjectName,
+          o.topic,
+          o.competency,
+          o.indicator,
+          o.lessonFor,
+          o.customerName,
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase(),
@@ -31,8 +56,21 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
 
   const filtered = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return indexed.filter(({ haystack }) => terms.every((t) => haystack.includes(t))).map(({ order }) => order);
-  }, [indexed, query]);
+    return indexed
+      .filter(({ order }) => grade === "" || order.grade === Number(grade))
+      .filter(({ order }) => subject === "" || order.subjectName === subject)
+      .filter(({ order }) => lessonFor === "" || order.lessonFor === lessonFor)
+      .filter(({ haystack }) => terms.every((t) => haystack.includes(t)))
+      .map(({ order }) => order);
+  }, [indexed, query, grade, subject, lessonFor]);
+
+  const hasActiveFilter = query !== "" || grade !== "" || subject !== "" || lessonFor !== "";
+  function clearFilters() {
+    setQuery("");
+    setGrade("");
+    setSubject("");
+    setLessonFor("");
+  }
 
   // Group filtered orders into Term -> Grade -> orders.
   const termGroups = useMemo<TermGroup[]>(() => {
@@ -70,19 +108,51 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
         </p>
       </div>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search grade, subject, topic, competency, or indicator…"
-          className="pl-9"
-        />
+      <div className="flex flex-col gap-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search grade, subject, topic, competency, or indicator…"
+            className="pl-9"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterSelect value={grade} onChange={setGrade} allLabel="All grades">
+            {gradeOptions.map((g) => (
+              <option key={g} value={g}>
+                Grade {g}
+              </option>
+            ))}
+          </FilterSelect>
+          <FilterSelect value={subject} onChange={setSubject} allLabel="All subjects">
+            {subjectOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </FilterSelect>
+          {lessonForOptions.length > 0 && (
+            <FilterSelect value={lessonFor} onChange={setLessonFor} allLabel="Reclass & Demo">
+              {lessonForOptions.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </FilterSelect>
+          )}
+          {hasActiveFilter && (
+            <button className="text-xs text-accent underline" onClick={clearFilters}>
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
       <p className="-mt-2 text-xs text-muted-foreground">
         {filtered.length} {filtered.length === 1 ? "order" : "orders"}
-        {query && ` · ${orders.length} total`}
+        {hasActiveFilter && ` · ${orders.length} total`}
       </p>
 
       {termGroups.length > 0 ? (
@@ -116,11 +186,11 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
         <Card className="flex flex-col items-center gap-2 py-14 text-center">
           <Search className="h-8 w-8 text-muted-foreground/50" />
           <p className="text-sm font-medium">
-            {orders.length === 0 ? "No completed orders yet." : "No orders match your search."}
+            {orders.length === 0 ? "No completed orders yet." : "No orders match your filters."}
           </p>
           {orders.length > 0 && (
-            <button className="text-xs text-accent underline" onClick={() => setQuery("")}>
-              Clear search
+            <button className="text-xs text-accent underline" onClick={clearFilters}>
+              Clear filters
             </button>
           )}
         </Card>
@@ -129,15 +199,51 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
   );
 }
 
+function FilterSelect({
+  value,
+  onChange,
+  allLabel,
+  children,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  allLabel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+    >
+      <option value="">{allLabel}</option>
+      {children}
+    </select>
+  );
+}
+
 function OrderRow({ order }: { order: CotLibraryOrder }) {
   const files = order.items.filter((i) => i.fileUrl);
   return (
     <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-medium">{order.subjectName ?? "—"}</span>
           <span className="text-muted-foreground">·</span>
           <span className="font-medium">{order.topic ?? "Untitled topic"}</span>
+          {order.lessonFor && (
+            <Badge
+              variant="secondary"
+              className={cn(
+                "font-normal",
+                order.lessonFor.toLowerCase() === "demo"
+                  ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                  : "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+              )}
+            >
+              {order.lessonFor}
+            </Badge>
+          )}
         </div>
         {(order.competency || order.indicator) && (
           <div className="mt-0.5 flex flex-col gap-0.5 text-xs text-muted-foreground sm:flex-row sm:gap-4">

@@ -12,6 +12,7 @@ export type MyCotItem = {
   customerName: string;
   subjectName: string | null;
   topic: string | null;
+  lessonFor: string | null;
   deadline: string;
   orderType: "rush" | "regular";
 };
@@ -22,6 +23,7 @@ export type CotReviewItem = {
   customerName: string;
   subjectName: string | null;
   topic: string | null;
+  lessonFor: string | null;
   deadline: string;
   assigneeName: string | null;
   fileUrl: string | null;
@@ -37,6 +39,7 @@ export async function getCotItemsInReview(): Promise<CotReviewItem[]> {
       customerName: customOrders.customerName,
       subjectName: customOrders.subjectName,
       topic: customOrders.topic,
+      lessonFor: customOrders.lessonFor,
       deadline: customOrders.deadline,
       assigneeName: assignee.fullName,
       fileUrl: customOrderItems.fileUrl,
@@ -59,6 +62,7 @@ export async function getMyCotItems(userId: string, statuses: ItemStatus[]): Pro
       customerName: customOrders.customerName,
       subjectName: customOrders.subjectName,
       topic: customOrders.topic,
+      lessonFor: customOrders.lessonFor,
       deadline: customOrders.deadline,
       orderType: customOrders.orderType,
     })
@@ -85,6 +89,7 @@ export type CotOrderView = {
   topic: string | null;
   competency: string | null;
   indicator: string | null;
+  lessonFor: string | null;
   notes: string | null;
   payment: string | null;
   orderType: "rush" | "regular";
@@ -131,6 +136,7 @@ async function loadOrders(orderRows: (typeof customOrders.$inferSelect)[]): Prom
       topic: o.topic,
       competency: o.competency,
       indicator: o.indicator,
+      lessonFor: o.lessonFor,
       notes: o.notes,
       payment: o.payment,
       orderType: o.orderType,

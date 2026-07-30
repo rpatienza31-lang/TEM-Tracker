@@ -13,6 +13,16 @@ function normalizeOrderType(raw: unknown): OrderType {
   return String(raw ?? "").toLowerCase().includes("rush") ? "rush" : "regular";
 }
 
+/** Normalizes the form's "Lesson For" answer to "Reclass" or "Demo" when recognizable. */
+function normalizeLessonFor(raw: unknown): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  if (lower.includes("reclass")) return "Reclass";
+  if (lower.includes("demo")) return "Demo";
+  return s;
+}
+
 function parseGrade(raw: unknown): number | null {
   if (raw == null || raw === "") return null;
   const m = String(raw).match(/\d+/);
@@ -64,6 +74,7 @@ export async function POST(request: NextRequest) {
     topic: body.topic != null ? String(body.topic) : null,
     competency: body.competency != null ? String(body.competency) : null,
     indicator: body.indicator != null ? String(body.indicator) : null,
+    lessonFor: normalizeLessonFor(body.lessonFor ?? body.lesson_for ?? body["lessonFor"]),
     notes: body.notes != null ? String(body.notes) : null,
     payment: parsePayment(body.payment),
     orderType: normalizeOrderType(body.orderType ?? body.type),

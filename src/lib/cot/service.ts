@@ -20,6 +20,7 @@ export type CreateCotOrderInput = {
   topic?: string | null;
   competency?: string | null;
   indicator?: string | null;
+  lessonFor?: string | null;
   notes?: string | null;
   payment?: number | null;
   orderType: OrderType;
@@ -58,6 +59,7 @@ export async function createCotOrder(input: CreateCotOrderInput): Promise<CotRes
         topic: input.topic ?? null,
         competency: input.competency ?? null,
         indicator: input.indicator ?? null,
+        lessonFor: input.lessonFor ?? null,
         notes: input.notes ?? null,
         payment: input.payment != null ? String(input.payment) : null,
         orderType: input.orderType,
@@ -120,17 +122,17 @@ export async function setCotOrderType(orderId: string, type: OrderType, actor: C
   return { ok: true };
 }
 
-/** Owner/admin edits an order's grade, subject, and topic (customers sometimes revise). */
+/** Owner/admin edits an order's grade, subject, topic, and lesson-for (customers sometimes revise). */
 export async function updateCotOrderDetails(
   orderId: string,
-  patch: { grade: number | null; subjectName: string | null; topic: string | null },
+  patch: { grade: number | null; subjectName: string | null; topic: string | null; lessonFor: string | null },
   actor: CotActor,
 ): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can edit an order." };
 
   await db
     .update(customOrders)
-    .set({ grade: patch.grade, subjectName: patch.subjectName, topic: patch.topic })
+    .set({ grade: patch.grade, subjectName: patch.subjectName, topic: patch.topic, lessonFor: patch.lessonFor })
     .where(eq(customOrders.id, orderId));
   return { ok: true };
 }

@@ -239,6 +239,8 @@ export const customOrders = pgTable("custom_orders", {
   topic: text("topic"),
   competency: text("competency"),
   indicator: text("indicator"),
+  // "Lesson For" from the order form — typically "Reclass" or "Demo".
+  lessonFor: text("lesson_for"),
   notes: text("notes"),
   payment: numeric("payment", { precision: 10, scale: 2 }),
   orderType: orderType("order_type").notNull().default("regular"),

@@ -34,6 +34,7 @@ const FIELD_MAP = {
   topic: "Topic",
   competency: "Competency",
   indicator: "Indicator",
+  lessonFor: "Lesson For", // the answer should contain "Reclass" or "Demo"
   notes: "Notes",
   payment: "Payment",
   orderType: "Order Type", // the answer should contain "Rush" or "Regular"
@@ -52,6 +53,7 @@ function onFormSubmit(e) {
     topic: get(FIELD_MAP.topic),
     competency: get(FIELD_MAP.competency),
     indicator: get(FIELD_MAP.indicator),
+    lessonFor: get(FIELD_MAP.lessonFor),
     notes: get(FIELD_MAP.notes),
     payment: get(FIELD_MAP.payment),
     orderType: get(FIELD_MAP.orderType),

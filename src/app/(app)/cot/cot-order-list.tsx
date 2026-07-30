@@ -33,7 +33,7 @@ function daysLabel(level: PriorityLevel, daysLeft: number) {
   return `${daysLeft} days left`;
 }
 
-type Filter = "all" | PriorityLevel | "due2" | "unclaimed";
+type Filter = "all" | PriorityLevel | "due2" | "unclaimed" | "assigned";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
@@ -42,11 +42,22 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "due2", label: "≤2 days" },
   { key: "alert", label: "Soon" },
   { key: "normal", label: "On track" },
-  { key: "unclaimed", label: "Unclaimed" },
+  { key: "unclaimed", label: "Needs editor" },
+  { key: "assigned", label: "Assigned" },
 ];
 
 function isUnclaimed(o: CotOrderView) {
   return o.items.some((i) => i.status === "available");
+}
+
+/** Every deliverable now has an editor (nothing left in the available pool). */
+function isFullyAssigned(o: CotOrderView) {
+  return o.items.length > 0 && o.items.every((i) => i.status !== "available");
+}
+
+/** Short label for a COT deliverable ("DLP" / "PPT"). */
+function shortType(type: CotOrderView["items"][number]["type"]) {
+  return type === "COT_DLP" || type === "DLP" ? "DLP" : "PPT";
 }
 
 /** Due within the next two days (today, tomorrow, or the day after) — not yet overdue. */
@@ -57,6 +68,7 @@ function isDueWithin2(o: CotOrderView) {
 function matchesFilter(o: CotOrderView, filter: Filter) {
   if (filter === "all") return true;
   if (filter === "unclaimed") return isUnclaimed(o);
+  if (filter === "assigned") return isFullyAssigned(o);
   if (filter === "due2") return isDueWithin2(o);
   return o.priority === filter;
 }
@@ -163,11 +175,22 @@ export function CotOrderList({
         <Card key={o.id} className={`border-l-4 ${PRIORITY_CLASS[o.priority]}`}>
           <CardHeader className="pb-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold">{o.customerName}</span>
                 <Badge variant="outline" className="uppercase">
                   {o.orderType}
                 </Badge>
+                {o.lessonFor && (
+                  <Badge
+                    className={
+                      o.lessonFor.toLowerCase() === "demo"
+                        ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                        : "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                    }
+                  >
+                    {o.lessonFor}
+                  </Badge>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Badge className={PRIORITY_BADGE[o.priority]}>{daysLabel(o.priority, o.daysLeft)}</Badge>
@@ -177,6 +200,18 @@ export function CotOrderList({
             <p className="text-sm text-muted-foreground">
               {[o.grade ? `Grade ${o.grade}` : null, o.subjectName, o.topic].filter(Boolean).join(" · ") || "—"}
             </p>
+            {/* Who's on it — at a glance, without scrolling to the item controls. */}
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {o.items.map((it) => (
+                <Badge
+                  key={it.id}
+                  variant={it.assigneeName ? "secondary" : "outline"}
+                  className={it.assigneeName ? "font-normal" : "border-dashed font-normal text-muted-foreground"}
+                >
+                  {shortType(it.type)}: {it.assigneeName ?? "Unassigned"}
+                </Badge>
+              ))}
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
@@ -190,6 +225,12 @@ export function CotOrderList({
                 <div>
                   <dt className="text-xs text-muted-foreground">Indicator</dt>
                   <dd>{o.indicator}</dd>
+                </div>
+              )}
+              {o.lessonFor && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Lesson For</dt>
+                  <dd>{o.lessonFor}</dd>
                 </div>
               )}
               <div>
@@ -213,6 +254,7 @@ export function CotOrderList({
                   grade: o.grade,
                   subjectName: o.subjectName,
                   topic: o.topic,
+                  lessonFor: o.lessonFor,
                   customerName: o.customerName,
                 }}
               />

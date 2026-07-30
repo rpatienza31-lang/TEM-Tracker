@@ -13,6 +13,7 @@ type Order = {
   grade: number | null;
   subjectName: string | null;
   topic: string | null;
+  lessonFor: string | null;
   customerName: string;
 };
 
@@ -23,6 +24,7 @@ export function CotOrderEdit({ order }: { order: Order }) {
   const [grade, setGrade] = useState(order.grade != null ? String(order.grade) : "");
   const [subject, setSubject] = useState(order.subjectName ?? "");
   const [topic, setTopic] = useState(order.topic ?? "");
+  const [lessonFor, setLessonFor] = useState(order.lessonFor ?? "");
 
   const other = order.orderType === "rush" ? "regular" : "rush";
 
@@ -101,12 +103,33 @@ export function CotOrderEdit({ order }: { order: Order }) {
               className="h-8 w-48"
             />
           </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs" htmlFor={`lessonfor-${order.id}`}>
+              Lesson For
+            </Label>
+            <select
+              id={`lessonfor-${order.id}`}
+              value={lessonFor}
+              onChange={(e) => setLessonFor(e.target.value)}
+              className="h-8 w-28 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="">—</option>
+              <option value="Reclass">Reclass</option>
+              <option value="Demo">Demo</option>
+            </select>
+          </div>
           <Button
             size="sm"
             disabled={pending}
             onClick={() =>
               run(() =>
-                updateCotOrderAction(order.id, grade.trim() ? Number(grade) : null, subject.trim() || null, topic.trim() || null),
+                updateCotOrderAction(
+                  order.id,
+                  grade.trim() ? Number(grade) : null,
+                  subject.trim() || null,
+                  topic.trim() || null,
+                  lessonFor.trim() || null,
+                ),
               )
             }
           >
