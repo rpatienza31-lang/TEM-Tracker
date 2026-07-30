@@ -6,6 +6,7 @@ import { customOrderItems, quotaCycles } from "@/db/schema";
 import { computeDeadline, priorityFor } from "@/lib/cot/deadline";
 import { createCotOrder, claimCotItem, submitCotItem, approveCotItem, deleteCotOrder } from "@/lib/cot/service";
 import { getActiveCotOrders, getCotLibrary } from "@/lib/cot/queries";
+import { getProductivityStats } from "@/lib/quota/productivity";
 import { makeUser, resetDb, seedSettings } from "./helpers";
 
 describe("COT deadline", () => {
@@ -66,6 +67,27 @@ describe("COT order lifecycle", () => {
     // Order is now completed → in the library, out of the active list.
     expect(await getActiveCotOrders()).toHaveLength(0);
     expect(await getCotLibrary()).toHaveLength(1);
+  });
+
+  it("counts approved COT points in the editor's productivity total", async () => {
+    const editor = await makeUser("editor", "Prod Editor");
+    const admin = await makeUser("admin", "Prod Admin");
+    const editorActor = { id: editor.id, role: "editor" as const };
+    const adminActor = { id: admin.id, role: "admin" as const };
+
+    await createCotOrder({ customerName: "Points Test", orderType: "regular", orderDate: "2026-07-01" });
+    const items = await db.select().from(customOrderItems);
+    for (const item of items) {
+      await claimCotItem(item.id, editorActor);
+      await submitCotItem(item.id, editorActor, "https://drive.test/f");
+      await approveCotItem(item.id, adminActor);
+    }
+
+    const stats = await getProductivityStats();
+    const mine = stats.find((s) => s.editorId === editor.id);
+    expect(mine?.totalPoints).toBe(1); // COT_DLP 0.5 + COT_PPT 0.5
+    expect(mine?.pointsByType.COT_DLP).toBe(0.5);
+    expect(mine?.pointsByType.COT_PPT).toBe(0.5);
   });
 
   it("deleting an order reverses any points it had awarded", async () => {

@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { quotaCycles, quotaCycleItems, users, workItems } from "@/db/schema";
+import { customOrderItems, quotaCycles, quotaCycleItems, users, workItems } from "@/db/schema";
 import { getQuotaSize } from "@/lib/settings";
 import { ALL_DELIVERABLE_TYPES, type DeliverableType } from "@/lib/constants";
 
@@ -37,7 +37,7 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
     .where(eq(users.role, "editor"))
     .orderBy(asc(users.fullName));
 
-  const [openCycles, completedCounts, breakdown, turnaround, revision] = await Promise.all([
+  const [openCycles, completedCounts, breakdown, cotBreakdown, turnaround, revision] = await Promise.all([
     db.select().from(quotaCycles).where(eq(quotaCycles.isClosed, false)),
     db
       .select({ editorId: quotaCycles.editorId, count: sql<number>`count(*)::int` })
@@ -55,6 +55,24 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
       .innerJoin(workItems, eq(workItems.id, quotaCycleItems.workItemId))
       .where(dateCondition(quotaCycleItems.awardedAt, range))
       .groupBy(quotaCycles.editorId, workItems.type),
+    // COT approvals live in custom_order_items, not the quota_cycle_items
+    // ledger, so their points must be summed separately or they'd never show
+    // up in an editor's period points total.
+    db
+      .select({
+        editorId: customOrderItems.assigneeId,
+        type: customOrderItems.type,
+        points: sql<string>`sum(${customOrderItems.pointsAwarded})`,
+      })
+      .from(customOrderItems)
+      .where(
+        and(
+          eq(customOrderItems.status, "approved"),
+          isNotNull(customOrderItems.assigneeId),
+          dateCondition(customOrderItems.approvedAt, range),
+        ),
+      )
+      .groupBy(customOrderItems.assigneeId, customOrderItems.type),
     db
       .select({
         editorId: workItems.assigneeId,
@@ -92,6 +110,12 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
 
   const breakdownByEditor = new Map<string, Record<DeliverableType, number>>();
   for (const row of breakdown) {
+    const entry = breakdownByEditor.get(row.editorId) ?? emptyBreakdown();
+    entry[row.type] += Number(row.points);
+    breakdownByEditor.set(row.editorId, entry);
+  }
+  for (const row of cotBreakdown) {
+    if (!row.editorId) continue;
     const entry = breakdownByEditor.get(row.editorId) ?? emptyBreakdown();
     entry[row.type] += Number(row.points);
     breakdownByEditor.set(row.editorId, entry);
