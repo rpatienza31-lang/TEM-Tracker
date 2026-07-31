@@ -9,6 +9,7 @@ import { users } from "@/db/schema";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
+import { updateTimeLogTimes } from "@/lib/time-logs/mutations";
 import { sendMail } from "@/lib/email/mailer";
 
 export type SetRateState = { status: "idle" | "ok" | "error"; message?: string };
@@ -114,4 +115,24 @@ export async function adjustPointsAction(_prev: SetRateState, formData: FormData
   await recordPointAdjustment({ editorId, points, note, actorId: actor.id });
   revalidatePath("/payroll");
   return { status: "ok", message: "Adjusted." };
+}
+
+/**
+ * Corrects an approved time log's clock-in / clock-out (owner only), for when a
+ * staffer forgot to clock in or out. Hours are recomputed from the new times so
+ * approved-hours totals and salary stay in sync.
+ */
+export async function editTimeLogTimesAction(_prev: SetRateState, formData: FormData): Promise<SetRateState> {
+  await requireRole("owner");
+
+  const logId = String(formData.get("logId") ?? "");
+  const timeIn = String(formData.get("timeIn") ?? "").trim();
+  const timeOut = String(formData.get("timeOut") ?? "").trim();
+
+  if (!logId) return { status: "error", message: "Missing time log." };
+
+  const res = await updateTimeLogTimes({ logId, timeIn, timeOut });
+  if (!res.ok) return { status: "error", message: res.message };
+  revalidatePath("/payroll");
+  return { status: "ok", message: "Saved." };
 }
