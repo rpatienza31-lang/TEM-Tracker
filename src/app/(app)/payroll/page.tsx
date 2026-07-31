@@ -1,7 +1,7 @@
 import { formatInTimeZone } from "date-fns-tz";
 
 import { requireRole } from "@/lib/auth";
-import { getActiveClockIns, getPendingTimeLogs } from "@/lib/time-logs/queries";
+import { getActiveClockIns, getApprovedTimeLogsForPeriod, getPendingTimeLogs } from "@/lib/time-logs/queries";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { getPointsBreakdown } from "@/lib/payroll/breakdown";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,15 +10,33 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PendingApprovals } from "./pending-approvals";
 import { ActiveClockIns } from "./active-clock-ins";
-import { RateCell } from "./rate-cell";
 import { CashAdvanceCell } from "./cash-advance-cell";
 import { QuotaStaffTable } from "./quota-staff-table";
+import { HourlyStaffTable } from "./hourly-staff-table";
 
 type SearchParams = { from?: string; to?: string };
 
 const PH_TZ = "Asia/Manila";
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const phTime = (d: Date | null) => (d ? formatInTimeZone(new Date(d), PH_TZ, "h:mm a") : null);
+
+function toSession(log: {
+  id: string;
+  workDate: string;
+  clockIn: Date | null;
+  clockOut: Date | null;
+  hours: number;
+  note: string | null;
+}) {
+  return {
+    id: log.id,
+    workDate: log.workDate,
+    clockInIso: log.clockIn ? new Date(log.clockIn).toISOString() : null,
+    clockOutIso: log.clockOut ? new Date(log.clockOut).toISOString() : null,
+    hours: log.hours,
+    note: log.note,
+  };
+}
 
 function defaultRange() {
   const to = new Date();
@@ -35,13 +53,19 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   const from = sp.from || defaults.from;
   const to = sp.to || defaults.to;
 
-  const [pending, report, activeClockIns, breakdownMap] = await Promise.all([
+  const [pending, report, activeClockIns, breakdownMap, approvedLogs] = await Promise.all([
     getPendingTimeLogs(),
     getPayrollReport(from, to),
     getActiveClockIns(),
     getPointsBreakdown(from, to),
+    getApprovedTimeLogsForPeriod(from, to),
   ]);
   const breakdown = Object.fromEntries(breakdownMap);
+
+  const sessionsByUser: Record<string, ReturnType<typeof toSession>[]> = {};
+  for (const log of approvedLogs) {
+    (sessionsByUser[log.userId] ??= []).push(toSession(log));
+  }
 
   return (
     <div className="flex flex-col gap-8">
@@ -126,37 +150,10 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
 
         <div>
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Hourly staff</h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Approved hours</TableHead>
-                {isOwner && <TableHead>Rate (₱ / hour)</TableHead>}
-                {isOwner && <TableHead className="text-right">Salary</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {report.hourlyRows.map((row) => (
-                <TableRow key={row.userId}>
-                  <TableCell>{row.fullName}</TableCell>
-                  <TableCell>{row.approvedHours.toFixed(2)}</TableCell>
-                  {isOwner && (
-                    <TableCell>
-                      <RateCell userId={row.userId} rate={row.rate} field="hourly" />
-                    </TableCell>
-                  )}
-                  {isOwner && <TableCell className="text-right font-medium tabular-nums">{peso.format(row.salary)}</TableCell>}
-                </TableRow>
-              ))}
-              {report.hourlyRows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={isOwner ? 4 : 2} className="text-center text-muted-foreground">
-                    No hourly staff yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Click an approved-hours figure to see the clock-in / clock-out history behind it.
+          </p>
+          <HourlyStaffTable rows={report.hourlyRows} sessions={sessionsByUser} isOwner={isOwner} />
         </div>
       </section>
 

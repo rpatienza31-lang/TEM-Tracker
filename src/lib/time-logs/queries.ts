@@ -73,3 +73,39 @@ export async function getApprovedHoursForPeriod(from: string, to: string): Promi
 
   return rows.map((r) => ({ userId: r.userId, hours: Number(r.hours) }));
 }
+
+export type ApprovedTimeLog = {
+  id: string;
+  userId: string;
+  workDate: string;
+  clockIn: Date | null;
+  clockOut: Date | null;
+  hours: number;
+  note: string | null;
+  approvedAt: Date | null;
+};
+
+/**
+ * The individual approved time-log sessions in [from, to] — the clock-in /
+ * clock-out history behind each hourly staffer's approved-hours total. Uses the
+ * same filter (approved, workDate in range) as getApprovedHoursForPeriod, so
+ * the sessions sum to that total. Newest work date first.
+ */
+export async function getApprovedTimeLogsForPeriod(from: string, to: string): Promise<ApprovedTimeLog[]> {
+  const rows = await db
+    .select({
+      id: timeLogs.id,
+      userId: timeLogs.userId,
+      workDate: timeLogs.workDate,
+      clockIn: timeLogs.clockIn,
+      clockOut: timeLogs.clockOut,
+      hours: timeLogs.hours,
+      note: timeLogs.note,
+      approvedAt: timeLogs.approvedAt,
+    })
+    .from(timeLogs)
+    .where(and(isNotNull(timeLogs.approvedAt), gte(timeLogs.workDate, from), lte(timeLogs.workDate, to)))
+    .orderBy(desc(timeLogs.workDate), desc(timeLogs.clockIn));
+
+  return rows.map((r) => ({ ...r, hours: Number(r.hours ?? 0) }));
+}
