@@ -1,12 +1,14 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useActionState, useState } from "react";
 
 import { DELIVERABLE_TYPE_LABELS, type DeliverableType } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RateCell } from "./rate-cell";
 import { AdjustPointsForm } from "./adjust-points-form";
+import { adjustPointsAction, type SetRateState } from "./actions";
 
 export type BreakdownLine = {
   kind: "catalog" | "cot" | "adjustment";
@@ -34,6 +36,42 @@ const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
 function lineLabel(line: BreakdownLine) {
   if (line.type) return DELIVERABLE_TYPE_LABELS[line.type];
   return "Adjustment";
+}
+
+const removeInitial: SetRateState = { status: "idle" };
+
+/**
+ * Owner control to take a wrongly-counted project out of an editor's points.
+ * It records a compensating correction (the line's points, negated) rather than
+ * touching the underlying approval, so the change is auditable and reversible;
+ * the correction shows as its own "Removed: …" line and nets the total.
+ */
+function RemoveLineButton({ editorId, points, label }: { editorId: string; points: number; label: string }) {
+  const [state, formAction, pending] = useActionState(adjustPointsAction, removeInitial);
+  return (
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        if (!window.confirm(`Remove "${label}" (${signed(points)}) from this editor's points? A compensating correction will be recorded.`)) {
+          e.preventDefault();
+        }
+      }}
+    >
+      <input type="hidden" name="editorId" value={editorId} />
+      <input type="hidden" name="points" value={String(-points)} />
+      <input type="hidden" name="note" value={`Removed: ${label}`} />
+      <Button
+        type="submit"
+        size="sm"
+        variant="ghost"
+        disabled={pending}
+        className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+      >
+        {pending ? "Removing…" : "Remove"}
+      </Button>
+      {state.status === "error" && <span className="ml-1 text-xs text-destructive">{state.message}</span>}
+    </form>
+  );
 }
 
 /**
@@ -136,6 +174,13 @@ export function QuotaStaffTable({
                                 >
                                   {signed(line.points)}
                                 </span>
+                                {isOwner && (
+                                  <RemoveLineButton
+                                    editorId={row.userId}
+                                    points={line.points}
+                                    label={line.subtitle ? `${lineLabel(line)} — ${line.subtitle}` : lineLabel(line)}
+                                  />
+                                )}
                               </div>
                             </li>
                           ))}

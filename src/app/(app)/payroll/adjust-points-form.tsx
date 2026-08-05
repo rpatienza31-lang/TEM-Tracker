@@ -23,34 +23,46 @@ export function AdjustPointsForm({ editorId, editorName }: { editorId: string; e
   }, [state]);
 
   return (
-    <form ref={formRef} action={formAction} className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
-      <input type="hidden" name="editorId" value={editorId} />
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-muted-foreground" htmlFor={`adj-points-${editorId}`}>
-          Adjust points
-        </label>
-        <Input
-          id={`adj-points-${editorId}`}
-          name="points"
-          type="number"
-          step="0.5"
-          inputMode="decimal"
-          placeholder="e.g. 2 or -1.5"
-          className="w-32"
-          aria-label={`Point adjustment for ${editorName}`}
-        />
-      </div>
-      <div className="flex flex-1 flex-col gap-1">
-        <label className="text-xs font-medium text-muted-foreground" htmlFor={`adj-note-${editorId}`}>
-          Reason (optional)
-        </label>
-        <Input id={`adj-note-${editorId}`} name="note" type="text" placeholder="Why this correction?" className="min-w-48" />
-      </div>
-      <Button type="submit" size="sm" variant="secondary" disabled={pending}>
-        {pending ? "Applying…" : "Apply"}
-      </Button>
-      {state.status === "ok" && <span className="text-xs text-status-approved">Adjusted ✓</span>}
-      {state.status === "error" && <span className="text-xs text-destructive">{state.message}</span>}
-    </form>
+    <div className="flex flex-col gap-1 border-t border-border pt-3">
+      <p className="text-xs text-muted-foreground">
+        Add a missing project (enter its points and name the subject in the reason) or correct the total. Use a minus
+        sign to deduct.
+      </p>
+      <form ref={formRef} action={formAction} className="flex flex-wrap items-end gap-2">
+        <input type="hidden" name="editorId" value={editorId} />
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor={`adj-points-${editorId}`}>
+            Add / adjust points
+          </label>
+          <Input
+            id={`adj-points-${editorId}`}
+            name="points"
+            type="number"
+            step="0.5"
+            inputMode="decimal"
+            placeholder="e.g. 1 or -1.5"
+            className="w-32"
+            aria-label={`Point adjustment for ${editorName}`}
+          />
+        </div>
+        <div className="flex flex-1 flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor={`adj-note-${editorId}`}>
+            Subject / reason (optional)
+          </label>
+          <Input
+            id={`adj-note-${editorId}`}
+            name="note"
+            type="text"
+            placeholder="e.g. Grade 4 Math Week 3, or why this correction"
+            className="min-w-48"
+          />
+        </div>
+        <Button type="submit" size="sm" variant="secondary" disabled={pending}>
+          {pending ? "Applying…" : "Apply"}
+        </Button>
+        {state.status === "ok" && <span className="text-xs text-status-approved">Adjusted ✓</span>}
+        {state.status === "error" && <span className="text-xs text-destructive">{state.message}</span>}
+      </form>
+    </div>
   );
 }

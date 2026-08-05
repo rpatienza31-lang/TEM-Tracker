@@ -143,7 +143,8 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         <div>
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Quota staff</h3>
           <p className="mb-2 text-xs text-muted-foreground">
-            Click a points figure to see the projects behind it{isOwner && " or to adjust it"}.
+            Click a points figure to see the projects behind it
+            {isOwner && " — the owner can remove a wrongly-counted project or add a missing one there"}.
           </p>
           <QuotaStaffTable rows={report.quotaRows} breakdown={breakdown} isOwner={isOwner} />
         </div>

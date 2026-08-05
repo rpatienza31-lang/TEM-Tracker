@@ -103,4 +103,28 @@ describe("manual point adjustments", () => {
     const stats = await getProductivityStats(WIDE);
     expect(sum).toBe(stats.find((r) => r.editorId === editorId)!.totalPoints); // 1 + 2 = 3
   });
+
+  it("nets a removed project back out via a compensating correction", async () => {
+    const term = await makeTerm();
+    const subject = await makeSubject();
+    const admin = await makeUser("admin", "Admin Two");
+
+    const dlp = await makeWorkItem({ termId: term.id, subjectId: subject.id, type: "DLP" });
+    const editorActor = { id: editorId, role: "editor" } as never;
+    const adminActor = { id: admin.id, role: "admin" } as never;
+    await transitionWorkItem({ action: "claim", itemId: dlp.id, actor: editorActor });
+    await transitionWorkItem({ action: "submit", itemId: dlp.id, actor: editorActor, fileUrl: "https://x.test/f" });
+    await transitionWorkItem({ action: "approve", itemId: dlp.id, actor: adminActor });
+
+    // Owner removes the wrongly-counted project: a compensating −1 is recorded.
+    await recordPointAdjustment({ editorId, points: -1, note: "Removed: DLP — Grade 4 · Test Subject · Week 1" });
+
+    const stats = await getProductivityStats(WIDE);
+    const mine = stats.find((r) => r.editorId === editorId)!;
+    expect(mine.totalPoints).toBe(0); // +1 catalog, −1 removal
+
+    const lines = (await getPointsBreakdown(WIDE.from, WIDE.to)).get(editorId)!;
+    expect(lines).toHaveLength(2);
+    expect(lines.reduce((s, l) => s + l.points, 0)).toBe(0);
+  });
 });
