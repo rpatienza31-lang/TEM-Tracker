@@ -55,6 +55,14 @@ describe("manual point adjustments", () => {
     expect(stats.totalPoints).toBe(4);
   });
 
+  it("derives the current cycle from the point ledger (23 pts → cycle #2, 2/21)", async () => {
+    await recordPointAdjustment({ editorId, points: 23 });
+    const stats = await productivityFor(editorId);
+    expect(stats.totalPoints).toBe(23);
+    expect(stats.ledgerCycleNumber).toBe(2);
+    expect(stats.ledgerCyclePoints).toBe(2);
+  });
+
   it("subtracts for a negative adjustment, keeping the recorded amount and cycle in step", async () => {
     await recordPointAdjustment({ editorId, points: 5, note: "bump" });
     await recordPointAdjustment({ editorId, points: -2, note: "correction" });

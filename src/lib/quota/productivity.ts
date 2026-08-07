@@ -16,6 +16,12 @@ export type EditorProductivity = {
   targetPoints: number;
   completedCycles: number;
   totalPoints: number;
+  // Current cycle derived from the point ledger (totalPoints), not the mutable
+  // quota_cycles counter — so it can't drift under manual corrections. Cycle
+  // number is floor(totalPoints / quota) + 1; ledgerCyclePoints is the progress
+  // into that cycle (totalPoints mod quota).
+  ledgerCycleNumber: number;
+  ledgerCyclePoints: number;
   adjustments: number;
   pointsByType: Record<DeliverableType, number>;
   avgTurnaroundHours: number | null;
@@ -130,6 +136,9 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
     const rev = revisionByEditor.get(editor.id);
     const avgSeconds = turnaroundByEditor.get(editor.id);
     const adjustments = adjustmentTotals.get(editor.id) ?? 0;
+    const totalPoints = Object.values(pointsByType).reduce((sum, p) => sum + p, 0) + adjustments;
+    const ledgerCycleNumber = quotaSize > 0 ? Math.floor(totalPoints / quotaSize) + 1 : 1;
+    const ledgerCyclePoints = Math.round((totalPoints - (ledgerCycleNumber - 1) * quotaSize) * 100) / 100;
 
     return {
       editorId: editor.id,
@@ -138,7 +147,9 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
       pointsTotal: Number(open?.pointsTotal ?? 0),
       targetPoints: Number(open?.targetPoints ?? quotaSize),
       completedCycles: completedByEditor.get(editor.id) ?? 0,
-      totalPoints: Object.values(pointsByType).reduce((sum, p) => sum + p, 0) + adjustments,
+      totalPoints,
+      ledgerCycleNumber,
+      ledgerCyclePoints,
       adjustments,
       pointsByType,
       avgTurnaroundHours: avgSeconds ? Number(avgSeconds) / 3600 : null,

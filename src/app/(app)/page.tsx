@@ -78,15 +78,15 @@ export default async function DashboardPage() {
                   </span>
                   <div>
                     <p className="text-sm font-semibold">Current quota cycle</p>
-                    <p className="text-xs text-muted-foreground">Cycle #{mine.cycleNumber}</p>
+                    <p className="text-xs text-muted-foreground">Cycle #{mine.ledgerCycleNumber}</p>
                   </div>
                 </div>
                 <p className="text-sm font-semibold tabular-nums">
-                  {mine.pointsTotal.toFixed(1)}
+                  {mine.ledgerCyclePoints.toFixed(1)}
                   <span className="text-muted-foreground"> / {mine.targetPoints.toFixed(0)} pts</span>
                 </p>
               </div>
-              <BigProgress value={mine.pointsTotal} max={mine.targetPoints} />
+              <BigProgress value={mine.ledgerCyclePoints} max={mine.targetPoints} />
             </CardContent>
           </Card>
         )}
@@ -102,7 +102,7 @@ export default async function DashboardPage() {
     getMyWorkItems(user.id, ["revision"]),
     getMyCotItems(user.id, ["claimed", "in_review", "revision"]),
   ]);
-  const leaderboard = [...stats].sort((a, b) => b.pointsTotal - a.pointsTotal).slice(0, 8);
+  const leaderboard = [...stats].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 8);
   const myAssignedTotal = myClaimed.length + mySubmitted.length + myRevisions.length + myCot.length;
 
   return (
@@ -275,7 +275,8 @@ const RANK_STYLE: Record<number, string> = {
 };
 
 function LeaderRow({ rank, row }: { rank: number; row: EditorProductivity }) {
-  const complete = row.pointsTotal >= row.targetPoints && row.targetPoints > 0;
+  // Reached quota at least once (completed a full cycle), from the point ledger.
+  const reachedQuota = row.targetPoints > 0 && row.totalPoints >= row.targetPoints;
   const initials = row.fullName
     .split(" ")
     .map((p) => p[0])
@@ -300,15 +301,15 @@ function LeaderRow({ rank, row }: { rank: number; row: EditorProductivity }) {
       <div className="flex flex-1 items-center gap-2">
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
           <div
-            className={cn("h-full rounded-full transition-all", complete ? "bg-status-uploaded" : "bg-status-claimed")}
-            style={{ width: `${pct(row.pointsTotal, row.targetPoints)}%` }}
+            className={cn("h-full rounded-full transition-all", reachedQuota ? "bg-status-uploaded" : "bg-status-claimed")}
+            style={{ width: `${pct(row.ledgerCyclePoints, row.targetPoints)}%` }}
           />
         </div>
       </div>
-      <span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-        {row.pointsTotal.toFixed(1)}/{row.targetPoints.toFixed(0)}
+      <span className="w-28 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+        {row.ledgerCyclePoints.toFixed(1)}/{row.targetPoints.toFixed(0)} · cycle&nbsp;{row.ledgerCycleNumber}
       </span>
-      {complete && <CheckCircle2 className="h-4 w-4 shrink-0 text-status-approved" />}
+      {reachedQuota && <CheckCircle2 className="h-4 w-4 shrink-0 text-status-approved" />}
     </div>
   );
 }

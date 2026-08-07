@@ -52,12 +52,12 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
           <Card className="max-w-md">
             <CardHeader>
               <CardTitle>
-                {mine.pointsTotal.toFixed(1)} / {mine.targetPoints.toFixed(0)} · cycle #{mine.cycleNumber}
+                {mine.ledgerCyclePoints.toFixed(1)} / {mine.targetPoints.toFixed(0)} · cycle #{mine.ledgerCycleNumber}
               </CardTitle>
               <CardDescription>Current quota cycle progress</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <ProgressBar value={mine.pointsTotal} max={mine.targetPoints} />
+              <ProgressBar value={mine.ledgerCyclePoints} max={mine.targetPoints} />
               <dl className="grid grid-cols-2 gap-2 text-sm">
                 <dt className="text-muted-foreground">Completed cycles</dt>
                 <dd className="text-right">{mine.completedCycles}</dd>
@@ -135,9 +135,9 @@ export default async function ProductivityPage({ searchParams }: { searchParams:
               <TableCell className="font-medium">{row.fullName}</TableCell>
               <TableCell className="w-48">
                 <div className="flex items-center gap-2">
-                  <ProgressBar value={row.pointsTotal} max={row.targetPoints} className="w-24" />
+                  <ProgressBar value={row.ledgerCyclePoints} max={row.targetPoints} className="w-24" />
                   <span className="whitespace-nowrap text-xs text-muted-foreground">
-                    {row.pointsTotal.toFixed(1)}/{row.targetPoints.toFixed(0)} · #{row.cycleNumber}
+                    {row.ledgerCyclePoints.toFixed(1)}/{row.targetPoints.toFixed(0)} · #{row.ledgerCycleNumber}
                   </span>
                 </div>
               </TableCell>
