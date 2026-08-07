@@ -141,9 +141,9 @@ export function QuotaStaffTable({
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
-          <TableHead>Cycles completed</TableHead>
+          <TableHead>Cycles earned</TableHead>
           <TableHead>Points earned</TableHead>
-          <TableHead>Remainder carried</TableHead>
+          <TableHead>Remainder</TableHead>
           {isOwner && <TableHead>Rate (₱ / cycle)</TableHead>}
           {isOwner && <TableHead className="text-right">Salary</TableHead>}
         </TableRow>
@@ -157,7 +157,7 @@ export function QuotaStaffTable({
             <Fragment key={row.userId}>
               <TableRow>
                 <TableCell>{row.fullName}</TableCell>
-                <TableCell>{row.cyclesCompleted}</TableCell>
+                <TableCell className="tabular-nums">{row.cyclesCompleted.toFixed(2)}</TableCell>
                 <TableCell>
                   {canExpand ? (
                     <button

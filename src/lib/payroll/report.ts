@@ -3,14 +3,17 @@ import { asc, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getProductivityStats } from "@/lib/quota/productivity";
-import { getCyclesClosedInPeriod } from "@/lib/quota/cycles";
+import { getQuotaSize } from "@/lib/settings";
 import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 
 export type QuotaPayrollRow = {
   userId: string;
   fullName: string;
+  // Cycle-equivalents earned this period: pointsEarned / quotaSize (may be
+  // fractional). Multiplied by the cycle rate to get salary.
   cyclesCompleted: number;
   pointsEarned: number;
+  // Points into the current (incomplete) cycle: pointsEarned mod quotaSize.
   remainderCarried: number;
   rate: number;
   salary: number;
@@ -51,9 +54,9 @@ export type PayrollReport = {
  * reconcile. Hourly totals only ever include approved time logs.
  */
 export async function getPayrollReport(from: string, to: string): Promise<PayrollReport> {
-  const [productivity, closures, approvedHours, hourlyStaff, rateRows] = await Promise.all([
+  const [productivity, quotaSize, approvedHours, hourlyStaff, rateRows] = await Promise.all([
     getProductivityStats({ from, to }),
-    getCyclesClosedInPeriod(from, to),
+    getQuotaSize(),
     getApprovedHoursForPeriod(from, to),
     db
       .select({ id: users.id, fullName: users.fullName })
@@ -71,24 +74,29 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
       .from(users),
   ]);
 
-  const closuresByEditor = new Map(closures.map((c) => [c.editorId, c]));
   const hourlyRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.hourlyRate)]));
   const cycleRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.cycleRate)]));
   const cashAdvanceByUser = new Map(rateRows.map((r) => [r.id, Number(r.cashAdvance)]));
   const nameByUser = new Map(rateRows.map((r) => [r.id, r.fullName]));
+  const round2 = (n: number) => Math.round(n * 100) / 100;
 
+  // Quota pay is computed directly from points earned: every `quotaSize` points
+  // is one cycle's pay, pro-rated for a partial cycle. This is derived from the
+  // point ledger (which the breakdown itemises), so it always reconciles and is
+  // immune to a cycle's open/closed flag drifting under manual corrections.
   const quotaRows: QuotaPayrollRow[] = productivity.map((p) => {
-    const closure = closuresByEditor.get(p.editorId);
-    const cyclesCompleted = closure?.cyclesCompleted ?? 0;
     const rate = cycleRateByUser.get(p.editorId) ?? 0;
+    const points = p.totalPoints;
+    const cyclesCompleted = quotaSize > 0 ? round2(points / quotaSize) : 0;
+    const remainderCarried = round2(points - Math.floor(points / quotaSize) * quotaSize);
     return {
       userId: p.editorId,
       fullName: p.fullName,
       cyclesCompleted,
-      pointsEarned: p.totalPoints,
-      remainderCarried: closure?.remainderCarried ?? 0,
+      pointsEarned: points,
+      remainderCarried,
       rate,
-      salary: cyclesCompleted * rate,
+      salary: round2((quotaSize > 0 ? points / quotaSize : 0) * rate),
     };
   });
 
@@ -159,11 +167,11 @@ export function payrollReportToCsv(report: PayrollReport, includeSalary = false)
   lines.push("Quota staff");
   lines.push(
     includeSalary
-      ? "Name,Cycles completed,Points earned,Remainder carried,Rate per cycle,Salary"
-      : "Name,Cycles completed,Points earned,Remainder carried",
+      ? "Name,Cycles earned,Points earned,Remainder,Rate per cycle,Salary"
+      : "Name,Cycles earned,Points earned,Remainder",
   );
   for (const row of report.quotaRows) {
-    const base = [row.fullName, row.cyclesCompleted, row.pointsEarned.toFixed(2), row.remainderCarried.toFixed(2)];
+    const base = [row.fullName, row.cyclesCompleted.toFixed(2), row.pointsEarned.toFixed(2), row.remainderCarried.toFixed(2)];
     if (includeSalary) base.push(row.rate.toFixed(2), row.salary.toFixed(2));
     lines.push(base.join(","));
   }

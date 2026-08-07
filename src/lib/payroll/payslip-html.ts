@@ -35,7 +35,9 @@ function earningRow(label: string, sub: string, amount: number) {
 export function renderPayslipHtml(d: PayslipData): string {
   const earnings: string[] = [];
   if (d.quota && d.quota.amount > 0) {
-    earnings.push(earningRow("Quota output", `${d.quota.cycles} cycle(s) × ${peso.format(d.quota.rate)}`, d.quota.amount));
+    earnings.push(
+      earningRow("Quota output", `${d.quota.cycles.toFixed(2)} cycle(s) × ${peso.format(d.quota.rate)}`, d.quota.amount),
+    );
   }
   if (d.hourly && d.hourly.amount > 0) {
     earnings.push(earningRow("Hourly work", `${d.hourly.hours.toFixed(2)} hr × ${peso.format(d.hourly.rate)}`, d.hourly.amount));
