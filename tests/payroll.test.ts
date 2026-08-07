@@ -98,7 +98,7 @@ describe("payroll report", () => {
     let report = await getPayrollReport(WIDE.from, WIDE.to);
     expect(report.quotaRows.find((r) => r.userId === editor.id)!.unpaidCycles).toBe(1);
 
-    await recordPayrollPayment({ editorId: editor.id, cycles: 1, rate: 2100, quotaSize: 21 });
+    await recordPayrollPayment({ editorId: editor.id, cycles: 1, rate: 2100, quotaSize: 21, from: WIDE.from, to: WIDE.to });
 
     report = await getPayrollReport(WIDE.from, WIDE.to);
     const row = report.quotaRows.find((r) => r.userId === editor.id)!;
@@ -114,6 +114,20 @@ describe("payroll report", () => {
     expect(row2.completedCycles).toBe(2);
     expect(row2.unpaidCycles).toBe(1);
     expect(row2.salary).toBe(2100);
+  });
+
+  it("scopes 'paid' to the period, so a payment in one period doesn't hide another", async () => {
+    const editor = await makeUser("editor", "Two Periods");
+    await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
+    for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
+
+    // Paid against a DIFFERENT period than the one we then view.
+    await recordPayrollPayment({ editorId: editor.id, cycles: 1, rate: 2100, quotaSize: 21, from: "1999-01-01", to: "1999-01-31" });
+
+    const report = await getPayrollReport(WIDE.from, WIDE.to);
+    const row = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row.cyclesPaid).toBe(0); // that other period's payment doesn't count here
+    expect(row.unpaidCycles).toBe(1);
   });
 
   it("only includes approved time logs in hourly totals", async () => {

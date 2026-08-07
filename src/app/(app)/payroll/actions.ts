@@ -132,12 +132,12 @@ export async function markQuotaPaidAction(
   const actor = await requireRole("owner");
 
   const userId = String(formData.get("userId") ?? "");
-  const from = String(formData.get("from") ?? "") || undefined;
-  const to = String(formData.get("to") ?? "") || undefined;
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
   if (!userId) return { status: "error", message: "Missing staff id." };
-  if (!to) return { status: "error", message: "Missing period." };
+  if (!from || !to) return { status: "error", message: "Missing period." };
 
-  const report = await getPayrollReport(from ?? to, to);
+  const report = await getPayrollReport(from, to);
   const row = report.quotaRows.find((r) => r.userId === userId);
   if (!row) return { status: "error", message: "No quota staff found." };
   if (row.unpaidCycles <= 0) return { status: "error", message: "No unpaid cycles to pay." };

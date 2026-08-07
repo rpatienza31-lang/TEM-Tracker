@@ -57,9 +57,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
     getPendingTimeLogs(),
     getPayrollReport(from, to),
     getActiveClockIns(),
-    // Quota pay is cumulative, so show every project behind the running total,
-    // not just this period's, so the breakdown reconciles with "Points".
-    getPointsBreakdown("1970-01-01", to),
+    getPointsBreakdown(from, to),
     getApprovedTimeLogsForPeriod(from, to),
   ]);
   const breakdown = Object.fromEntries(breakdownMap);
@@ -145,7 +143,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         <div>
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Quota staff</h3>
           <p className="mb-2 text-xs text-muted-foreground">
-            Points and cycles are cumulative. Every whole {"21"}-point cycle pays once; a partial cycle carries to the next.
+            Points are for the selected period. Only whole completed cycles are payable; a partial cycle carries over.
             {isOwner && " Click a points figure to see or correct the projects behind it, then Mark paid to record a payout."}
           </p>
           <QuotaStaffTable rows={report.quotaRows} breakdown={breakdown} isOwner={isOwner} from={from} to={to} />

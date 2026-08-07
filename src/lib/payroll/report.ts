@@ -4,17 +4,17 @@ import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { getQuotaSize } from "@/lib/settings";
-import { getPaymentSummary } from "@/lib/payroll/payments";
+import { getPaymentsForPeriod } from "@/lib/payroll/payments";
 import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 
 export type QuotaPayrollRow = {
   userId: string;
   fullName: string;
-  // Cumulative points earned as of the period end.
+  // Points earned within this payroll period.
   pointsEarned: number;
-  // Whole 21-point cycles completed all-time: floor(pointsEarned / quotaSize).
+  // Whole 21-point cycles completed this period: floor(pointsEarned / quotaSize).
   completedCycles: number;
-  // Whole cycles already paid out (the payment watermark).
+  // Whole cycles already paid FOR this period.
   cyclesPaid: number;
   // Completed cycles not yet paid — what this payout covers.
   unpaidCycles: number;
@@ -63,11 +63,9 @@ export type PayrollReport = {
  */
 export async function getPayrollReport(from: string, to: string): Promise<PayrollReport> {
   const [productivity, quotaSize, paymentSummary, approvedHours, hourlyStaff, rateRows] = await Promise.all([
-    // Quota pay is based on cumulative points as of the period end, so a cycle
-    // that spans pay periods is counted once, when it completes.
-    getProductivityStats({ to }),
+    getProductivityStats({ from, to }),
     getQuotaSize(),
-    getPaymentSummary(),
+    getPaymentsForPeriod(from, to),
     getApprovedHoursForPeriod(from, to),
     db
       .select({ id: users.id, fullName: users.fullName })
@@ -91,9 +89,9 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   const nameByUser = new Map(rateRows.map((r) => [r.id, r.fullName]));
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // Quota pay: every whole `quotaSize`-point cycle earns one cycle's pay, but
-  // only completed cycles not yet paid (per the payment watermark) are owed —
-  // a partial cycle is carried until it completes, and nothing is paid twice.
+  // Quota pay: every whole `quotaSize`-point cycle earned this period is owed,
+  // less any already paid FOR this period, so a partial cycle is never paid and
+  // a period is never paid twice.
   const quotaRows: QuotaPayrollRow[] = productivity.map((p) => {
     const rate = cycleRateByUser.get(p.editorId) ?? 0;
     const points = p.totalPoints;

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { payrollPayments } from "@/db/schema";
@@ -8,10 +8,12 @@ type Reader = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type PaymentSummary = { cyclesPaid: number; lastPaidAt: Date | null };
 
 /**
- * Per-editor payout summary: total cycles already paid (the "paid" watermark)
- * and when they were last paid. Keyed by editor id.
+ * Cycles paid to each editor FOR a specific payroll period (matched by the
+ * period's from/to), and when. This scopes "paid" to the period being viewed,
+ * so paying one period never suppresses a cycle earned in another. Keyed by
+ * editor id.
  */
-export async function getPaymentSummary(reader: Reader = db): Promise<Map<string, PaymentSummary>> {
+export async function getPaymentsForPeriod(from: string, to: string, reader: Reader = db): Promise<Map<string, PaymentSummary>> {
   const rows = await reader
     .select({
       editorId: payrollPayments.editorId,
@@ -19,6 +21,7 @@ export async function getPaymentSummary(reader: Reader = db): Promise<Map<string
       lastPaidAt: sql<Date | null>`max(${payrollPayments.paidAt})`,
     })
     .from(payrollPayments)
+    .where(and(eq(payrollPayments.periodFrom, from), eq(payrollPayments.periodTo, to)))
     .groupBy(payrollPayments.editorId);
   return new Map(rows.map((r) => [r.editorId, { cyclesPaid: r.cyclesPaid, lastPaidAt: r.lastPaidAt }]));
 }

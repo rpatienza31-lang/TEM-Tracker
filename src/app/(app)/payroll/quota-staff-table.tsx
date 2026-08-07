@@ -48,18 +48,26 @@ const payInitial: SetRateState = { status: "idle" };
 function MarkPaidButton({
   userId,
   unpaidCycles,
+  cyclesPaid,
   lastPaidAt,
   from,
   to,
 }: {
   userId: string;
   unpaidCycles: number;
+  cyclesPaid: number;
   lastPaidAt: string | null;
   from: string;
   to: string;
 }) {
   const [state, formAction, pending] = useActionState(markQuotaPaidAction, payInitial);
 
+  // Nothing owed and nothing paid yet → no cycle completed this period.
+  if (unpaidCycles <= 0 && cyclesPaid <= 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  // Fully settled for this period (a real payout was recorded).
   if (unpaidCycles <= 0) {
     return (
       <span className="text-xs text-status-approved">
@@ -249,6 +257,7 @@ export function QuotaStaffTable({
                     <MarkPaidButton
                       userId={row.userId}
                       unpaidCycles={row.unpaidCycles}
+                      cyclesPaid={row.cyclesPaid}
                       lastPaidAt={row.lastPaidAt}
                       from={from}
                       to={to}
