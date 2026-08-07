@@ -5,13 +5,15 @@ import { Fragment, useActionState, useState } from "react";
 import { DELIVERABLE_TYPE_LABELS, type DeliverableType } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RateCell } from "./rate-cell";
 import { AdjustPointsForm } from "./adjust-points-form";
-import { adjustPointsAction, type SetRateState } from "./actions";
+import { adjustPointsAction, editLinePointsAction, type SetRateState } from "./actions";
 
 export type BreakdownLine = {
   kind: "catalog" | "cot" | "adjustment";
+  refId: string;
   type: DeliverableType | null;
   title: string;
   subtitle: string | null;
@@ -39,6 +41,48 @@ function lineLabel(line: BreakdownLine) {
 }
 
 const removeInitial: SetRateState = { status: "idle" };
+
+/**
+ * Owner control to edit one line's point value in place. Saving updates the
+ * line's source row and adjusts the cycle it landed in, so the figure — and the
+ * editor's total — changes directly, with no offsetting entry.
+ */
+function EditableLinePoints({
+  kind,
+  refId,
+  points,
+}: {
+  kind: BreakdownLine["kind"];
+  refId: string;
+  points: number;
+}) {
+  const [state, formAction, pending] = useActionState(editLinePointsAction, removeInitial);
+  const [value, setValue] = useState(points.toString());
+  const parsed = Number(value);
+  const dirty = value.trim() !== points.toString() && Number.isFinite(parsed) && parsed !== points;
+
+  return (
+    <form action={formAction} className="flex items-center gap-1">
+      <input type="hidden" name="kind" value={kind} />
+      <input type="hidden" name="refId" value={refId} />
+      <Input
+        name="newPoints"
+        type="number"
+        step="0.1"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="h-7 w-16 text-right tabular-nums"
+        aria-label="Points for this line"
+      />
+      {dirty && (
+        <Button type="submit" size="sm" variant="secondary" disabled={pending} className="h-7 px-2 text-xs">
+          {pending ? "…" : "Save"}
+        </Button>
+      )}
+      {state.status === "error" && <span className="text-xs text-destructive">{state.message}</span>}
+    </form>
+  );
+}
 
 /**
  * Owner control to take a wrongly-counted project out of an editor's points.
@@ -167,13 +211,17 @@ export function QuotaStaffTable({
                                 <span className="text-xs text-muted-foreground">
                                   {dateFmt.format(new Date(line.dateIso))}
                                 </span>
-                                <span
-                                  className={`w-12 text-right tabular-nums ${
-                                    line.points < 0 ? "text-destructive" : ""
-                                  }`}
-                                >
-                                  {signed(line.points)}
-                                </span>
+                                {isOwner ? (
+                                  <EditableLinePoints kind={line.kind} refId={line.refId} points={line.points} />
+                                ) : (
+                                  <span
+                                    className={`w-12 text-right tabular-nums ${
+                                      line.points < 0 ? "text-destructive" : ""
+                                    }`}
+                                  >
+                                    {signed(line.points)}
+                                  </span>
+                                )}
                                 {isOwner && (
                                   <RemoveLineButton
                                     editorId={row.userId}

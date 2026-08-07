@@ -167,6 +167,66 @@ async function reverseFromCycle(tx: Tx, cycleId: string, pointsToRemove: number)
 }
 
 /**
+ * Adds `pointsToAdd` into a specific cycle — the mirror of reverseFromCycle.
+ * If an open cycle crosses its target it closes and opens the next (carrying
+ * overflow); if a closed cycle's overflow grows, the extra cascades forward
+ * into the next cycle (recursively).
+ */
+async function addToCycle(tx: Tx, cycleId: string, pointsToAdd: number) {
+  const [cycle] = await tx.select().from(quotaCycles).where(eq(quotaCycles.id, cycleId)).limit(1);
+  if (!cycle) return;
+
+  const target = Number(cycle.targetPoints);
+  const newTotal = Number(cycle.pointsTotal) + pointsToAdd;
+
+  if (cycle.isClosed) {
+    // Already past target; the extra grows the overflow carried onward.
+    await tx.update(quotaCycles).set({ pointsTotal: String(newTotal) }).where(eq(quotaCycles.id, cycleId));
+    const nextCycle = await findCycleByNumber(tx, cycle.editorId, cycle.cycleNumber + 1);
+    if (nextCycle) await addToCycle(tx, nextCycle.id, pointsToAdd);
+    return;
+  }
+
+  if (newTotal < target) {
+    await tx.update(quotaCycles).set({ pointsTotal: String(newTotal) }).where(eq(quotaCycles.id, cycleId));
+    return;
+  }
+
+  // Open cycle now crosses the target: close it and carry the overflow forward.
+  const carry = newTotal - target;
+  await tx
+    .update(quotaCycles)
+    .set({ pointsTotal: String(newTotal), isClosed: true, closedAt: new Date() })
+    .where(eq(quotaCycles.id, cycleId));
+
+  const nextCycle = await findCycleByNumber(tx, cycle.editorId, cycle.cycleNumber + 1);
+  if (nextCycle) {
+    await addToCycle(tx, nextCycle.id, carry);
+  } else {
+    const quotaSize = await getQuotaSize(tx);
+    await tx.insert(quotaCycles).values({
+      editorId: cycle.editorId,
+      cycleNumber: cycle.cycleNumber + 1,
+      targetPoints: String(quotaSize),
+      pointsTotal: String(carry),
+      carriedIn: String(carry),
+    });
+  }
+}
+
+/**
+ * Applies a signed `delta` to a specific cycle's total, keeping cycle closures
+ * consistent: a negative delta reverses (possibly reopening a cycle), a
+ * positive delta adds (possibly closing one). Used when an already-awarded
+ * line's point value is edited.
+ */
+export async function applyDeltaToCycle(tx: Tx, cycleId: string, delta: number) {
+  if (delta === 0) return;
+  if (delta < 0) return reverseFromCycle(tx, cycleId, -delta);
+  return addToCycle(tx, cycleId, delta);
+}
+
+/**
  * Undoes a previously-awarded approval (un-approve or release of an
  * approved/uploaded item, spec §6.4 "Reversal"). No-ops if the item was
  * never awarded points.

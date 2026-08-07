@@ -19,6 +19,9 @@ import type { DeliverableType } from "@/lib/constants";
  */
 export type PointLine = {
   kind: "catalog" | "cot" | "adjustment";
+  // The source row's id, so the owner can edit this exact line's points:
+  // work item id (catalog), custom order item id (cot), or adjustment id.
+  refId: string;
   type: DeliverableType | null;
   title: string;
   subtitle: string | null;
@@ -40,6 +43,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
     db
       .select({
         editorId: quotaCycles.editorId,
+        refId: quotaCycleItems.workItemId,
         type: workItems.type,
         grade: workItems.grade,
         subjectName: subjects.name,
@@ -55,6 +59,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
     db
       .select({
         editorId: customOrderItems.assigneeId,
+        refId: customOrderItems.id,
         type: customOrderItems.type,
         customerName: customOrders.customerName,
         subjectName: customOrders.subjectName,
@@ -74,6 +79,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
     db
       .select({
         editorId: pointAdjustments.editorId,
+        refId: pointAdjustments.id,
         points: pointAdjustments.points,
         note: pointAdjustments.note,
         at: pointAdjustments.createdAt,
@@ -93,6 +99,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
   for (const r of catalog) {
     push(r.editorId, {
       kind: "catalog",
+      refId: r.refId,
       type: r.type,
       title: r.type,
       subtitle: `Grade ${r.grade} · ${r.subjectName} · Week ${r.weekNumber}`,
@@ -104,6 +111,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
     const parts = [r.customerName, r.subjectName, r.topic].filter(Boolean);
     push(r.editorId, {
       kind: "cot",
+      refId: r.refId,
       type: r.type,
       title: r.type,
       subtitle: parts.length ? parts.join(" · ") : null,
@@ -114,6 +122,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
   for (const r of adjustments) {
     push(r.editorId, {
       kind: "adjustment",
+      refId: r.refId,
       type: null,
       title: "Manual adjustment",
       subtitle: r.note,

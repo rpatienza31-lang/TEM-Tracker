@@ -9,6 +9,7 @@ import { users } from "@/db/schema";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
+import { editLinePoints, type LineKind } from "@/lib/payroll/edit-line";
 import { updateTimeLogTimes } from "@/lib/time-logs/mutations";
 import { sendMail } from "@/lib/email/mailer";
 
@@ -115,6 +116,29 @@ export async function adjustPointsAction(_prev: SetRateState, formData: FormData
   await recordPointAdjustment({ editorId, points, note, actorId: actor.id });
   revalidatePath("/payroll");
   return { status: "ok", message: "Adjusted." };
+}
+
+const LINE_KINDS: LineKind[] = ["catalog", "cot", "adjustment"];
+
+/**
+ * Edits one breakdown line's point value in place (owner only), keeping the
+ * cycle it landed in consistent. Used to correct a project whose recorded
+ * points differ from what it should be worth (e.g. an EPP item at 1.0 → 0.6).
+ */
+export async function editLinePointsAction(_prev: SetRateState, formData: FormData): Promise<SetRateState> {
+  await requireRole("owner");
+
+  const kind = String(formData.get("kind") ?? "");
+  const refId = String(formData.get("refId") ?? "");
+  const newPoints = Number(String(formData.get("newPoints") ?? "").trim());
+
+  if (!LINE_KINDS.includes(kind as LineKind)) return { status: "error", message: "Unknown line type." };
+  if (!refId) return { status: "error", message: "Missing line." };
+
+  const res = await editLinePoints({ kind: kind as LineKind, refId, newPoints });
+  if (!res.ok) return { status: "error", message: res.message };
+  revalidatePath("/payroll");
+  return { status: "ok", message: "Saved." };
 }
 
 /**
