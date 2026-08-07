@@ -25,6 +25,8 @@ export type QuotaRow = {
   userId: string;
   fullName: string;
   pointsEarned: number;
+  pointsPaid: number;
+  pointsUnpaid: number;
   completedCycles: number;
   quotaReached: boolean;
   remainderCarried: number;
@@ -200,7 +202,7 @@ export function QuotaStaffTable({
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
-          <TableHead>Points</TableHead>
+          <TableHead>Unpaid points</TableHead>
           <TableHead>Quota (÷21)</TableHead>
           <TableHead>Remainder</TableHead>
           {isOwner && <TableHead>Rate (₱ / subject)</TableHead>}
@@ -225,13 +227,14 @@ export function QuotaStaffTable({
                       className="inline-flex items-center gap-1 rounded text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
                       aria-expanded={isOpen}
                     >
-                      <span className="tabular-nums">{row.pointsEarned.toFixed(1)}</span>
+                      <span className="tabular-nums">{row.pointsUnpaid.toFixed(1)}</span>
                       <span className="text-xs text-muted-foreground">
-                        ({lines.length} {lines.length === 1 ? "item" : "items"}) {isOpen ? "▲" : "▼"}
+                        {row.pointsPaid > 0 ? `(of ${row.pointsEarned.toFixed(1)}) ` : ""}
+                        {isOpen ? "▲" : "▼"}
                       </span>
                     </button>
                   ) : (
-                    <span className="tabular-nums">{row.pointsEarned.toFixed(1)}</span>
+                    <span className="tabular-nums">{row.pointsUnpaid.toFixed(1)}</span>
                   )}
                 </TableCell>
                 <TableCell className="tabular-nums">
@@ -240,7 +243,7 @@ export function QuotaStaffTable({
                       ✓ {row.completedCycles} {row.completedCycles === 1 ? "cycle" : "cycles"}
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">{row.pointsEarned.toFixed(0)} / 21</span>
+                    <span className="text-muted-foreground">{row.pointsUnpaid.toFixed(0)} / 21</span>
                   )}
                 </TableCell>
                 <TableCell className="tabular-nums">{row.remainderCarried.toFixed(1)}</TableCell>
@@ -271,7 +274,16 @@ export function QuotaStaffTable({
                   <TableCell colSpan={colSpan} className="py-3">
                     <div className="flex flex-col gap-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Projects behind {row.pointsEarned.toFixed(1)} points
+                        Projects this period — {row.pointsEarned.toFixed(1)} earned
+                        {row.pointsPaid > 0 && (
+                          <span className="text-status-approved">
+                            {" · "}
+                            {row.pointsPaid.toFixed(1)} paid
+                            {row.lastPaidAt ? ` (${paidFmt.format(new Date(row.lastPaidAt))})` : ""}
+                          </span>
+                        )}
+                        {" · "}
+                        <span className="text-foreground">{row.pointsUnpaid.toFixed(1)} unpaid</span>
                       </div>
                       {lines.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No point-earning items in this period.</p>

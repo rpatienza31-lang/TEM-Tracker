@@ -42,7 +42,7 @@ export async function emailPayslipAction(
     from,
     to,
     quota: quota
-      ? { points: quota.pointsEarned, perSubjectRate: quota.perSubjectRate, amount: slip.quotaSalary }
+      ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: slip.quotaSalary }
       : undefined,
     hourly: hourly ? { hours: hourly.approvedHours, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
     gross: slip.gross,
@@ -140,12 +140,11 @@ export async function markQuotaPaidAction(
   const report = await getPayrollReport(from, to);
   const row = report.quotaRows.find((r) => r.userId === userId);
   if (!row) return { status: "error", message: "No quota staff found." };
-  if (row.isPaid) return { status: "error", message: "This period is already paid." };
-  if (row.salary <= 0) return { status: "error", message: "No quota pay to record." };
+  if (row.pointsUnpaid <= 0) return { status: "error", message: "No unpaid balance to record." };
 
   await recordPayrollPayment({
     editorId: userId,
-    points: row.pointsEarned,
+    points: row.pointsUnpaid,
     cycles: row.completedCycles,
     amount: row.salary,
     rate: row.rate,

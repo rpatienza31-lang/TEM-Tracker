@@ -90,18 +90,19 @@ describe("payroll report", () => {
     expect(row.salary).toBe(1400); // 14 × ₱100
   });
 
-  it("marks a period paid and never double-records it", async () => {
+  it("settles the unpaid balance on payment, so new approvals start a fresh count", async () => {
     const editor = await makeUser("editor", "Paid Once");
     await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
-    for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
+    for (let i = 0; i < 22; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
 
     let report = await getPayrollReport(WIDE.from, WIDE.to);
     let row = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row.pointsUnpaid).toBe(22);
     expect(row.isPaid).toBe(false);
 
     await recordPayrollPayment({
       editorId: editor.id,
-      points: row.pointsEarned,
+      points: row.pointsUnpaid,
       cycles: row.completedCycles,
       amount: row.salary,
       rate: row.rate,
@@ -111,9 +112,20 @@ describe("payroll report", () => {
 
     report = await getPayrollReport(WIDE.from, WIDE.to);
     row = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row.pointsPaid).toBe(22);
+    expect(row.pointsUnpaid).toBe(0);
     expect(row.isPaid).toBe(true);
-    expect(row.lastPaidAt).not.toBeNull();
-    expect(row.salary).toBe(2100); // salary still shown; the flag records it's settled
+    expect(row.salary).toBe(0);
+
+    // Approve one more subject: it reads as a fresh unpaid point, not 23.
+    await recordPointAdjustment({ editorId: editor.id, points: 1 });
+    report = await getPayrollReport(WIDE.from, WIDE.to);
+    row = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row.pointsEarned).toBe(23); // total still tracked
+    expect(row.pointsUnpaid).toBe(1); // but only 1 is outstanding
+    expect(row.quotaReached).toBe(false); // new cycle, quota not reached again
+    expect(row.isPaid).toBe(false);
+    expect(row.salary).toBe(100); // 1 × ₱100
   });
 
   it("scopes 'paid' to the period, so a payment in one period doesn't mark another", async () => {

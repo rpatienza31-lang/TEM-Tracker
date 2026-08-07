@@ -143,8 +143,8 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         <div>
           <h3 className="mb-2 text-sm font-semibold text-muted-foreground">Quota staff</h3>
           <p className="mb-2 text-xs text-muted-foreground">
-            Points are for the selected period. Only whole completed cycles are payable; a partial cycle carries over.
-            {isOwner && " Click a points figure to see or correct the projects behind it, then Mark paid to record a payout."}
+            Shows the unpaid points for the period. Marking paid settles them, so new approvals start a fresh count.
+            {isOwner && " Click a figure to see or correct the projects behind it, then Mark paid to record a payout."}
           </p>
           <QuotaStaffTable rows={report.quotaRows} breakdown={breakdown} isOwner={isOwner} from={from} to={to} />
         </div>

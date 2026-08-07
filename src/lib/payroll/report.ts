@@ -10,20 +10,25 @@ import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 export type QuotaPayrollRow = {
   userId: string;
   fullName: string;
-  // Points earned within this payroll period.
+  // Total points earned within this payroll period (all projects; the breakdown).
   pointsEarned: number;
-  // Whole 21-point cycles reached this period (monitoring): floor(points / quota).
+  // Points already settled by a recorded payout this period.
+  pointsPaid: number;
+  // Outstanding points still to pay: pointsEarned − pointsPaid. Resets toward
+  // zero after a payout, so new approvals read as a fresh cycle.
+  pointsUnpaid: number;
+  // Whole 21-point cycles in the unpaid balance (monitoring): floor(unpaid / quota).
   completedCycles: number;
-  // Whether the quota (one full cycle) has been reached this period.
+  // Whether the unpaid balance has reached one full cycle.
   quotaReached: boolean;
-  // Points into the current (incomplete) cycle: points − completed × quota.
+  // Points into the current (incomplete) cycle of the unpaid balance.
   remainderCarried: number;
   // The per-cycle rate, and the per-subject (per-point) rate derived from it.
   rate: number;
   perSubjectRate: number;
-  // Pro-rated pay: points × (rate / quota) — every point earns, exceeded ones included.
+  // Pro-rated pay on the unpaid balance: unpaid × (rate / quota).
   salary: number;
-  // Whether this period's pay has been recorded as paid, and when.
+  // Whether everything earned this period has been paid, and when it was last paid.
   isPaid: boolean;
   lastPaidAt: string | null;
 };
@@ -90,27 +95,32 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   const nameByUser = new Map(rateRows.map((r) => [r.id, r.fullName]));
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // Quota pay is pro-rated per point: points × (rate / quota). Every earned
-  // point pays, exceeded ones included. The whole-cycle count is kept only to
-  // flag whether quota was reached. "Paid" is recorded per period.
+  // Quota pay is pro-rated per point on the UNPAID balance: unpaid × (rate /
+  // quota). Points already paid this period drop out, so after a payout the
+  // balance resets toward zero and new approvals read as a fresh cycle. Every
+  // earned point pays, exceeded ones included.
   const quotaRows: QuotaPayrollRow[] = productivity.map((p) => {
     const rate = cycleRateByUser.get(p.editorId) ?? 0;
     const perSubjectRate = quotaSize > 0 ? rate / quotaSize : 0;
     const points = p.totalPoints;
-    const completedCycles = quotaSize > 0 ? Math.floor(points / quotaSize) : 0;
-    const remainderCarried = round2(points - completedCycles * quotaSize);
     const summary = paymentSummary.get(p.editorId);
+    const pointsPaid = summary?.pointsPaid ?? 0;
+    const pointsUnpaid = round2(Math.max(0, points - pointsPaid));
+    const completedCycles = quotaSize > 0 ? Math.floor(pointsUnpaid / quotaSize) : 0;
+    const remainderCarried = round2(pointsUnpaid - completedCycles * quotaSize);
     return {
       userId: p.editorId,
       fullName: p.fullName,
       pointsEarned: points,
+      pointsPaid,
+      pointsUnpaid,
       completedCycles,
       quotaReached: completedCycles >= 1,
       remainderCarried,
       rate,
       perSubjectRate: round2(perSubjectRate),
-      salary: round2(points * perSubjectRate),
-      isPaid: !!summary && summary.amount > 0,
+      salary: round2(pointsUnpaid * perSubjectRate),
+      isPaid: pointsUnpaid <= 0 && pointsPaid > 0,
       lastPaidAt: summary?.lastPaidAt ? new Date(summary.lastPaidAt).toISOString() : null,
     };
   });
@@ -182,11 +192,17 @@ export function payrollReportToCsv(report: PayrollReport, includeSalary = false)
   lines.push("Quota staff");
   lines.push(
     includeSalary
-      ? "Name,Points,Cycles,Quota reached,Rate per subject,Salary,Paid"
-      : "Name,Points,Cycles,Quota reached",
+      ? "Name,Points earned,Paid,Unpaid,Quota reached,Rate per subject,Salary,Status"
+      : "Name,Points earned,Paid,Unpaid,Quota reached",
   );
   for (const row of report.quotaRows) {
-    const base = [row.fullName, row.pointsEarned.toFixed(2), String(row.completedCycles), row.quotaReached ? "Yes" : "No"];
+    const base = [
+      row.fullName,
+      row.pointsEarned.toFixed(2),
+      row.pointsPaid.toFixed(2),
+      row.pointsUnpaid.toFixed(2),
+      row.quotaReached ? "Yes" : "No",
+    ];
     if (includeSalary) base.push(row.perSubjectRate.toFixed(2), row.salary.toFixed(2), row.isPaid ? "Paid" : "");
     lines.push(base.join(","));
   }
