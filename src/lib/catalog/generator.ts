@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { termOfferings, termWeeks, workItems } from "@/db/schema";
 import { getPointsTable } from "@/lib/settings";
+import { getSubjectPointsMap, pointsForItem } from "@/lib/catalog/subject-points";
 import type { DeliverableType } from "@/lib/constants";
 
 export type CatalogWeekInput = { weekNumber: number; uploadDeadline: string };
@@ -97,6 +98,10 @@ export async function generateCatalog(input: CatalogGeneratorInput) {
 
     const pointsTable = await getPointsTable(tx);
     const planned = planItems(input);
+    const subjectOverrides = await getSubjectPointsMap(
+      tx,
+      [...new Set(planned.map((p) => p.subjectId))],
+    );
 
     const itemRows = planned
       .map((item) => {
@@ -109,7 +114,7 @@ export async function generateCatalog(input: CatalogGeneratorInput) {
           weekNumber: item.weekNumber,
           type: item.type,
           dueDate,
-          pointsValue: String(pointsTable[item.type]),
+          pointsValue: String(pointsForItem(subjectOverrides, pointsTable, item.subjectId, item.type)),
         };
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);

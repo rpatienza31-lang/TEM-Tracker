@@ -65,6 +65,26 @@ export const subjects = pgTable("subjects", {
   isActive: boolean("is_active").notNull().default(true),
 });
 
+/**
+ * Per-subject point value for a deliverable type, overriding the global points
+ * table (settings "points") for that subject only. A row means "items of this
+ * subject and type are worth `points`"; with no row, the global value applies.
+ * Like the global table, this is snapshotted onto a work item when it's created
+ * (and onto not-yet-approved items when the value changes) — it never rewrites
+ * points already awarded.
+ */
+export const subjectPoints = pgTable(
+  "subject_points",
+  {
+    subjectId: uuid("subject_id")
+      .notNull()
+      .references(() => subjects.id, { onDelete: "cascade" }),
+    type: deliverableType("type").notNull(),
+    points: numeric("points", { precision: 4, scale: 2 }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.subjectId, t.type] })],
+);
+
 export const termOfferings = pgTable(
   "term_offerings",
   {
