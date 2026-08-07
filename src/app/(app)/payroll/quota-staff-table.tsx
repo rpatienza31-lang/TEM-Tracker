@@ -211,7 +211,7 @@ export function QuotaStaffTable({
                                 <span className="text-xs text-muted-foreground">
                                   {dateFmt.format(new Date(line.dateIso))}
                                 </span>
-                                {isOwner ? (
+                                {isOwner && line.kind === "adjustment" ? (
                                   <EditableLinePoints kind={line.kind} refId={line.refId} points={line.points} />
                                 ) : (
                                   <span
