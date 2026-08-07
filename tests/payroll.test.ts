@@ -58,76 +58,82 @@ describe("payroll report", () => {
     expect(payrollRow!.pointsEarned).toBe(productivity.totalPoints);
   });
 
-  it("pays quota staff for whole completed cycles from points earned", async () => {
+  it("pays quota staff pro-rated per point, exceeded points included", async () => {
     const editor = await makeUser("editor", "Quota Paid");
-    await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
+    await db.update(users).set({ cycleRate: "3500.00" }).where(eq(users.id, editor.id)); // ₱3500/21 = ₱166.67/pt
 
-    // 22 points = one complete 21-point cycle, with 1 point carried.
+    // 22 points: quota reached with 1 exceeded point, all paid pro-rated.
     for (let i = 0; i < 22; i++) await recordPointAdjustment({ editorId: editor.id, points: 1, note: `p${i}` });
 
     const report = await getPayrollReport(WIDE.from, WIDE.to);
     const row = report.quotaRows.find((r) => r.userId === editor.id)!;
     expect(row.pointsEarned).toBe(22);
     expect(row.completedCycles).toBe(1);
-    expect(row.unpaidCycles).toBe(1);
+    expect(row.quotaReached).toBe(true);
     expect(row.remainderCarried).toBe(1);
-    expect(row.salary).toBe(2100); // 1 whole cycle × ₱2100
+    expect(row.perSubjectRate).toBeCloseTo(166.67, 2);
+    expect(row.salary).toBeCloseTo(3666.67, 1); // 22 × ₱166.67
 
     const slip = report.payslips.find((p) => p.userId === editor.id);
-    expect(slip!.gross).toBe(2100);
+    expect(slip!.gross).toBeCloseTo(3666.67, 1);
   });
 
-  it("does not pay a partial cycle; it carries the remainder", async () => {
+  it("pays a partial cycle pro-rated and flags quota not reached", async () => {
     const editor = await makeUser("editor", "Partial Cycle");
-    await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
+    await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id)); // ₱100/pt
     for (let i = 0; i < 14; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
 
     const report = await getPayrollReport(WIDE.from, WIDE.to);
     const row = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row.quotaReached).toBe(false);
     expect(row.completedCycles).toBe(0);
-    expect(row.unpaidCycles).toBe(0);
-    expect(row.salary).toBe(0);
-    expect(row.remainderCarried).toBe(14);
+    expect(row.salary).toBe(1400); // 14 × ₱100
   });
 
-  it("never pays the same cycle twice once it is marked paid", async () => {
+  it("marks a period paid and never double-records it", async () => {
     const editor = await makeUser("editor", "Paid Once");
     await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
     for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
 
     let report = await getPayrollReport(WIDE.from, WIDE.to);
-    expect(report.quotaRows.find((r) => r.userId === editor.id)!.unpaidCycles).toBe(1);
+    let row = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row.isPaid).toBe(false);
 
-    await recordPayrollPayment({ editorId: editor.id, cycles: 1, rate: 2100, quotaSize: 21, from: WIDE.from, to: WIDE.to });
+    await recordPayrollPayment({
+      editorId: editor.id,
+      points: row.pointsEarned,
+      cycles: row.completedCycles,
+      amount: row.salary,
+      rate: row.rate,
+      from: WIDE.from,
+      to: WIDE.to,
+    });
 
     report = await getPayrollReport(WIDE.from, WIDE.to);
-    const row = report.quotaRows.find((r) => r.userId === editor.id)!;
-    expect(row.cyclesPaid).toBe(1);
-    expect(row.unpaidCycles).toBe(0);
-    expect(row.salary).toBe(0);
+    row = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row.isPaid).toBe(true);
     expect(row.lastPaidAt).not.toBeNull();
-
-    // Earning one more full cycle makes exactly one new cycle payable.
-    for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
-    report = await getPayrollReport(WIDE.from, WIDE.to);
-    const row2 = report.quotaRows.find((r) => r.userId === editor.id)!;
-    expect(row2.completedCycles).toBe(2);
-    expect(row2.unpaidCycles).toBe(1);
-    expect(row2.salary).toBe(2100);
+    expect(row.salary).toBe(2100); // salary still shown; the flag records it's settled
   });
 
-  it("scopes 'paid' to the period, so a payment in one period doesn't hide another", async () => {
+  it("scopes 'paid' to the period, so a payment in one period doesn't mark another", async () => {
     const editor = await makeUser("editor", "Two Periods");
     await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
     for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
 
-    // Paid against a DIFFERENT period than the one we then view.
-    await recordPayrollPayment({ editorId: editor.id, cycles: 1, rate: 2100, quotaSize: 21, from: "1999-01-01", to: "1999-01-31" });
+    await recordPayrollPayment({
+      editorId: editor.id,
+      points: 21,
+      cycles: 1,
+      amount: 2100,
+      rate: 2100,
+      from: "1999-01-01",
+      to: "1999-01-31",
+    });
 
     const report = await getPayrollReport(WIDE.from, WIDE.to);
     const row = report.quotaRows.find((r) => r.userId === editor.id)!;
-    expect(row.cyclesPaid).toBe(0); // that other period's payment doesn't count here
-    expect(row.unpaidCycles).toBe(1);
+    expect(row.isPaid).toBe(false); // other period's payment doesn't count here
   });
 
   it("only includes approved time logs in hourly totals", async () => {

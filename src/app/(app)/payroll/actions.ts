@@ -11,7 +11,6 @@ import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
 import { editLinePoints, type LineKind } from "@/lib/payroll/edit-line";
 import { recordPayrollPayment } from "@/lib/payroll/payments";
-import { getQuotaSize } from "@/lib/settings";
 import { updateTimeLogTimes } from "@/lib/time-logs/mutations";
 import { sendMail } from "@/lib/email/mailer";
 
@@ -42,7 +41,9 @@ export async function emailPayslipAction(
     fullName: slip.fullName,
     from,
     to,
-    quota: quota ? { cycles: quota.unpaidCycles, rate: quota.rate, amount: slip.quotaSalary } : undefined,
+    quota: quota
+      ? { points: quota.pointsEarned, perSubjectRate: quota.perSubjectRate, amount: slip.quotaSalary }
+      : undefined,
     hourly: hourly ? { hours: hourly.approvedHours, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
     gross: slip.gross,
     cashAdvance: slip.cashAdvance,
@@ -121,9 +122,8 @@ export async function adjustPointsAction(_prev: SetRateState, formData: FormData
 }
 
 /**
- * Records a quota payout for an editor: pays their currently-unpaid completed
- * cycles and advances the payment watermark so they are never paid again.
- * Owner only. Recomputes the amount server-side rather than trusting the client.
+ * Records this period's quota payout for an editor and marks it paid. Owner
+ * only. Recomputes the amount server-side and refuses to pay a period twice.
  */
 export async function markQuotaPaidAction(
   _prev: SetRateState,
@@ -140,20 +140,21 @@ export async function markQuotaPaidAction(
   const report = await getPayrollReport(from, to);
   const row = report.quotaRows.find((r) => r.userId === userId);
   if (!row) return { status: "error", message: "No quota staff found." };
-  if (row.unpaidCycles <= 0) return { status: "error", message: "No unpaid cycles to pay." };
+  if (row.isPaid) return { status: "error", message: "This period is already paid." };
+  if (row.salary <= 0) return { status: "error", message: "No quota pay to record." };
 
-  const quotaSize = await getQuotaSize();
   await recordPayrollPayment({
     editorId: userId,
-    cycles: row.unpaidCycles,
+    points: row.pointsEarned,
+    cycles: row.completedCycles,
+    amount: row.salary,
     rate: row.rate,
-    quotaSize,
     from,
     to,
     paidBy: actor.id,
   });
   revalidatePath("/payroll");
-  return { status: "ok", message: `Paid ${row.unpaidCycles} cycle(s).` };
+  return { status: "ok", message: "Marked as paid." };
 }
 
 const LINE_KINDS: LineKind[] = ["catalog", "cot", "adjustment"];

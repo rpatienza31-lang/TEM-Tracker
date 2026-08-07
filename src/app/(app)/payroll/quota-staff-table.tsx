@@ -26,11 +26,12 @@ export type QuotaRow = {
   fullName: string;
   pointsEarned: number;
   completedCycles: number;
-  cyclesPaid: number;
-  unpaidCycles: number;
+  quotaReached: boolean;
   remainderCarried: number;
   rate: number;
+  perSubjectRate: number;
   salary: number;
+  isPaid: boolean;
   lastPaidAt: string | null;
 };
 
@@ -47,47 +48,42 @@ const payInitial: SetRateState = { status: "idle" };
  */
 function MarkPaidButton({
   userId,
-  unpaidCycles,
-  cyclesPaid,
+  salary,
+  isPaid,
   lastPaidAt,
   from,
   to,
 }: {
   userId: string;
-  unpaidCycles: number;
-  cyclesPaid: number;
+  salary: number;
+  isPaid: boolean;
   lastPaidAt: string | null;
   from: string;
   to: string;
 }) {
   const [state, formAction, pending] = useActionState(markQuotaPaidAction, payInitial);
 
-  // Nothing owed and nothing paid yet → no cycle completed this period.
-  if (unpaidCycles <= 0 && cyclesPaid <= 0) {
-    return <span className="text-xs text-muted-foreground">—</span>;
-  }
-
-  // Fully settled for this period (a real payout was recorded).
-  if (unpaidCycles <= 0) {
+  if (isPaid) {
     return (
       <span className="text-xs text-status-approved">
         Paid{lastPaidAt ? ` · ${paidFmt.format(new Date(lastPaidAt))}` : ""} ✓
       </span>
     );
   }
+  if (salary <= 0) return <span className="text-xs text-muted-foreground">—</span>;
 
   return (
     <form
       action={formAction}
       onSubmit={(e) => {
-        if (!window.confirm(`Mark ${unpaidCycles} completed cycle(s) as paid for this editor?`)) e.preventDefault();
+        if (!window.confirm(`Mark ${peso.format(salary)} as paid for this editor this period?`)) e.preventDefault();
       }}
     >
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="from" value={from} />
       <input type="hidden" name="to" value={to} />
       <Button type="submit" size="sm" variant="secondary" disabled={pending}>
-        {pending ? "Paying…" : `Mark paid (${unpaidCycles})`}
+        {pending ? "Saving…" : "Mark paid"}
       </Button>
       {state.status === "error" && <span className="ml-1 text-xs text-destructive">{state.message}</span>}
     </form>
@@ -197,7 +193,7 @@ export function QuotaStaffTable({
   to: string;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const colSpan = isOwner ? 9 : 5;
+  const colSpan = isOwner ? 7 : 4;
 
   return (
     <Table>
@@ -205,12 +201,10 @@ export function QuotaStaffTable({
         <TableRow>
           <TableHead>Name</TableHead>
           <TableHead>Points</TableHead>
-          <TableHead>Completed</TableHead>
-          <TableHead>Paid</TableHead>
-          <TableHead>Unpaid</TableHead>
+          <TableHead>Quota (÷21)</TableHead>
           <TableHead>Remainder</TableHead>
-          {isOwner && <TableHead>Rate (₱ / cycle)</TableHead>}
-          {isOwner && <TableHead className="text-right">Salary due</TableHead>}
+          {isOwner && <TableHead>Rate (₱ / subject)</TableHead>}
+          {isOwner && <TableHead className="text-right">Salary</TableHead>}
           {isOwner && <TableHead />}
         </TableRow>
       </TableHeader>
@@ -240,13 +234,20 @@ export function QuotaStaffTable({
                     <span className="tabular-nums">{row.pointsEarned.toFixed(1)}</span>
                   )}
                 </TableCell>
-                <TableCell className="tabular-nums">{row.completedCycles}</TableCell>
-                <TableCell className="tabular-nums text-muted-foreground">{row.cyclesPaid}</TableCell>
-                <TableCell className="tabular-nums font-medium">{row.unpaidCycles}</TableCell>
+                <TableCell className="tabular-nums">
+                  {row.quotaReached ? (
+                    <span className="text-status-approved">
+                      ✓ {row.completedCycles} {row.completedCycles === 1 ? "cycle" : "cycles"}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">{row.pointsEarned.toFixed(0)} / 21</span>
+                  )}
+                </TableCell>
                 <TableCell className="tabular-nums">{row.remainderCarried.toFixed(1)}</TableCell>
                 {isOwner && (
                   <TableCell>
                     <RateCell userId={row.userId} rate={row.rate} field="cycle" />
+                    <span className="ml-1 text-xs text-muted-foreground">= {peso.format(row.perSubjectRate)}/pt</span>
                   </TableCell>
                 )}
                 {isOwner && (
@@ -256,8 +257,8 @@ export function QuotaStaffTable({
                   <TableCell>
                     <MarkPaidButton
                       userId={row.userId}
-                      unpaidCycles={row.unpaidCycles}
-                      cyclesPaid={row.cyclesPaid}
+                      salary={row.salary}
+                      isPaid={row.isPaid}
                       lastPaidAt={row.lastPaidAt}
                       from={from}
                       to={to}

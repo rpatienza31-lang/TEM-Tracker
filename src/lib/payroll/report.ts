@@ -12,18 +12,19 @@ export type QuotaPayrollRow = {
   fullName: string;
   // Points earned within this payroll period.
   pointsEarned: number;
-  // Whole 21-point cycles completed this period: floor(pointsEarned / quotaSize).
+  // Whole 21-point cycles reached this period (monitoring): floor(points / quota).
   completedCycles: number;
-  // Whole cycles already paid FOR this period.
-  cyclesPaid: number;
-  // Completed cycles not yet paid — what this payout covers.
-  unpaidCycles: number;
-  // Points into the current (incomplete) cycle: pointsEarned − completed × quota.
+  // Whether the quota (one full cycle) has been reached this period.
+  quotaReached: boolean;
+  // Points into the current (incomplete) cycle: points − completed × quota.
   remainderCarried: number;
+  // The per-cycle rate, and the per-subject (per-point) rate derived from it.
   rate: number;
-  // unpaidCycles × rate — pay for whole unpaid cycles only.
+  perSubjectRate: number;
+  // Pro-rated pay: points × (rate / quota) — every point earns, exceeded ones included.
   salary: number;
-  // ISO timestamp of the last payout, or null if never paid.
+  // Whether this period's pay has been recorded as paid, and when.
+  isPaid: boolean;
   lastPaidAt: string | null;
 };
 
@@ -89,27 +90,27 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   const nameByUser = new Map(rateRows.map((r) => [r.id, r.fullName]));
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // Quota pay: every whole `quotaSize`-point cycle earned this period is owed,
-  // less any already paid FOR this period, so a partial cycle is never paid and
-  // a period is never paid twice.
+  // Quota pay is pro-rated per point: points × (rate / quota). Every earned
+  // point pays, exceeded ones included. The whole-cycle count is kept only to
+  // flag whether quota was reached. "Paid" is recorded per period.
   const quotaRows: QuotaPayrollRow[] = productivity.map((p) => {
     const rate = cycleRateByUser.get(p.editorId) ?? 0;
+    const perSubjectRate = quotaSize > 0 ? rate / quotaSize : 0;
     const points = p.totalPoints;
     const completedCycles = quotaSize > 0 ? Math.floor(points / quotaSize) : 0;
-    const summary = paymentSummary.get(p.editorId);
-    const cyclesPaid = summary?.cyclesPaid ?? 0;
-    const unpaidCycles = Math.max(0, completedCycles - cyclesPaid);
     const remainderCarried = round2(points - completedCycles * quotaSize);
+    const summary = paymentSummary.get(p.editorId);
     return {
       userId: p.editorId,
       fullName: p.fullName,
       pointsEarned: points,
       completedCycles,
-      cyclesPaid,
-      unpaidCycles,
+      quotaReached: completedCycles >= 1,
       remainderCarried,
       rate,
-      salary: round2(unpaidCycles * rate),
+      perSubjectRate: round2(perSubjectRate),
+      salary: round2(points * perSubjectRate),
+      isPaid: !!summary && summary.amount > 0,
       lastPaidAt: summary?.lastPaidAt ? new Date(summary.lastPaidAt).toISOString() : null,
     };
   });
@@ -181,19 +182,12 @@ export function payrollReportToCsv(report: PayrollReport, includeSalary = false)
   lines.push("Quota staff");
   lines.push(
     includeSalary
-      ? "Name,Points,Completed cycles,Paid,Unpaid,Remainder,Rate per cycle,Salary due"
-      : "Name,Points,Completed cycles,Paid,Unpaid,Remainder",
+      ? "Name,Points,Cycles,Quota reached,Rate per subject,Salary,Paid"
+      : "Name,Points,Cycles,Quota reached",
   );
   for (const row of report.quotaRows) {
-    const base = [
-      row.fullName,
-      row.pointsEarned.toFixed(2),
-      String(row.completedCycles),
-      String(row.cyclesPaid),
-      String(row.unpaidCycles),
-      row.remainderCarried.toFixed(2),
-    ];
-    if (includeSalary) base.push(row.rate.toFixed(2), row.salary.toFixed(2));
+    const base = [row.fullName, row.pointsEarned.toFixed(2), String(row.completedCycles), row.quotaReached ? "Yes" : "No"];
+    if (includeSalary) base.push(row.perSubjectRate.toFixed(2), row.salary.toFixed(2), row.isPaid ? "Paid" : "");
     lines.push(base.join(","));
   }
   lines.push("");
