@@ -226,6 +226,32 @@ export const pointAdjustments = pgTable(
   (t) => [index("point_adjustments_editor_created_idx").on(t.editorId, t.createdAt)],
 );
 
+/**
+ * A recorded quota payout for an editor: a snapshot of how many completed
+ * 21-point cycles were paid, at what rate, for how much, and when. The sum of
+ * `cycles` across an editor's rows is the "already paid" watermark — payroll
+ * only ever offers to pay completed cycles beyond it, so a cycle is never paid
+ * twice and a partial cycle is carried until it completes.
+ */
+export const payrollPayments = pgTable(
+  "payroll_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cycles: integer("cycles").notNull(),
+    points: numeric("points", { precision: 8, scale: 2 }).notNull(),
+    rate: numeric("rate", { precision: 10, scale: 2 }).notNull(),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    periodFrom: date("period_from"),
+    periodTo: date("period_to"),
+    paidBy: uuid("paid_by").references(() => users.id),
+    paidAt: timestamp("paid_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("payroll_payments_editor_idx").on(t.editorId, t.paidAt)],
+);
+
 export const timeLogs = pgTable(
   "time_logs",
   {

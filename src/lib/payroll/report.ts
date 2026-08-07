@@ -4,19 +4,27 @@ import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { getQuotaSize } from "@/lib/settings";
+import { getPaymentSummary } from "@/lib/payroll/payments";
 import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 
 export type QuotaPayrollRow = {
   userId: string;
   fullName: string;
-  // Cycle-equivalents earned this period: pointsEarned / quotaSize (may be
-  // fractional). Multiplied by the cycle rate to get salary.
-  cyclesCompleted: number;
+  // Cumulative points earned as of the period end.
   pointsEarned: number;
-  // Points into the current (incomplete) cycle: pointsEarned mod quotaSize.
+  // Whole 21-point cycles completed all-time: floor(pointsEarned / quotaSize).
+  completedCycles: number;
+  // Whole cycles already paid out (the payment watermark).
+  cyclesPaid: number;
+  // Completed cycles not yet paid — what this payout covers.
+  unpaidCycles: number;
+  // Points into the current (incomplete) cycle: pointsEarned − completed × quota.
   remainderCarried: number;
   rate: number;
+  // unpaidCycles × rate — pay for whole unpaid cycles only.
   salary: number;
+  // ISO timestamp of the last payout, or null if never paid.
+  lastPaidAt: string | null;
 };
 
 export type HourlyPayrollRow = {
@@ -54,9 +62,12 @@ export type PayrollReport = {
  * reconcile. Hourly totals only ever include approved time logs.
  */
 export async function getPayrollReport(from: string, to: string): Promise<PayrollReport> {
-  const [productivity, quotaSize, approvedHours, hourlyStaff, rateRows] = await Promise.all([
-    getProductivityStats({ from, to }),
+  const [productivity, quotaSize, paymentSummary, approvedHours, hourlyStaff, rateRows] = await Promise.all([
+    // Quota pay is based on cumulative points as of the period end, so a cycle
+    // that spans pay periods is counted once, when it completes.
+    getProductivityStats({ to }),
     getQuotaSize(),
+    getPaymentSummary(),
     getApprovedHoursForPeriod(from, to),
     db
       .select({ id: users.id, fullName: users.fullName })
@@ -80,23 +91,28 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   const nameByUser = new Map(rateRows.map((r) => [r.id, r.fullName]));
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
-  // Quota pay is computed directly from points earned: every `quotaSize` points
-  // is one cycle's pay, pro-rated for a partial cycle. This is derived from the
-  // point ledger (which the breakdown itemises), so it always reconciles and is
-  // immune to a cycle's open/closed flag drifting under manual corrections.
+  // Quota pay: every whole `quotaSize`-point cycle earns one cycle's pay, but
+  // only completed cycles not yet paid (per the payment watermark) are owed —
+  // a partial cycle is carried until it completes, and nothing is paid twice.
   const quotaRows: QuotaPayrollRow[] = productivity.map((p) => {
     const rate = cycleRateByUser.get(p.editorId) ?? 0;
     const points = p.totalPoints;
-    const cyclesCompleted = quotaSize > 0 ? round2(points / quotaSize) : 0;
-    const remainderCarried = round2(points - Math.floor(points / quotaSize) * quotaSize);
+    const completedCycles = quotaSize > 0 ? Math.floor(points / quotaSize) : 0;
+    const summary = paymentSummary.get(p.editorId);
+    const cyclesPaid = summary?.cyclesPaid ?? 0;
+    const unpaidCycles = Math.max(0, completedCycles - cyclesPaid);
+    const remainderCarried = round2(points - completedCycles * quotaSize);
     return {
       userId: p.editorId,
       fullName: p.fullName,
-      cyclesCompleted,
       pointsEarned: points,
+      completedCycles,
+      cyclesPaid,
+      unpaidCycles,
       remainderCarried,
       rate,
-      salary: round2((quotaSize > 0 ? points / quotaSize : 0) * rate),
+      salary: round2(unpaidCycles * rate),
+      lastPaidAt: summary?.lastPaidAt ? new Date(summary.lastPaidAt).toISOString() : null,
     };
   });
 
@@ -167,11 +183,18 @@ export function payrollReportToCsv(report: PayrollReport, includeSalary = false)
   lines.push("Quota staff");
   lines.push(
     includeSalary
-      ? "Name,Cycles earned,Points earned,Remainder,Rate per cycle,Salary"
-      : "Name,Cycles earned,Points earned,Remainder",
+      ? "Name,Points,Completed cycles,Paid,Unpaid,Remainder,Rate per cycle,Salary due"
+      : "Name,Points,Completed cycles,Paid,Unpaid,Remainder",
   );
   for (const row of report.quotaRows) {
-    const base = [row.fullName, row.cyclesCompleted.toFixed(2), row.pointsEarned.toFixed(2), row.remainderCarried.toFixed(2)];
+    const base = [
+      row.fullName,
+      row.pointsEarned.toFixed(2),
+      String(row.completedCycles),
+      String(row.cyclesPaid),
+      String(row.unpaidCycles),
+      row.remainderCarried.toFixed(2),
+    ];
     if (includeSalary) base.push(row.rate.toFixed(2), row.salary.toFixed(2));
     lines.push(base.join(","));
   }

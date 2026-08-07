@@ -8,6 +8,7 @@ import { transitionWorkItem } from "@/lib/work-items/transitions";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { getPayrollReport, payrollReportToCsv } from "@/lib/payroll/report";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
+import { recordPayrollPayment } from "@/lib/payroll/payments";
 import { makeSubject, makeTerm, makeUser, makeWorkItem, resetDb, seedSettings } from "./helpers";
 
 const RANGE = { from: "2020-01-01", to: "2020-01-31" };
@@ -57,38 +58,62 @@ describe("payroll report", () => {
     expect(payrollRow!.pointsEarned).toBe(productivity.totalPoints);
   });
 
-  it("pays quota staff from points earned, pro-rated by the quota size", async () => {
-    const term = await makeTerm();
-    const subject = await makeSubject();
+  it("pays quota staff for whole completed cycles from points earned", async () => {
     const editor = await makeUser("editor", "Quota Paid");
-    const admin = await makeUser("admin", "Admin Pay");
-    await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id)); // ₱2100 / 21-pt cycle = ₱100/pt
+    await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
 
-    // Award 21 points (one full cycle's worth) via manual adjustments, so the
-    // pay does not depend on any cycle's open/closed flag.
-    for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1, note: `p${i}` });
+    // 22 points = one complete 21-point cycle, with 1 point carried.
+    for (let i = 0; i < 22; i++) await recordPointAdjustment({ editorId: editor.id, points: 1, note: `p${i}` });
 
     const report = await getPayrollReport(WIDE.from, WIDE.to);
     const row = report.quotaRows.find((r) => r.userId === editor.id)!;
-    expect(row.pointsEarned).toBe(21);
-    expect(row.cyclesCompleted).toBe(1); // 21 / 21
-    expect(row.salary).toBe(2100); // 1 cycle × ₱2100
+    expect(row.pointsEarned).toBe(22);
+    expect(row.completedCycles).toBe(1);
+    expect(row.unpaidCycles).toBe(1);
+    expect(row.remainderCarried).toBe(1);
+    expect(row.salary).toBe(2100); // 1 whole cycle × ₱2100
 
     const slip = report.payslips.find((p) => p.userId === editor.id);
-    expect(slip).toBeDefined();
     expect(slip!.gross).toBe(2100);
   });
 
-  it("pro-rates a partial cycle from points", async () => {
+  it("does not pay a partial cycle; it carries the remainder", async () => {
     const editor = await makeUser("editor", "Partial Cycle");
     await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
     for (let i = 0; i < 14; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
 
     const report = await getPayrollReport(WIDE.from, WIDE.to);
     const row = report.quotaRows.find((r) => r.userId === editor.id)!;
-    expect(row.pointsEarned).toBe(14);
-    expect(row.salary).toBe(1400); // 14/21 × ₱2100
+    expect(row.completedCycles).toBe(0);
+    expect(row.unpaidCycles).toBe(0);
+    expect(row.salary).toBe(0);
     expect(row.remainderCarried).toBe(14);
+  });
+
+  it("never pays the same cycle twice once it is marked paid", async () => {
+    const editor = await makeUser("editor", "Paid Once");
+    await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
+    for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
+
+    let report = await getPayrollReport(WIDE.from, WIDE.to);
+    expect(report.quotaRows.find((r) => r.userId === editor.id)!.unpaidCycles).toBe(1);
+
+    await recordPayrollPayment({ editorId: editor.id, cycles: 1, rate: 2100, quotaSize: 21 });
+
+    report = await getPayrollReport(WIDE.from, WIDE.to);
+    const row = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row.cyclesPaid).toBe(1);
+    expect(row.unpaidCycles).toBe(0);
+    expect(row.salary).toBe(0);
+    expect(row.lastPaidAt).not.toBeNull();
+
+    // Earning one more full cycle makes exactly one new cycle payable.
+    for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
+    report = await getPayrollReport(WIDE.from, WIDE.to);
+    const row2 = report.quotaRows.find((r) => r.userId === editor.id)!;
+    expect(row2.completedCycles).toBe(2);
+    expect(row2.unpaidCycles).toBe(1);
+    expect(row2.salary).toBe(2100);
   });
 
   it("only includes approved time logs in hourly totals", async () => {

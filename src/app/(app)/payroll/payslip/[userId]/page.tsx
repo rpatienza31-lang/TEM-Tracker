@@ -51,7 +51,7 @@ export default async function PayslipPage({
     fullName: slip.fullName,
     from,
     to,
-    quota: quota ? { cycles: quota.cyclesCompleted, rate: quota.rate, amount: slip.quotaSalary } : undefined,
+    quota: quota ? { cycles: quota.unpaidCycles, rate: quota.rate, amount: slip.quotaSalary } : undefined,
     hourly: hourly ? { hours: hourly.approvedHours, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
     gross: slip.gross,
     cashAdvance: slip.cashAdvance,

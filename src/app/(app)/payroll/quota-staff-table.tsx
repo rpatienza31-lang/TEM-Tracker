@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RateCell } from "./rate-cell";
 import { AdjustPointsForm } from "./adjust-points-form";
-import { adjustPointsAction, editLinePointsAction, type SetRateState } from "./actions";
+import { adjustPointsAction, editLinePointsAction, markQuotaPaidAction, type SetRateState } from "./actions";
 
 export type BreakdownLine = {
   kind: "catalog" | "cot" | "adjustment";
@@ -24,16 +24,67 @@ export type BreakdownLine = {
 export type QuotaRow = {
   userId: string;
   fullName: string;
-  cyclesCompleted: number;
   pointsEarned: number;
+  completedCycles: number;
+  cyclesPaid: number;
+  unpaidCycles: number;
   remainderCarried: number;
   rate: number;
   salary: number;
+  lastPaidAt: string | null;
 };
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const dateFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
+const paidFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" });
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
+
+const payInitial: SetRateState = { status: "idle" };
+
+/**
+ * Owner control that pays an editor's unpaid completed cycles and records the
+ * payout so they are never paid twice. Shows a "Paid" state once nothing is due.
+ */
+function MarkPaidButton({
+  userId,
+  unpaidCycles,
+  lastPaidAt,
+  from,
+  to,
+}: {
+  userId: string;
+  unpaidCycles: number;
+  lastPaidAt: string | null;
+  from: string;
+  to: string;
+}) {
+  const [state, formAction, pending] = useActionState(markQuotaPaidAction, payInitial);
+
+  if (unpaidCycles <= 0) {
+    return (
+      <span className="text-xs text-status-approved">
+        Paid{lastPaidAt ? ` · ${paidFmt.format(new Date(lastPaidAt))}` : ""} ✓
+      </span>
+    );
+  }
+
+  return (
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        if (!window.confirm(`Mark ${unpaidCycles} completed cycle(s) as paid for this editor?`)) e.preventDefault();
+      }}
+    >
+      <input type="hidden" name="userId" value={userId} />
+      <input type="hidden" name="from" value={from} />
+      <input type="hidden" name="to" value={to} />
+      <Button type="submit" size="sm" variant="secondary" disabled={pending}>
+        {pending ? "Paying…" : `Mark paid (${unpaidCycles})`}
+      </Button>
+      {state.status === "error" && <span className="ml-1 text-xs text-destructive">{state.message}</span>}
+    </form>
+  );
+}
 
 function lineLabel(line: BreakdownLine) {
   if (line.type) return DELIVERABLE_TYPE_LABELS[line.type];
@@ -128,24 +179,31 @@ export function QuotaStaffTable({
   rows,
   breakdown,
   isOwner,
+  from,
+  to,
 }: {
   rows: QuotaRow[];
   breakdown: Record<string, BreakdownLine[]>;
   isOwner: boolean;
+  from: string;
+  to: string;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const colSpan = isOwner ? 6 : 4;
+  const colSpan = isOwner ? 9 : 5;
 
   return (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
-          <TableHead>Cycles earned</TableHead>
-          <TableHead>Points earned</TableHead>
+          <TableHead>Points</TableHead>
+          <TableHead>Completed</TableHead>
+          <TableHead>Paid</TableHead>
+          <TableHead>Unpaid</TableHead>
           <TableHead>Remainder</TableHead>
           {isOwner && <TableHead>Rate (₱ / cycle)</TableHead>}
-          {isOwner && <TableHead className="text-right">Salary</TableHead>}
+          {isOwner && <TableHead className="text-right">Salary due</TableHead>}
+          {isOwner && <TableHead />}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -157,7 +215,6 @@ export function QuotaStaffTable({
             <Fragment key={row.userId}>
               <TableRow>
                 <TableCell>{row.fullName}</TableCell>
-                <TableCell className="tabular-nums">{row.cyclesCompleted.toFixed(2)}</TableCell>
                 <TableCell>
                   {canExpand ? (
                     <button
@@ -175,7 +232,10 @@ export function QuotaStaffTable({
                     <span className="tabular-nums">{row.pointsEarned.toFixed(1)}</span>
                   )}
                 </TableCell>
-                <TableCell>{row.remainderCarried.toFixed(1)}</TableCell>
+                <TableCell className="tabular-nums">{row.completedCycles}</TableCell>
+                <TableCell className="tabular-nums text-muted-foreground">{row.cyclesPaid}</TableCell>
+                <TableCell className="tabular-nums font-medium">{row.unpaidCycles}</TableCell>
+                <TableCell className="tabular-nums">{row.remainderCarried.toFixed(1)}</TableCell>
                 {isOwner && (
                   <TableCell>
                     <RateCell userId={row.userId} rate={row.rate} field="cycle" />
@@ -183,6 +243,17 @@ export function QuotaStaffTable({
                 )}
                 {isOwner && (
                   <TableCell className="text-right font-medium tabular-nums">{peso.format(row.salary)}</TableCell>
+                )}
+                {isOwner && (
+                  <TableCell>
+                    <MarkPaidButton
+                      userId={row.userId}
+                      unpaidCycles={row.unpaidCycles}
+                      lastPaidAt={row.lastPaidAt}
+                      from={from}
+                      to={to}
+                    />
+                  </TableCell>
                 )}
               </TableRow>
               {isOpen && (
