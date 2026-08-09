@@ -240,7 +240,10 @@ export const payrollPayments = pgTable(
     editorId: uuid("editor_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // "quota" (points × per-subject rate) or "hourly" (hours × hourly rate).
+    kind: text("kind").notNull().default("quota"),
     cycles: integer("cycles").notNull(),
+    // Points for a quota payout, or hours for an hourly payout.
     points: numeric("points", { precision: 8, scale: 2 }).notNull(),
     rate: numeric("rate", { precision: 10, scale: 2 }).notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),

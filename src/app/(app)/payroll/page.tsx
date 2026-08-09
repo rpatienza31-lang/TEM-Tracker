@@ -168,7 +168,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
           <p className="mb-2 text-xs text-muted-foreground">
             Click an approved-hours figure to see the clock-in / clock-out history behind it.
           </p>
-          <HourlyStaffTable rows={report.hourlyRows} sessions={sessionsByUser} isOwner={isOwner} />
+          <HourlyStaffTable rows={report.hourlyRows} sessions={sessionsByUser} isOwner={isOwner} from={from} to={to} />
         </div>
       </section>
 

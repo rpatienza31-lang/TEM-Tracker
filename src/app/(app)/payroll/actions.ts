@@ -188,6 +188,55 @@ export async function markQuotaPaidAction(
   };
 }
 
+/**
+ * Records this period's hourly payout for a staff member and marks it paid,
+ * mirroring the quota flow: pays the unpaid hours, recovers cash advance, and
+ * refuses to pay a settled balance again. Owner only.
+ */
+export async function markHourlyPaidAction(_prev: SetRateState, formData: FormData): Promise<SetRateState> {
+  const actor = await requireRole("owner");
+
+  const userId = String(formData.get("userId") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  if (!userId) return { status: "error", message: "Missing staff id." };
+  if (!from || !to) return { status: "error", message: "Missing period." };
+
+  const report = await getPayrollReport(from, to);
+  const row = report.hourlyRows.find((r) => r.userId === userId);
+  if (!row) return { status: "error", message: "No hourly staff found." };
+  if (row.hoursUnpaid <= 0) return { status: "error", message: "No unpaid hours to record." };
+
+  const [u] = await db.select({ cashAdvance: users.cashAdvance }).from(users).where(eq(users.id, userId)).limit(1);
+  const outstandingCA = Number(u?.cashAdvance ?? 0);
+  const appliedCA = Math.min(Math.max(0, outstandingCA), row.salary);
+
+  await recordPayrollPayment({
+    editorId: userId,
+    kind: "hourly",
+    points: row.hoursUnpaid,
+    cycles: 0,
+    amount: row.salary,
+    rate: row.rate,
+    cashAdvance: appliedCA,
+    from,
+    to,
+    paidBy: actor.id,
+  });
+  if (appliedCA > 0) {
+    await db
+      .update(users)
+      .set({ cashAdvance: (outstandingCA - appliedCA).toFixed(2) })
+      .where(eq(users.id, userId));
+  }
+  revalidatePath("/payroll");
+  const net = row.salary - appliedCA;
+  return {
+    status: "ok",
+    message: appliedCA > 0 ? `Paid — net ₱${net.toFixed(2)} after ₱${appliedCA.toFixed(2)} CA.` : "Marked as paid.",
+  };
+}
+
 const LINE_KINDS: LineKind[] = ["catalog", "cot", "adjustment"];
 
 /**

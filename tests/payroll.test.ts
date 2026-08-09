@@ -160,6 +160,29 @@ describe("payroll report", () => {
     expect(row!.approvedHours).toBe(8);
   });
 
+  it("pays hourly staff for unpaid hours and settles them once marked paid", async () => {
+    const staff = await makeUser("admin", "Hourly Paid");
+    await db.update(users).set({ hourlyRate: "50.00" }).where(eq(users.id, staff.id));
+    await db.insert(timeLogs).values([
+      { userId: staff.id, workDate: "2020-01-10", hours: "8", approvedBy: staff.id, approvedAt: new Date() },
+    ]);
+
+    let report = await getPayrollReport(RANGE.from, RANGE.to);
+    let row = report.hourlyRows.find((r) => r.userId === staff.id)!;
+    expect(row.hoursUnpaid).toBe(8);
+    expect(row.salary).toBe(400);
+    expect(row.isPaid).toBe(false);
+
+    await recordPayrollPayment({ editorId: staff.id, kind: "hourly", points: 8, cycles: 0, amount: 400, rate: 50 });
+
+    report = await getPayrollReport(RANGE.from, RANGE.to);
+    row = report.hourlyRows.find((r) => r.userId === staff.id)!;
+    expect(row.hoursPaid).toBe(8);
+    expect(row.hoursUnpaid).toBe(0);
+    expect(row.salary).toBe(0);
+    expect(row.isPaid).toBe(true);
+  });
+
   it("computes hourly salary from the staff rate and totals it", async () => {
     const staff = await makeUser("admin", "Hourly Rate");
     await db.update(users).set({ hourlyRate: "50.00" }).where(eq(users.id, staff.id));

@@ -41,8 +41,9 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
           <TableRow>
             <TableHead>Paid on</TableHead>
             <TableHead>Staff</TableHead>
+            <TableHead>Type</TableHead>
             <TableHead>Period</TableHead>
-            <TableHead className="text-right">Points</TableHead>
+            <TableHead className="text-right">Pts / Hrs</TableHead>
             <TableHead className="text-right">Gross</TableHead>
             <TableHead className="text-right">CA</TableHead>
             <TableHead className="text-right">Net</TableHead>
@@ -57,6 +58,11 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
                 <TableRow>
                   <TableCell className="whitespace-nowrap">{dateFmt.format(new Date(p.paidAtIso))}</TableCell>
                   <TableCell className="font-medium">{p.editorName}</TableCell>
+                  <TableCell>
+                    <Badge variant={p.kind === "hourly" ? "outline" : "secondary"}>
+                      {p.kind === "hourly" ? "Hourly" : "Quota"}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {p.periodFrom && p.periodTo ? `${p.periodFrom} → ${p.periodTo}` : "—"}
                   </TableCell>
@@ -83,7 +89,7 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
                 </TableRow>
                 {isOpen && (
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableCell colSpan={8} className="py-3">
+                    <TableCell colSpan={9} className="py-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Projects covered by this payout
                         {p.itemsReconstructed && (
@@ -127,7 +133,7 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
           })}
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
+              <TableCell colSpan={9} className="text-center text-muted-foreground">
                 {payments.length === 0 ? "No payouts recorded yet." : "No payments match that name."}
               </TableCell>
             </TableRow>

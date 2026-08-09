@@ -15,15 +15,19 @@ export type PaymentItem = {
   kind: "catalog" | "cot" | "adjustment";
 };
 
+export type PaymentKind = "quota" | "hourly";
 export type PaymentSummary = { pointsPaid: number; lastPaidAt: Date | null };
 
 /**
- * Each editor's lifetime paid watermark: total points ever settled and when
- * last paid. This is the single "already paid" baseline the whole app subtracts
- * from earned points to get the UNPAID balance — so the dashboard, productivity,
- * and payroll all show the same current-cycle number. Keyed by editor id.
+ * Each editor's lifetime paid watermark for one payout kind: total points (quota)
+ * or hours (hourly) ever settled, and when last paid. This is the single
+ * "already paid" baseline the whole app subtracts from earned points/hours to get
+ * the UNPAID balance. Keyed by editor id.
  */
-export async function getPaymentTotals(reader: Reader = db): Promise<Map<string, PaymentSummary>> {
+export async function getPaymentTotals(
+  kind: PaymentKind = "quota",
+  reader: Reader = db,
+): Promise<Map<string, PaymentSummary>> {
   const rows = await reader
     .select({
       editorId: payrollPayments.editorId,
@@ -31,13 +35,15 @@ export async function getPaymentTotals(reader: Reader = db): Promise<Map<string,
       lastPaidAt: sql<Date | null>`max(${payrollPayments.paidAt})`,
     })
     .from(payrollPayments)
+    .where(eq(payrollPayments.kind, kind))
     .groupBy(payrollPayments.editorId);
   return new Map(rows.map((r) => [r.editorId, { pointsPaid: Number(r.pointsPaid), lastPaidAt: r.lastPaidAt }]));
 }
 
-/** Records a quota payout for an editor's work in a period. */
+/** Records a payout (quota or hourly) for an editor's work in a period. */
 export async function recordPayrollPayment(params: {
   editorId: string;
+  kind?: PaymentKind;
   points: number;
   cycles: number;
   amount: number;
@@ -48,9 +54,10 @@ export async function recordPayrollPayment(params: {
   to?: string;
   paidBy?: string | null;
 }): Promise<void> {
-  const { editorId, points, cycles, amount, rate, cashAdvance, items, from, to, paidBy } = params;
+  const { editorId, kind, points, cycles, amount, rate, cashAdvance, items, from, to, paidBy } = params;
   await db.insert(payrollPayments).values({
     editorId,
+    kind: kind ?? "quota",
     cycles,
     points: points.toFixed(2),
     rate: rate.toFixed(2),
@@ -67,6 +74,7 @@ export type PaymentHistoryRow = {
   id: string;
   editorId: string;
   editorName: string;
+  kind: PaymentKind;
   points: number;
   amount: number;
   cashAdvance: number;
@@ -89,6 +97,7 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
       id: payrollPayments.id,
       editorId: payrollPayments.editorId,
       editorName: payee.fullName,
+      kind: payrollPayments.kind,
       points: payrollPayments.points,
       amount: payrollPayments.amount,
       cashAdvance: payrollPayments.cashAdvance,
@@ -110,14 +119,16 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
     : [];
   const actorNames = new Map(actorRows.map((u) => [u.id, u.fullName]));
 
-  // Reconstruct covered projects for payouts recorded before snapshots existed:
-  // partition each editor's whole breakdown across their payouts oldest-first.
-  const needsReconstruct = rows.some((r) => !Array.isArray(r.items));
+  // Reconstruct covered projects for QUOTA payouts recorded before snapshots
+  // existed: partition each editor's whole breakdown across their payouts
+  // oldest-first. Hourly payouts have no project breakdown.
+  const quotaRows = rows.filter((r) => r.kind !== "hourly");
+  const needsReconstruct = quotaRows.some((r) => !Array.isArray(r.items));
   const reconstructed = new Map<string, PaymentItem[]>();
   if (needsReconstruct) {
     const breakdown = await getPointsBreakdown("1970-01-01", new Date().toISOString().slice(0, 10));
-    const byEditor = new Map<string, typeof rows>();
-    for (const r of rows) (byEditor.get(r.editorId) ?? byEditor.set(r.editorId, []).get(r.editorId)!).push(r);
+    const byEditor = new Map<string, typeof quotaRows>();
+    for (const r of quotaRows) (byEditor.get(r.editorId) ?? byEditor.set(r.editorId, []).get(r.editorId)!).push(r);
     for (const [editorId, editorPayments] of byEditor) {
       const lines = [...(breakdown.get(editorId) ?? [])].sort((a, b) => a.dateIso.localeCompare(b.dateIso));
       let li = 0;
@@ -141,10 +152,12 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
     const amount = Number(r.amount);
     const cashAdvance = Number(r.cashAdvance);
     const stored = Array.isArray(r.items) ? (r.items as PaymentItem[]) : null;
+    const kind: PaymentKind = r.kind === "hourly" ? "hourly" : "quota";
     return {
       id: r.id,
       editorId: r.editorId,
       editorName: r.editorName,
+      kind,
       points: Number(r.points),
       amount,
       cashAdvance,
@@ -155,7 +168,7 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
       paidByName: r.paidBy ? actorNames.get(r.paidBy) ?? null : null,
       paidAtIso: new Date(r.paidAt).toISOString(),
       items: stored ?? reconstructed.get(r.id) ?? [],
-      itemsReconstructed: !stored,
+      itemsReconstructed: kind === "quota" && !stored,
     };
   });
 }

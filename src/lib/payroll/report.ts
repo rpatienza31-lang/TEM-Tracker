@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { getQuotaSize } from "@/lib/settings";
+import { getPaymentTotals } from "@/lib/payroll/payments";
 import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 
 export type QuotaPayrollRow = {
@@ -35,9 +36,16 @@ export type QuotaPayrollRow = {
 export type HourlyPayrollRow = {
   userId: string;
   fullName: string;
+  // Cumulative approved hours as of the period end.
   approvedHours: number;
+  // Hours already paid (lifetime watermark) and the unpaid balance still owed.
+  hoursPaid: number;
+  hoursUnpaid: number;
   rate: number;
+  // hoursUnpaid × rate.
   salary: number;
+  isPaid: boolean;
+  lastPaidAt: string | null;
 };
 
 export type PayslipRow = {
@@ -67,12 +75,15 @@ export type PayrollReport = {
  * reconcile. Hourly totals only ever include approved time logs.
  */
 export async function getPayrollReport(from: string, to: string): Promise<PayrollReport> {
-  const [productivity, quotaSize, approvedHours, hourlyStaff, rateRows] = await Promise.all([
+  const [productivity, quotaSize, hourlyPayments, approvedHours, hourlyStaff, rateRows] = await Promise.all([
     // Cumulative points as of the period end; the unpaid balance (points −
     // lifetime paid) is what's owed, matching the dashboard.
     getProductivityStats({ to }),
     getQuotaSize(),
-    getApprovedHoursForPeriod(from, to),
+    getPaymentTotals("hourly"),
+    // Cumulative approved hours as of the period end, so the unpaid-hours
+    // balance (hours − lifetime paid) mirrors the quota model.
+    getApprovedHoursForPeriod("1970-01-01", to),
     db
       .select({ id: users.id, fullName: users.fullName })
       .from(users)
@@ -123,15 +134,24 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   });
 
   const hoursByUser = new Map(approvedHours.map((h) => [h.userId, h.hours]));
+  // Hourly pay mirrors quota: pay the UNPAID hours (approved − lifetime paid),
+  // so a payout resets the balance and nothing is paid twice.
   const hourlyRows: HourlyPayrollRow[] = hourlyStaff.map((u) => {
     const approvedHrs = hoursByUser.get(u.id) ?? 0;
     const rate = hourlyRateByUser.get(u.id) ?? 0;
+    const summary = hourlyPayments.get(u.id);
+    const hoursPaid = summary?.pointsPaid ?? 0;
+    const hoursUnpaid = round2(Math.max(0, approvedHrs - hoursPaid));
     return {
       userId: u.id,
       fullName: u.fullName,
       approvedHours: approvedHrs,
+      hoursPaid,
+      hoursUnpaid,
       rate,
-      salary: approvedHrs * rate,
+      salary: round2(hoursUnpaid * rate),
+      isPaid: hoursUnpaid <= 0 && hoursPaid > 0,
+      lastPaidAt: summary?.lastPaidAt ? new Date(summary.lastPaidAt).toISOString() : null,
     };
   });
 

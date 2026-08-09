@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RateCell } from "./rate-cell";
-import { editTimeLogTimesAction, type SetRateState } from "./actions";
+import { editTimeLogTimesAction, markHourlyPaidAction, type SetRateState } from "./actions";
 
 export type ApprovedSession = {
   id: string;
@@ -21,8 +21,12 @@ export type HourlyRow = {
   userId: string;
   fullName: string;
   approvedHours: number;
+  hoursPaid: number;
+  hoursUnpaid: number;
   rate: number;
   salary: number;
+  isPaid: boolean;
+  lastPaidAt: string | null;
 };
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
@@ -44,8 +48,54 @@ const hhmmFmt = new Intl.DateTimeFormat("en-GB", {
 const time = (iso: string | null) => (iso ? timeFmt.format(new Date(iso)) : "—");
 const hhmm = (iso: string | null) => (iso ? hhmmFmt.format(new Date(iso)) : "");
 const day = (workDate: string) => dateFmt.format(new Date(`${workDate}T00:00:00+08:00`));
+const paidFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" });
 
 const initial: SetRateState = { status: "idle" };
+
+/** Owner control that pays a staff member's unpaid hours and records the payout. */
+function MarkHourlyPaidButton({
+  userId,
+  salary,
+  isPaid,
+  lastPaidAt,
+  from,
+  to,
+}: {
+  userId: string;
+  salary: number;
+  isPaid: boolean;
+  lastPaidAt: string | null;
+  from: string;
+  to: string;
+}) {
+  const [state, formAction, pending] = useActionState(markHourlyPaidAction, initial);
+
+  if (isPaid) {
+    return (
+      <span className="text-xs text-status-approved">
+        Paid{lastPaidAt ? ` · ${paidFmt.format(new Date(lastPaidAt))}` : ""} ✓
+      </span>
+    );
+  }
+  if (salary <= 0) return <span className="text-xs text-muted-foreground">—</span>;
+
+  return (
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        if (!window.confirm(`Mark ${peso.format(salary)} as paid for this staff member this period?`)) e.preventDefault();
+      }}
+    >
+      <input type="hidden" name="userId" value={userId} />
+      <input type="hidden" name="from" value={from} />
+      <input type="hidden" name="to" value={to} />
+      <Button type="submit" size="sm" variant="secondary" disabled={pending}>
+        {pending ? "Saving…" : "Mark paid"}
+      </Button>
+      {state.status === "error" && <span className="ml-1 text-xs text-destructive">{state.message}</span>}
+    </form>
+  );
+}
 
 /** One approved session, editable in place: owner corrects the clock times, hours recompute on save. */
 function EditableSessionRow({ session }: { session: ApprovedSession }) {
@@ -106,22 +156,27 @@ export function HourlyStaffTable({
   rows,
   sessions,
   isOwner,
+  from,
+  to,
 }: {
   rows: HourlyRow[];
   sessions: Record<string, ApprovedSession[]>;
   isOwner: boolean;
+  from: string;
+  to: string;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
-  const colSpan = isOwner ? 4 : 2;
+  const colSpan = isOwner ? 5 : 2;
 
   return (
     <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
-          <TableHead>Approved hours</TableHead>
+          <TableHead>Unpaid hours</TableHead>
           {isOwner && <TableHead>Rate (₱ / hour)</TableHead>}
           {isOwner && <TableHead className="text-right">Salary</TableHead>}
+          {isOwner && <TableHead />}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -140,13 +195,14 @@ export function HourlyStaffTable({
                       className="inline-flex items-center gap-1 rounded text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
                       aria-expanded={isOpen}
                     >
-                      <span className="tabular-nums">{row.approvedHours.toFixed(2)}</span>
+                      <span className="tabular-nums">{row.hoursUnpaid.toFixed(2)}</span>
                       <span className="text-xs text-muted-foreground">
-                        ({list.length} {list.length === 1 ? "session" : "sessions"}) {isOpen ? "▲" : "▼"}
+                        {row.hoursPaid > 0 ? `(of ${row.approvedHours.toFixed(2)}) ` : ""}
+                        {isOpen ? "▲" : "▼"}
                       </span>
                     </button>
                   ) : (
-                    <span className="tabular-nums">{row.approvedHours.toFixed(2)}</span>
+                    <span className="tabular-nums">{row.hoursUnpaid.toFixed(2)}</span>
                   )}
                 </TableCell>
                 {isOwner && (
@@ -156,6 +212,18 @@ export function HourlyStaffTable({
                 )}
                 {isOwner && (
                   <TableCell className="text-right font-medium tabular-nums">{peso.format(row.salary)}</TableCell>
+                )}
+                {isOwner && (
+                  <TableCell>
+                    <MarkHourlyPaidButton
+                      userId={row.userId}
+                      salary={row.salary}
+                      isPaid={row.isPaid}
+                      lastPaidAt={row.lastPaidAt}
+                      from={from}
+                      to={to}
+                    />
+                  </TableCell>
                 )}
               </TableRow>
               {isOpen && (
