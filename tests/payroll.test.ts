@@ -173,7 +173,16 @@ describe("payroll report", () => {
     expect(row.salary).toBe(400);
     expect(row.isPaid).toBe(false);
 
-    await recordPayrollPayment({ editorId: staff.id, kind: "hourly", points: 8, cycles: 0, amount: 400, rate: 50 });
+    await recordPayrollPayment({
+      editorId: staff.id,
+      kind: "hourly",
+      points: 8,
+      cycles: 0,
+      amount: 400,
+      rate: 50,
+      from: RANGE.from,
+      to: RANGE.to,
+    });
 
     report = await getPayrollReport(RANGE.from, RANGE.to);
     row = report.hourlyRows.find((r) => r.userId === staff.id)!;

@@ -1,4 +1,4 @@
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { payrollPayments, users } from "@/db/schema";
@@ -36,6 +36,31 @@ export async function getPaymentTotals(
     })
     .from(payrollPayments)
     .where(eq(payrollPayments.kind, kind))
+    .groupBy(payrollPayments.editorId);
+  return new Map(rows.map((r) => [r.editorId, { pointsPaid: Number(r.pointsPaid), lastPaidAt: r.lastPaidAt }]));
+}
+
+/**
+ * Paid watermark for one kind scoped to a specific payroll period (matched by
+ * from/to). Used for hourly pay, which is settled per period (weekly timesheet),
+ * so the figures track the selected date filter. Keyed by editor id.
+ */
+export async function getPaymentsForPeriod(
+  kind: PaymentKind,
+  from: string,
+  to: string,
+  reader: Reader = db,
+): Promise<Map<string, PaymentSummary>> {
+  const rows = await reader
+    .select({
+      editorId: payrollPayments.editorId,
+      pointsPaid: sql<string>`coalesce(sum(${payrollPayments.points}), 0)`,
+      lastPaidAt: sql<Date | null>`max(${payrollPayments.paidAt})`,
+    })
+    .from(payrollPayments)
+    .where(
+      and(eq(payrollPayments.kind, kind), eq(payrollPayments.periodFrom, from), eq(payrollPayments.periodTo, to)),
+    )
     .groupBy(payrollPayments.editorId);
   return new Map(rows.map((r) => [r.editorId, { pointsPaid: Number(r.pointsPaid), lastPaidAt: r.lastPaidAt }]));
 }

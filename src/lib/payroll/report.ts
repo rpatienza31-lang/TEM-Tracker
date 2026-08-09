@@ -4,7 +4,7 @@ import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { getQuotaSize } from "@/lib/settings";
-import { getPaymentTotals } from "@/lib/payroll/payments";
+import { getPaymentsForPeriod } from "@/lib/payroll/payments";
 import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 
 export type QuotaPayrollRow = {
@@ -80,10 +80,10 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
     // lifetime paid) is what's owed, matching the dashboard.
     getProductivityStats({ to }),
     getQuotaSize(),
-    getPaymentTotals("hourly"),
-    // Cumulative approved hours as of the period end, so the unpaid-hours
-    // balance (hours − lifetime paid) mirrors the quota model.
-    getApprovedHoursForPeriod("1970-01-01", to),
+    // Hourly is settled per period (weekly timesheet), so it tracks the date
+    // filter: approved hours and paid hours are both scoped to [from, to].
+    getPaymentsForPeriod("hourly", from, to),
+    getApprovedHoursForPeriod(from, to),
     db
       .select({ id: users.id, fullName: users.fullName })
       .from(users)
@@ -134,8 +134,8 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   });
 
   const hoursByUser = new Map(approvedHours.map((h) => [h.userId, h.hours]));
-  // Hourly pay mirrors quota: pay the UNPAID hours (approved − lifetime paid),
-  // so a payout resets the balance and nothing is paid twice.
+  // Hourly pay: pay the UNPAID hours for the period (approved − already paid for
+  // this period), so it matches the selected date filter and isn't paid twice.
   const hourlyRows: HourlyPayrollRow[] = hourlyStaff.map((u) => {
     const approvedHrs = hoursByUser.get(u.id) ?? 0;
     const rate = hourlyRateByUser.get(u.id) ?? 0;
