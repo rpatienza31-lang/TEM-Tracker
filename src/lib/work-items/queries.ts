@@ -96,6 +96,26 @@ export async function getBoardItems(filters: BoardFilters): Promise<BoardItem[]>
   return rows;
 }
 
+/**
+ * Not-yet-finished catalog items matching the filters — the candidates for a
+ * bulk backfill. Excludes approved/uploaded/cancelled so already-done work is
+ * never offered for re-crediting.
+ */
+export async function getBackfillCandidates(filters: BoardFilters): Promise<BoardItem[]> {
+  const conditions = buildConditions(filters);
+  conditions.push(sql`${workItems.status} not in ('approved','uploaded','cancelled')`);
+
+  return db
+    .select(boardColumns)
+    .from(workItems)
+    .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
+    .innerJoin(terms, eq(terms.id, workItems.termId))
+    .leftJoin(users, eq(users.id, workItems.assigneeId))
+    .where(and(...conditions))
+    .orderBy(asc(workItems.grade), asc(subjects.name), asc(workItems.weekNumber), asc(workItems.type))
+    .limit(1000);
+}
+
 export async function getTermGrades(termId: string) {
   const rows = await db
     .selectDistinct({ grade: termOfferings.grade })

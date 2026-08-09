@@ -33,6 +33,7 @@ const NAV = [
   { href: "/productivity", label: "Productivity & Quota", roles: ["owner", "admin", "editor"] },
   { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales", "editor"], payTypes: ["hourly", "both"] },
   { href: "/payroll", label: "Payroll Period", roles: ["owner", "admin"] },
+  { href: "/admin/backfill", label: "Bulk Backfill", roles: ["owner", "admin"] },
   { href: "/admin", label: "Admin / Setup", roles: ["owner", "admin"] },
 ] as const;
 
