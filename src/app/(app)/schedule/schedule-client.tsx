@@ -3,9 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
+import { DELIVERABLE_TYPE_LABELS, type DeliverableType } from "@/lib/constants";
 import { setScheduledDateAction } from "@/lib/work-items/actions";
 import type { BoardItem } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
@@ -15,9 +13,53 @@ type Option = { id: string; name: string };
 
 const UNASSIGNED = "__unassigned__";
 
-const dayFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", weekday: "short" });
+const dayNameFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", weekday: "long" });
+const dayShortFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", weekday: "short" });
 const dateFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
 const rangeFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" });
+
+// Distinct, friendly accent per editor so a column is recognizable at a glance.
+const EDITOR_COLORS = [
+  "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#0d9488",
+  "#16a34a", "#0891b2", "#ca8a04", "#dc2626", "#4f46e5", "#9333ea", "#0284c7",
+];
+
+function colorFor(id: string): string {
+  if (id === UNASSIGNED) return "#64748b";
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return EDITOR_COLORS[h % EDITOR_COLORS.length];
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Deliverable-type look: solid badge + tinted card, both dark-mode aware.
+const TYPE_STYLES: Record<DeliverableType, { badge: string; card: string; bar: string }> = {
+  DLP: {
+    badge: "bg-blue-600 text-white",
+    card: "border-blue-200 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/40",
+    bar: "bg-blue-500",
+  },
+  PPT: {
+    badge: "bg-violet-600 text-white",
+    card: "border-violet-200 bg-violet-50/70 dark:border-violet-900 dark:bg-violet-950/40",
+    bar: "bg-violet-500",
+  },
+  COT_DLP: {
+    badge: "bg-amber-500 text-white",
+    card: "border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/40",
+    bar: "bg-amber-500",
+  },
+  COT_PPT: {
+    badge: "bg-rose-600 text-white",
+    card: "border-rose-200 bg-rose-50/70 dark:border-rose-900 dark:bg-rose-950/40",
+    bar: "bg-rose-500",
+  },
+};
 
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -25,44 +67,60 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function isWeekend(iso: string): boolean {
+  const d = new Date(`${iso}T00:00:00Z`).getUTCDay();
+  return d === 0 || d === 6;
+}
+
 /**
- * One work item as it appears in a schedule cell. Scheduled items are solid;
- * items only showing because their deadline falls here are dimmed with a "due"
- * hint, so the owner can tell planned work from work that merely lands today.
- * Admins get a date input to move the item to another day (or clear the plan).
+ * One work item as a schedule card. Colored by deliverable type with a matching
+ * accent bar; items only present because their deadline lands here (not yet
+ * planned) get a dashed, dimmed treatment with a "due" flag so planned work
+ * reads as the real plan. Admins get an inline date control to move it.
  */
 function ScheduleCard({
   item,
   isAdmin,
+  overdue,
   onReschedule,
   pending,
 }: {
   item: ScheduleItem;
   isAdmin: boolean;
+  overdue: boolean;
   onReschedule: (id: string, date: string | null) => void;
   pending: boolean;
 }) {
+  const style = TYPE_STYLES[item.type];
   return (
     <div
       className={cn(
-        "rounded-md border px-2 py-1.5 text-xs",
-        item.isScheduled
-          ? "border-primary/30 bg-primary/5"
-          : "border-dashed border-border bg-background text-muted-foreground",
+        "relative overflow-hidden rounded-lg border pl-2.5 pr-2 py-2 shadow-sm transition-shadow hover:shadow-md",
+        item.isScheduled ? style.card : "border-dashed border-border bg-muted/30",
         pending && "opacity-50",
       )}
     >
-      <div className="flex items-center gap-1">
-        <Badge variant={item.type.startsWith("COT") ? "outline" : "secondary"} className="shrink-0">
+      <span className={cn("absolute inset-y-0 left-0 w-1.5", item.isScheduled ? style.bar : "bg-muted-foreground/30")} />
+      <div className="flex items-center justify-between gap-1">
+        <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", style.badge)}>
           {DELIVERABLE_TYPE_LABELS[item.type]}
-        </Badge>
-        {!item.isScheduled && <span className="text-[10px] uppercase tracking-wide">due</span>}
+        </span>
+        {overdue ? (
+          <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-destructive">
+            overdue
+          </span>
+        ) : !item.isScheduled ? (
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">due</span>
+        ) : null}
       </div>
-      <div className="mt-1 font-medium text-foreground">
-        G{item.grade} · {item.subjectCode || item.subjectName} · W{item.weekNumber}
+      <div className="mt-1.5 text-sm font-semibold leading-tight text-foreground">
+        {item.subjectCode || item.subjectName}
+      </div>
+      <div className="text-xs text-muted-foreground">
+        Grade {item.grade} · Week {item.weekNumber}
       </div>
       {isAdmin && (
-        <div className="mt-1 flex items-center gap-1">
+        <div className="mt-1.5 flex items-center gap-1 border-t border-border/60 pt-1.5">
           <input
             type="date"
             defaultValue={item.isScheduled ? item.plannedFor : ""}
@@ -169,16 +227,74 @@ export function ScheduleClient({
     return m;
   }, [items]);
 
+  const perColumnCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const it of items) {
+      const col = it.assigneeId ?? UNASSIGNED;
+      m.set(col, (m.get(col) ?? 0) + 1);
+    }
+    return m;
+  }, [items]);
+
   const rangeLabel = `${rangeFmt.format(new Date(`${from}T00:00:00`))} – ${rangeFmt.format(new Date(`${dates[dates.length - 1]}T00:00:00`))}`;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-xl font-semibold">Project Schedule</h1>
-        <p className="text-sm text-muted-foreground">
-          What each editor should prioritize per day. {isAdmin ? "Set a planned date to pin an item to a day; items with no plan show on their deadline." : "Your own column is highlighted."}
-        </p>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">📅 Project Schedule</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {isAdmin
+              ? "Set a planned date to pin work to a day. Items with no plan show on their deadline."
+              : "What to prioritize each day — your own column is highlighted."}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-sm">
+          <select
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm font-medium"
+            value={termId}
+            onChange={(e) => setParam({ term: e.target.value || null })}
+          >
+            {terms.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <div className="flex items-center overflow-hidden rounded-md border border-input">
+            <button
+              className="px-2.5 py-1.5 text-sm hover:bg-accent"
+              onClick={() => setParam({ from: addDays(from, -days) })}
+              aria-label="Previous"
+            >
+              ←
+            </button>
+            <button
+              className="border-x border-input px-2.5 py-1.5 text-sm font-medium hover:bg-accent"
+              onClick={() => setParam({ from: today })}
+            >
+              Today
+            </button>
+            <button
+              className="px-2.5 py-1.5 text-sm hover:bg-accent"
+              onClick={() => setParam({ from: addDays(from, days) })}
+              aria-label="Next"
+            >
+              →
+            </button>
+          </div>
+          <select
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            value={days}
+            onChange={(e) => setParam({ days: e.target.value })}
+          >
+            <option value="7">7 days</option>
+            <option value="14">14 days</option>
+          </select>
+        </div>
       </div>
+
+      <div className="text-sm font-medium text-muted-foreground">{rangeLabel}</div>
 
       {error && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -189,103 +305,112 @@ export function ScheduleClient({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-          value={termId}
-          onChange={(e) => setParam({ term: e.target.value || null })}
-        >
-          {terms.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={() => setParam({ from: addDays(from, -days) })}>
-            ← Prev
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setParam({ from: today })}>
-            Today
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setParam({ from: addDays(from, days) })}>
-            Next →
-          </Button>
-        </div>
-        <select
-          className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-          value={days}
-          onChange={(e) => setParam({ days: e.target.value })}
-        >
-          <option value="7">7 days</option>
-          <option value="14">14 days</option>
-        </select>
-        <span className="text-sm text-muted-foreground">{rangeLabel}</span>
-      </div>
-
       {columns.length === 0 ? (
-        <p className="rounded-md border border-border bg-muted/40 px-3 py-6 text-center text-sm text-muted-foreground">
-          Nothing scheduled or due in this range.
-        </p>
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 px-3 py-16 text-center">
+          <span className="text-4xl">🗓️</span>
+          <p className="text-sm font-medium text-muted-foreground">Nothing scheduled or due in this range.</p>
+          <p className="text-xs text-muted-foreground">Try the Next arrow, or plan items from the Work Board.</p>
+        </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border border-border">
+        <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-muted/60">
-                <th className="sticky left-0 z-10 min-w-[7rem] border-b border-r border-border bg-muted/60 p-2 text-left font-medium">
+              <tr>
+                <th className="sticky left-0 top-0 z-30 min-w-[7rem] border-b border-r border-border bg-muted p-3 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Date
                 </th>
-                {columns.map((c) => (
-                  <th
-                    key={c.id}
-                    className={cn(
-                      "min-w-[11rem] border-b border-l border-border p-2 text-left font-medium",
-                      c.id === currentUserId && "bg-primary/10",
-                    )}
-                  >
-                    {c.name}
-                  </th>
-                ))}
+                {columns.map((c) => {
+                  const color = colorFor(c.id);
+                  const isMe = c.id === currentUserId;
+                  return (
+                    <th
+                      key={c.id}
+                      className={cn(
+                        "min-w-[12rem] border-b border-l border-border bg-card p-2.5 text-left align-middle",
+                        isMe && "bg-primary/5",
+                      )}
+                      style={{ borderBottomWidth: 3, borderBottomColor: color }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white shadow-sm"
+                          style={{ backgroundColor: color }}
+                        >
+                          {initials(c.name)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold leading-tight">
+                            {c.name}
+                            {isMe && <span className="ml-1 text-[10px] font-bold uppercase text-primary">you</span>}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            {perColumnCount.get(c.id) ?? 0} item{(perColumnCount.get(c.id) ?? 0) === 1 ? "" : "s"}
+                          </div>
+                        </div>
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {dates.map((date) => {
                 const isToday = date === today;
+                const weekend = isWeekend(date);
                 const byCol = grid.get(date);
+                const past = date < today;
                 return (
-                  <tr key={date} className={cn(isToday && "bg-primary/5")}>
+                  <tr key={date} className={cn(isToday && "bg-primary/[0.04]")}>
                     <th
                       scope="row"
                       className={cn(
-                        "sticky left-0 z-10 border-b border-r border-border bg-card p-2 text-left align-top font-normal",
-                        isToday && "bg-primary/10",
+                        "sticky left-0 z-20 min-w-[7rem] border-b border-r border-border p-3 text-left align-top font-normal",
+                        isToday ? "bg-primary text-primary-foreground" : weekend ? "bg-muted/70" : "bg-card",
                       )}
                     >
-                      <div className="font-medium">{dayFmt.format(new Date(`${date}T00:00:00`))}</div>
-                      <div className="text-xs text-muted-foreground">{dateFmt.format(new Date(`${date}T00:00:00`))}</div>
-                      {isToday && <div className="text-[10px] font-semibold uppercase text-primary">Today</div>}
+                      <div className={cn("text-lg font-bold leading-none", !isToday && "text-foreground")}>
+                        {dateFmt.format(new Date(`${date}T00:00:00`))}
+                      </div>
+                      <div className={cn("mt-1 text-xs font-medium", isToday ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                        <span className="md:hidden">{dayShortFmt.format(new Date(`${date}T00:00:00`))}</span>
+                        <span className="hidden md:inline">{dayNameFmt.format(new Date(`${date}T00:00:00`))}</span>
+                      </div>
+                      {isToday && (
+                        <div className="mt-1 inline-block rounded-full bg-primary-foreground/20 px-2 py-0.5 text-[10px] font-bold uppercase">
+                          Today
+                        </div>
+                      )}
                     </th>
                     {columns.map((c) => {
+                      const color = colorFor(c.id);
                       const cell = byCol?.get(c.id) ?? [];
+                      const isMe = c.id === currentUserId;
                       return (
                         <td
                           key={c.id}
                           className={cn(
-                            "border-b border-l border-border p-1.5 align-top",
-                            c.id === currentUserId && "bg-primary/[0.03]",
+                            "border-b border-l border-border p-2 align-top",
+                            weekend && "bg-muted/20",
+                            isMe && "bg-primary/[0.03]",
                           )}
+                          style={{ borderLeftColor: `${color}33` }}
                         >
-                          <div className="flex flex-col gap-1.5">
-                            {cell.map((it) => (
-                              <ScheduleCard
-                                key={it.id}
-                                item={it}
-                                isAdmin={isAdmin}
-                                onReschedule={reschedule}
-                                pending={pending && busyId === it.id}
-                              />
-                            ))}
-                          </div>
+                          {cell.length === 0 ? (
+                            <div className="min-h-[2rem]" />
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              {cell.map((it) => (
+                                <ScheduleCard
+                                  key={it.id}
+                                  item={it}
+                                  isAdmin={isAdmin}
+                                  overdue={past && it.status !== "approved"}
+                                  onReschedule={reschedule}
+                                  pending={pending && busyId === it.id}
+                                />
+                              ))}
+                            </div>
+                          )}
                         </td>
                       );
                     })}
@@ -297,12 +422,16 @@ export function ScheduleClient({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded border border-primary/30 bg-primary/5" /> Planned for this day
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded border border-dashed border-border bg-background" /> Shown on its deadline (not yet planned)
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-border bg-card p-3 text-xs">
+        <span className="font-semibold uppercase tracking-wide text-muted-foreground">Legend</span>
+        {(Object.keys(TYPE_STYLES) as DeliverableType[]).map((t) => (
+          <span key={t} className="flex items-center gap-1.5">
+            <span className={cn("h-3 w-3 rounded", TYPE_STYLES[t].bar)} />
+            {DELIVERABLE_TYPE_LABELS[t]}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <span className="h-3 w-3 rounded border border-dashed border-muted-foreground/50 bg-muted/30" /> Shown on deadline (not planned yet)
         </span>
       </div>
     </div>
