@@ -10,7 +10,9 @@ import { getPayrollReport } from "@/lib/payroll/report";
 import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
 import { editLinePoints, type LineKind } from "@/lib/payroll/edit-line";
-import { recordPayrollPayment } from "@/lib/payroll/payments";
+import { recordPayrollPayment, type PaymentItem } from "@/lib/payroll/payments";
+import { getPointsBreakdown } from "@/lib/payroll/breakdown";
+import { splitPaidUnpaid } from "@/lib/payroll/paid-split";
 import { updateTimeLogTimes } from "@/lib/time-logs/mutations";
 import { sendMail } from "@/lib/email/mailer";
 
@@ -142,12 +144,25 @@ export async function markQuotaPaidAction(
   if (!row) return { status: "error", message: "No quota staff found." };
   if (row.pointsUnpaid <= 0) return { status: "error", message: "No unpaid balance to record." };
 
+  // Snapshot the projects this payout covers: the currently-unpaid lines,
+  // taken from all of the editor's projects up to the period end.
+  const breakdown = await getPointsBreakdown("1970-01-01", to);
+  const { unpaidLines } = splitPaidUnpaid(breakdown.get(userId) ?? [], row.pointsPaid);
+  const items: PaymentItem[] = unpaidLines.map((l) => ({
+    title: l.title,
+    subtitle: l.subtitle,
+    points: l.points,
+    dateIso: l.dateIso,
+    kind: l.kind,
+  }));
+
   await recordPayrollPayment({
     editorId: userId,
     points: row.pointsUnpaid,
     cycles: row.completedCycles,
     amount: row.salary,
     rate: row.rate,
+    items,
     from,
     to,
     paidBy: actor.id,

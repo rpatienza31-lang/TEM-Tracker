@@ -274,16 +274,16 @@ export function QuotaStaffTable({
                   <TableCell colSpan={colSpan} className="py-3">
                     <div className="flex flex-col gap-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Projects this period — {row.pointsEarned.toFixed(1)} earned
+                        Unpaid projects — {row.pointsUnpaid.toFixed(1)} of {row.pointsEarned.toFixed(1)} earned
                         {row.pointsPaid > 0 && (
-                          <span className="text-status-approved">
+                          <span className="font-normal normal-case">
                             {" · "}
-                            {row.pointsPaid.toFixed(1)} paid
-                            {row.lastPaidAt ? ` (${paidFmt.format(new Date(row.lastPaidAt))})` : ""}
+                            {row.pointsPaid.toFixed(1)} already paid — see{" "}
+                            <a href="/payroll/history" className="text-primary underline">
+                              Payment history
+                            </a>
                           </span>
                         )}
-                        {" · "}
-                        <span className="text-foreground">{row.pointsUnpaid.toFixed(1)} unpaid</span>
                       </div>
                       {lines.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No point-earning items in this period.</p>

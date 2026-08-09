@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth";
 import { getActiveClockIns, getApprovedTimeLogsForPeriod, getPendingTimeLogs } from "@/lib/time-logs/queries";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { getPointsBreakdown } from "@/lib/payroll/breakdown";
+import { splitPaidUnpaid } from "@/lib/payroll/paid-split";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -57,10 +58,16 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
     getPendingTimeLogs(),
     getPayrollReport(from, to),
     getActiveClockIns(),
-    getPointsBreakdown(from, to),
+    // All projects up to the period end, so the split against lifetime-paid points is correct.
+    getPointsBreakdown("1970-01-01", to),
     getApprovedTimeLogsForPeriod(from, to),
   ]);
-  const breakdown = Object.fromEntries(breakdownMap);
+  // Show only the UNPAID projects in the live breakdown — already-paid ones live
+  // in the Payment history, so the list isn't cluttered with settled work.
+  const paidByUser = new Map(report.quotaRows.map((r) => [r.userId, r.pointsPaid]));
+  const breakdown = Object.fromEntries(
+    [...breakdownMap].map(([userId, lines]) => [userId, splitPaidUnpaid(lines, paidByUser.get(userId) ?? 0).unpaidLines]),
+  );
 
   const sessionsByUser: Record<string, ReturnType<typeof toSession>[]> = {};
   for (const log of approvedLogs) {
@@ -69,12 +76,19 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-xl font-semibold">Payroll Period</h1>
-        <p className="text-sm text-muted-foreground">
-          Quota staff show cycles completed, points earned, and remainder carried; hourly staff show approved hours.
-          {isOwner && " Salary is computed from each staff member's rate."}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-semibold">Payroll Period</h1>
+          <p className="text-sm text-muted-foreground">
+            Quota staff show unpaid points and pro-rated salary; hourly staff show approved hours.
+            {isOwner && " Salary is each staff member's unpaid points × per-subject rate."}
+          </p>
+        </div>
+        {isOwner && (
+          <a href="/payroll/history" className="shrink-0 text-sm text-primary underline">
+            Payment history →
+          </a>
+        )}
       </div>
 
       <ActiveClockIns
