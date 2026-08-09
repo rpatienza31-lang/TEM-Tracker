@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { customOrderItems, quotaCycles, quotaCycleItems, users, workItems } from "@/db/schema";
 import { getQuotaSize } from "@/lib/settings";
 import { getAdjustmentTotals } from "@/lib/quota/adjustments";
+import { getPaymentTotals } from "@/lib/payroll/payments";
 import { ALL_DELIVERABLE_TYPES, type DeliverableType } from "@/lib/constants";
 
 export type DateRange = { from?: string; to?: string };
@@ -16,10 +17,15 @@ export type EditorProductivity = {
   targetPoints: number;
   completedCycles: number;
   totalPoints: number;
-  // Current cycle derived from the point ledger (totalPoints), not the mutable
-  // quota_cycles counter — so it can't drift under manual corrections. Cycle
-  // number is floor(totalPoints / quota) + 1; ledgerCyclePoints is the progress
-  // into that cycle (totalPoints mod quota).
+  // Lifetime points already paid out (the payment watermark), and the unpaid
+  // balance still owed: totalPoints − pointsPaid.
+  pointsPaid: number;
+  pointsUnpaid: number;
+  lastPaidAt: string | null;
+  // Current cycle shown across the app, derived from the ledger + payments so it
+  // can't drift. ledgerCycleNumber is which payout cycle they're building
+  // (floor(pointsPaid / quota) + 1); ledgerCyclePoints is the UNPAID progress
+  // into it — the same number payroll shows.
   ledgerCycleNumber: number;
   ledgerCyclePoints: number;
   adjustments: number;
@@ -45,7 +51,7 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
     .where(eq(users.role, "editor"))
     .orderBy(asc(users.fullName));
 
-  const [openCycles, completedCounts, breakdown, cotBreakdown, turnaround, revision, adjustmentTotals] = await Promise.all([
+  const [openCycles, completedCounts, breakdown, cotBreakdown, turnaround, revision, adjustmentTotals, paymentTotals] = await Promise.all([
     db.select().from(quotaCycles).where(eq(quotaCycles.isClosed, false)),
     db
       .select({ editorId: quotaCycles.editorId, count: sql<number>`count(*)::int` })
@@ -106,6 +112,7 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
       .where(and(isNotNull(workItems.assigneeId), dateCondition(workItems.submittedAt, range)))
       .groupBy(workItems.assigneeId),
     getAdjustmentTotals(range),
+    getPaymentTotals(),
   ]);
 
   const openCycleByEditor = new Map(openCycles.map((c) => [c.editorId, c]));
@@ -137,8 +144,13 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
     const avgSeconds = turnaroundByEditor.get(editor.id);
     const adjustments = adjustmentTotals.get(editor.id) ?? 0;
     const totalPoints = Object.values(pointsByType).reduce((sum, p) => sum + p, 0) + adjustments;
-    const ledgerCycleNumber = quotaSize > 0 ? Math.floor(totalPoints / quotaSize) + 1 : 1;
-    const ledgerCyclePoints = Math.round((totalPoints - (ledgerCycleNumber - 1) * quotaSize) * 100) / 100;
+    const paid = paymentTotals.get(editor.id);
+    const pointsPaid = paid?.pointsPaid ?? 0;
+    const pointsUnpaid = Math.round(Math.max(0, totalPoints - pointsPaid) * 100) / 100;
+    // Which payout cycle they're building (from paid points), and the unpaid
+    // progress into it — the same figure payroll shows.
+    const ledgerCycleNumber = quotaSize > 0 ? Math.floor(pointsPaid / quotaSize) + 1 : 1;
+    const ledgerCyclePoints = pointsUnpaid;
 
     return {
       editorId: editor.id,
@@ -148,6 +160,9 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
       targetPoints: Number(open?.targetPoints ?? quotaSize),
       completedCycles: completedByEditor.get(editor.id) ?? 0,
       totalPoints,
+      pointsPaid,
+      pointsUnpaid,
+      lastPaidAt: paid?.lastPaidAt ? new Date(paid.lastPaidAt).toISOString() : null,
       ledgerCycleNumber,
       ledgerCyclePoints,
       adjustments,

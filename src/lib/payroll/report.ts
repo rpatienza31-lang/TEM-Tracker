@@ -4,7 +4,6 @@ import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { getQuotaSize } from "@/lib/settings";
-import { getPaymentsForPeriod } from "@/lib/payroll/payments";
 import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 
 export type QuotaPayrollRow = {
@@ -68,10 +67,11 @@ export type PayrollReport = {
  * reconcile. Hourly totals only ever include approved time logs.
  */
 export async function getPayrollReport(from: string, to: string): Promise<PayrollReport> {
-  const [productivity, quotaSize, paymentSummary, approvedHours, hourlyStaff, rateRows] = await Promise.all([
-    getProductivityStats({ from, to }),
+  const [productivity, quotaSize, approvedHours, hourlyStaff, rateRows] = await Promise.all([
+    // Cumulative points as of the period end; the unpaid balance (points −
+    // lifetime paid) is what's owed, matching the dashboard.
+    getProductivityStats({ to }),
     getQuotaSize(),
-    getPaymentsForPeriod(from, to),
     getApprovedHoursForPeriod(from, to),
     db
       .select({ id: users.id, fullName: users.fullName })
@@ -96,23 +96,20 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
   // Quota pay is pro-rated per point on the UNPAID balance: unpaid × (rate /
-  // quota). Points already paid this period drop out, so after a payout the
-  // balance resets toward zero and new approvals read as a fresh cycle. Every
-  // earned point pays, exceeded ones included.
+  // quota). The unpaid balance (points earned − lifetime paid) comes straight
+  // from the productivity stats, so payroll and the dashboard show the same
+  // number. After a payout the balance resets toward zero.
   const quotaRows: QuotaPayrollRow[] = productivity.map((p) => {
     const rate = cycleRateByUser.get(p.editorId) ?? 0;
     const perSubjectRate = quotaSize > 0 ? rate / quotaSize : 0;
-    const points = p.totalPoints;
-    const summary = paymentSummary.get(p.editorId);
-    const pointsPaid = summary?.pointsPaid ?? 0;
-    const pointsUnpaid = round2(Math.max(0, points - pointsPaid));
+    const pointsUnpaid = p.pointsUnpaid;
     const completedCycles = quotaSize > 0 ? Math.floor(pointsUnpaid / quotaSize) : 0;
     const remainderCarried = round2(pointsUnpaid - completedCycles * quotaSize);
     return {
       userId: p.editorId,
       fullName: p.fullName,
-      pointsEarned: points,
-      pointsPaid,
+      pointsEarned: p.totalPoints,
+      pointsPaid: p.pointsPaid,
       pointsUnpaid,
       completedCycles,
       quotaReached: completedCycles >= 1,
@@ -120,8 +117,8 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
       rate,
       perSubjectRate: round2(perSubjectRate),
       salary: round2(pointsUnpaid * perSubjectRate),
-      isPaid: pointsUnpaid <= 0 && pointsPaid > 0,
-      lastPaidAt: summary?.lastPaidAt ? new Date(summary.lastPaidAt).toISOString() : null,
+      isPaid: pointsUnpaid <= 0 && p.pointsPaid > 0,
+      lastPaidAt: p.lastPaidAt,
     };
   });
 

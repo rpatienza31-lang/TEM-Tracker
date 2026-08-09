@@ -55,12 +55,23 @@ describe("manual point adjustments", () => {
     expect(stats.totalPoints).toBe(4);
   });
 
-  it("derives the current cycle from the point ledger (23 pts → cycle #2, 2/21)", async () => {
+  it("shows the unpaid balance as the current cycle progress", async () => {
     await recordPointAdjustment({ editorId, points: 23 });
-    const stats = await productivityFor(editorId);
+    // Nothing paid yet: all 23 are unpaid, building the 1st payout cycle.
+    let stats = await productivityFor(editorId);
     expect(stats.totalPoints).toBe(23);
+    expect(stats.pointsUnpaid).toBe(23);
+    expect(stats.ledgerCycleNumber).toBe(1);
+    expect(stats.ledgerCyclePoints).toBe(23);
+
+    // Pay 22 → 1 unpaid, now building the 2nd payout cycle.
+    const { recordPayrollPayment } = await import("@/lib/payroll/payments");
+    await recordPayrollPayment({ editorId, points: 22, cycles: 1, amount: 2200, rate: 2100 });
+    stats = await productivityFor(editorId);
+    expect(stats.pointsPaid).toBe(22);
+    expect(stats.pointsUnpaid).toBe(1);
     expect(stats.ledgerCycleNumber).toBe(2);
-    expect(stats.ledgerCyclePoints).toBe(2);
+    expect(stats.ledgerCyclePoints).toBe(1);
   });
 
   it("subtracts for a negative adjustment, keeping the recorded amount and cycle in step", async () => {

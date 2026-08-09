@@ -102,7 +102,7 @@ export default async function DashboardPage() {
     getMyWorkItems(user.id, ["revision"]),
     getMyCotItems(user.id, ["claimed", "in_review", "revision"]),
   ]);
-  const leaderboard = [...stats].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 8);
+  const leaderboard = [...stats].sort((a, b) => b.pointsUnpaid - a.pointsUnpaid).slice(0, 8);
   const myAssignedTotal = myClaimed.length + mySubmitted.length + myRevisions.length + myCot.length;
 
   return (
@@ -152,7 +152,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionTitle icon={Trophy}>Editor leaderboard · points this cycle</SectionTitle>
+        <SectionTitle icon={Trophy}>Editor leaderboard · unpaid points this cycle</SectionTitle>
         <Card>
           <CardContent className="flex flex-col divide-y divide-border p-0">
             {leaderboard.map((row, i) => (
@@ -275,8 +275,8 @@ const RANK_STYLE: Record<number, string> = {
 };
 
 function LeaderRow({ rank, row }: { rank: number; row: EditorProductivity }) {
-  // Reached quota at least once (completed a full cycle), from the point ledger.
-  const reachedQuota = row.targetPoints > 0 && row.totalPoints >= row.targetPoints;
+  // Unpaid balance has reached a full payable cycle.
+  const reachedQuota = row.targetPoints > 0 && row.pointsUnpaid >= row.targetPoints;
   const initials = row.fullName
     .split(" ")
     .map((p) => p[0])

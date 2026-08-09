@@ -128,24 +128,21 @@ describe("payroll report", () => {
     expect(row.salary).toBe(100); // 1 × ₱100
   });
 
-  it("scopes 'paid' to the period, so a payment in one period doesn't mark another", async () => {
-    const editor = await makeUser("editor", "Two Periods");
+  it("shows the same unpaid balance on the dashboard (productivity) and payroll", async () => {
+    const editor = await makeUser("editor", "In Sync");
     await db.update(users).set({ cycleRate: "2100.00" }).where(eq(users.id, editor.id));
-    for (let i = 0; i < 21; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
+    for (let i = 0; i < 23; i++) await recordPointAdjustment({ editorId: editor.id, points: 1 });
+    // Pay 22 (one cycle + 1), leaving 1 unpaid.
+    await recordPayrollPayment({ editorId: editor.id, points: 22, cycles: 1, amount: 2200, rate: 2100 });
 
-    await recordPayrollPayment({
-      editorId: editor.id,
-      points: 21,
-      cycles: 1,
-      amount: 2100,
-      rate: 2100,
-      from: "1999-01-01",
-      to: "1999-01-31",
-    });
-
+    const [stat] = (await getProductivityStats()).filter((r) => r.editorId === editor.id);
     const report = await getPayrollReport(WIDE.from, WIDE.to);
     const row = report.quotaRows.find((r) => r.userId === editor.id)!;
-    expect(row.isPaid).toBe(false); // other period's payment doesn't count here
+
+    expect(stat.pointsUnpaid).toBe(1); // dashboard
+    expect(row.pointsUnpaid).toBe(1); // payroll — same number
+    expect(stat.ledgerCyclePoints).toBe(1); // leaderboard progress = unpaid
+    expect(stat.ledgerCycleNumber).toBe(2); // building the 2nd payout cycle
   });
 
   it("only includes approved time logs in hourly totals", async () => {

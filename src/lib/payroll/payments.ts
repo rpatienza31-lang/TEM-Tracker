@@ -1,33 +1,28 @@
-import { and, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { payrollPayments } from "@/db/schema";
 
 type Reader = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-export type PaymentSummary = { amount: number; pointsPaid: number; lastPaidAt: Date | null };
+export type PaymentSummary = { pointsPaid: number; lastPaidAt: Date | null };
 
 /**
- * What each editor has already been paid FOR a specific payroll period (matched
- * by the period's from/to): total amount, total points settled, and when. This
- * scopes "paid" to the period being viewed, so paying one period never marks
- * another, and points already paid drop out of the payable balance. Keyed by
- * editor id.
+ * Each editor's lifetime paid watermark: total points ever settled and when
+ * last paid. This is the single "already paid" baseline the whole app subtracts
+ * from earned points to get the UNPAID balance — so the dashboard, productivity,
+ * and payroll all show the same current-cycle number. Keyed by editor id.
  */
-export async function getPaymentsForPeriod(from: string, to: string, reader: Reader = db): Promise<Map<string, PaymentSummary>> {
+export async function getPaymentTotals(reader: Reader = db): Promise<Map<string, PaymentSummary>> {
   const rows = await reader
     .select({
       editorId: payrollPayments.editorId,
-      amount: sql<string>`coalesce(sum(${payrollPayments.amount}), 0)`,
       pointsPaid: sql<string>`coalesce(sum(${payrollPayments.points}), 0)`,
       lastPaidAt: sql<Date | null>`max(${payrollPayments.paidAt})`,
     })
     .from(payrollPayments)
-    .where(and(eq(payrollPayments.periodFrom, from), eq(payrollPayments.periodTo, to)))
     .groupBy(payrollPayments.editorId);
-  return new Map(
-    rows.map((r) => [r.editorId, { amount: Number(r.amount), pointsPaid: Number(r.pointsPaid), lastPaidAt: r.lastPaidAt }]),
-  );
+  return new Map(rows.map((r) => [r.editorId, { pointsPaid: Number(r.pointsPaid), lastPaidAt: r.lastPaidAt }]));
 }
 
 /** Records a quota payout for an editor's work in a period. */
