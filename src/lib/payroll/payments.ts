@@ -2,6 +2,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { payrollPayments, users } from "@/db/schema";
+import { getPointsBreakdown } from "@/lib/payroll/breakdown";
 
 type Reader = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -41,18 +42,20 @@ export async function recordPayrollPayment(params: {
   cycles: number;
   amount: number;
   rate: number;
+  cashAdvance?: number;
   items?: PaymentItem[];
   from?: string;
   to?: string;
   paidBy?: string | null;
 }): Promise<void> {
-  const { editorId, points, cycles, amount, rate, items, from, to, paidBy } = params;
+  const { editorId, points, cycles, amount, rate, cashAdvance, items, from, to, paidBy } = params;
   await db.insert(payrollPayments).values({
     editorId,
     cycles,
     points: points.toFixed(2),
     rate: rate.toFixed(2),
     amount: amount.toFixed(2),
+    cashAdvance: (cashAdvance ?? 0).toFixed(2),
     items: items ?? null,
     periodFrom: from ?? null,
     periodTo: to ?? null,
@@ -66,12 +69,16 @@ export type PaymentHistoryRow = {
   editorName: string;
   points: number;
   amount: number;
+  cashAdvance: number;
+  net: number;
   rate: number;
   periodFrom: string | null;
   periodTo: string | null;
   paidByName: string | null;
   paidAtIso: string;
   items: PaymentItem[];
+  // True when the covered projects were reconstructed (payout predates snapshots).
+  itemsReconstructed: boolean;
 };
 
 /** All recorded payouts, newest first, with the payee and who recorded it. */
@@ -84,6 +91,7 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
       editorName: payee.fullName,
       points: payrollPayments.points,
       amount: payrollPayments.amount,
+      cashAdvance: payrollPayments.cashAdvance,
       rate: payrollPayments.rate,
       periodFrom: payrollPayments.periodFrom,
       periodTo: payrollPayments.periodTo,
@@ -102,17 +110,52 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
     : [];
   const actorNames = new Map(actorRows.map((u) => [u.id, u.fullName]));
 
-  return rows.map((r) => ({
-    id: r.id,
-    editorId: r.editorId,
-    editorName: r.editorName,
-    points: Number(r.points),
-    amount: Number(r.amount),
-    rate: Number(r.rate),
-    periodFrom: r.periodFrom,
-    periodTo: r.periodTo,
-    paidByName: r.paidBy ? actorNames.get(r.paidBy) ?? null : null,
-    paidAtIso: new Date(r.paidAt).toISOString(),
-    items: Array.isArray(r.items) ? (r.items as PaymentItem[]) : [],
-  }));
+  // Reconstruct covered projects for payouts recorded before snapshots existed:
+  // partition each editor's whole breakdown across their payouts oldest-first.
+  const needsReconstruct = rows.some((r) => !Array.isArray(r.items));
+  const reconstructed = new Map<string, PaymentItem[]>();
+  if (needsReconstruct) {
+    const breakdown = await getPointsBreakdown("1970-01-01", new Date().toISOString().slice(0, 10));
+    const byEditor = new Map<string, typeof rows>();
+    for (const r of rows) (byEditor.get(r.editorId) ?? byEditor.set(r.editorId, []).get(r.editorId)!).push(r);
+    for (const [editorId, editorPayments] of byEditor) {
+      const lines = [...(breakdown.get(editorId) ?? [])].sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+      let li = 0;
+      // Oldest payout first so slices line up chronologically.
+      for (const p of [...editorPayments].sort((a, b) => a.paidAt.getTime() - b.paidAt.getTime())) {
+        const need = Number(p.points);
+        let acc = 0;
+        const slice: PaymentItem[] = [];
+        while (li < lines.length && acc < need - 1e-9) {
+          const l = lines[li];
+          slice.push({ title: l.title, subtitle: l.subtitle, points: l.points, dateIso: l.dateIso, kind: l.kind });
+          acc += l.points;
+          li++;
+        }
+        if (!Array.isArray(p.items)) reconstructed.set(p.id, slice);
+      }
+    }
+  }
+
+  return rows.map((r) => {
+    const amount = Number(r.amount);
+    const cashAdvance = Number(r.cashAdvance);
+    const stored = Array.isArray(r.items) ? (r.items as PaymentItem[]) : null;
+    return {
+      id: r.id,
+      editorId: r.editorId,
+      editorName: r.editorName,
+      points: Number(r.points),
+      amount,
+      cashAdvance,
+      net: Math.round((amount - cashAdvance) * 100) / 100,
+      rate: Number(r.rate),
+      periodFrom: r.periodFrom,
+      periodTo: r.periodTo,
+      paidByName: r.paidBy ? actorNames.get(r.paidBy) ?? null : null,
+      paidAtIso: new Date(r.paidAt).toISOString(),
+      items: stored ?? reconstructed.get(r.id) ?? [],
+      itemsReconstructed: !stored,
+    };
+  });
 }

@@ -244,6 +244,8 @@ export const payrollPayments = pgTable(
     points: numeric("points", { precision: 8, scale: 2 }).notNull(),
     rate: numeric("rate", { precision: 10, scale: 2 }).notNull(),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+    // Cash advance recovered from this payout; net cash paid = amount − cashAdvance.
+    cashAdvance: numeric("cash_advance", { precision: 12, scale: 2 }).notNull().default("0"),
     // Snapshot of the projects this payout covered, taken at payment time so the
     // history is auditable even as the live breakdown changes. Array of
     // { title, subtitle, points, dateIso, kind }.

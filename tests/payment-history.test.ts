@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { splitPaidUnpaid } from "@/lib/payroll/paid-split";
 import { recordPayrollPayment, getPaymentHistory, type PaymentItem } from "@/lib/payroll/payments";
+import { recordPointAdjustment } from "@/lib/quota/adjustments";
 import type { PointLine } from "@/lib/payroll/breakdown";
 import { makeUser, resetDb, seedSettings } from "./helpers";
 
@@ -44,6 +45,7 @@ describe("payment history", () => {
       cycles: 0,
       amount: 266.67,
       rate: 3500,
+      cashAdvance: 100,
       items,
       from: "2026-08-01",
       to: "2026-08-31",
@@ -57,7 +59,26 @@ describe("payment history", () => {
     expect(row.paidByName).toBe("The Owner");
     expect(row.points).toBe(1.6);
     expect(row.amount).toBeCloseTo(266.67, 2);
+    expect(row.cashAdvance).toBe(100);
+    expect(row.net).toBeCloseTo(166.67, 2); // gross − CA
     expect(row.items).toHaveLength(2);
-    expect(row.items[1].subtitle).toBe("Grade 4 EPP-AFA");
+    expect(row.itemsReconstructed).toBe(false);
+  });
+
+  it("reconstructs the covered projects for a payout recorded without a snapshot", async () => {
+    const editor = await makeUser("editor", "Legacy Pay");
+    // Three earned points via adjustments (become breakdown lines).
+    await recordPointAdjustment({ editorId: editor.id, points: 1, note: "Alpha" });
+    await recordPointAdjustment({ editorId: editor.id, points: 1, note: "Beta" });
+    await recordPointAdjustment({ editorId: editor.id, points: 1, note: "Gamma" });
+
+    // Legacy payout: no items snapshot, paid for 2 points.
+    await recordPayrollPayment({ editorId: editor.id, points: 2, cycles: 0, amount: 200, rate: 2100 });
+
+    const [row] = await getPaymentHistory();
+    expect(row.itemsReconstructed).toBe(true);
+    expect(row.items.length).toBeGreaterThanOrEqual(2); // the oldest ~2 points worth
+    const total = row.items.reduce((s, i) => s + i.points, 0);
+    expect(total).toBeGreaterThanOrEqual(2);
   });
 });

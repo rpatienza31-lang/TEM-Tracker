@@ -43,7 +43,9 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
             <TableHead>Staff</TableHead>
             <TableHead>Period</TableHead>
             <TableHead className="text-right">Points</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
+            <TableHead className="text-right">Gross</TableHead>
+            <TableHead className="text-right">CA</TableHead>
+            <TableHead className="text-right">Net</TableHead>
             <TableHead>Paid by</TableHead>
           </TableRow>
         </TableHeader>
@@ -72,14 +74,23 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
                       p.points.toFixed(1)
                     )}
                   </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{peso.format(p.amount)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{peso.format(p.amount)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {p.cashAdvance > 0 ? `−${peso.format(p.cashAdvance)}` : "—"}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{peso.format(p.net)}</TableCell>
                   <TableCell className="text-muted-foreground">{p.paidByName ?? "—"}</TableCell>
                 </TableRow>
                 {isOpen && (
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableCell colSpan={6} className="py-3">
+                    <TableCell colSpan={8} className="py-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Projects covered by this payout
+                        {p.itemsReconstructed && (
+                          <span className="ml-1 font-normal normal-case text-muted-foreground/80">
+                            (reconstructed — recorded before snapshots)
+                          </span>
+                        )}
                       </div>
                       <ul className="mt-2 flex flex-col gap-1">
                         {p.items.map((line, i) => (
@@ -116,7 +127,7 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
           })}
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
+              <TableCell colSpan={8} className="text-center text-muted-foreground">
                 {payments.length === 0 ? "No payouts recorded yet." : "No payments match that name."}
               </TableCell>
             </TableRow>

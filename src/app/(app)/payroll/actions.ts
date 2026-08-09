@@ -156,19 +156,36 @@ export async function markQuotaPaidAction(
     kind: l.kind,
   }));
 
+  // Recover the staff member's cash advance from this payout, up to the amount
+  // being paid, and reduce their outstanding CA so it isn't deducted again.
+  const [u] = await db.select({ cashAdvance: users.cashAdvance }).from(users).where(eq(users.id, userId)).limit(1);
+  const outstandingCA = Number(u?.cashAdvance ?? 0);
+  const appliedCA = Math.min(Math.max(0, outstandingCA), row.salary);
+
   await recordPayrollPayment({
     editorId: userId,
     points: row.pointsUnpaid,
     cycles: row.completedCycles,
     amount: row.salary,
     rate: row.rate,
+    cashAdvance: appliedCA,
     items,
     from,
     to,
     paidBy: actor.id,
   });
+  if (appliedCA > 0) {
+    await db
+      .update(users)
+      .set({ cashAdvance: (outstandingCA - appliedCA).toFixed(2) })
+      .where(eq(users.id, userId));
+  }
   revalidatePath("/payroll");
-  return { status: "ok", message: "Marked as paid." };
+  const net = row.salary - appliedCA;
+  return {
+    status: "ok",
+    message: appliedCA > 0 ? `Paid — net ₱${net.toFixed(2)} after ₱${appliedCA.toFixed(2)} CA.` : "Marked as paid.",
+  };
 }
 
 const LINE_KINDS: LineKind[] = ["catalog", "cot", "adjustment"];
