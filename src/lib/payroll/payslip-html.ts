@@ -1,5 +1,8 @@
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
+export type PayslipSession = { dateLabel: string; timeIn: string; timeOut: string; hours: number };
+export type PayslipItem = { label: string; detail: string | null; points: number; dateLabel: string };
+
 export type PayslipData = {
   fullName: string;
   from: string;
@@ -9,12 +12,77 @@ export type PayslipData = {
   gross: number;
   cashAdvance: number;
   net: number;
+  // Page-2 detail: the clock-in/out sessions (hourly) or credited projects (quota).
+  hourlySessions?: PayslipSession[];
+  quotaItems?: PayslipItem[];
 };
 
 const BRAND = "#0f766e"; // deep teal
 const INK = "#14201f";
 const MUTED = "#64748b";
 const LINE = "#e2e8f0";
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+const num = (n: number, d = 2) => n.toFixed(d);
+
+function th(label: string, align = "left") {
+  return `<th style="text-align:${align};padding:6px 8px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${MUTED};border-bottom:1px solid ${LINE};">${label}</th>`;
+}
+function td(content: string, align = "left", bold = false) {
+  return `<td style="text-align:${align};padding:7px 8px;font-size:13px;color:${INK};border-bottom:1px solid ${LINE};font-variant-numeric:tabular-nums;${bold ? "font-weight:700;" : ""}">${content}</td>`;
+}
+
+/** The second page: clock-in/out sessions (hourly) and/or credited projects (quota). */
+function detailPage(d: PayslipData): string {
+  const blocks: string[] = [];
+
+  if (d.hourlySessions && d.hourlySessions.length > 0) {
+    const total = d.hourlySessions.reduce((s, x) => s + x.hours, 0);
+    const rows = d.hourlySessions
+      .map(
+        (s) =>
+          `<tr>${td(esc(s.dateLabel))}${td(esc(s.timeIn), "left")}${td(esc(s.timeOut), "left")}${td(num(s.hours), "right")}</tr>`,
+      )
+      .join("");
+    blocks.push(`
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${MUTED};margin-bottom:6px;">Approved clock-in / clock-out</div>
+      <table role="presentation" width="100%" style="border-collapse:collapse;">
+        <tr>${th("Date")}${th("Time in")}${th("Time out")}${th("Hours", "right")}</tr>
+        ${rows}
+        <tr><td colspan="3" style="padding:8px;font-size:13px;font-weight:700;color:${INK};">Total hours</td><td style="padding:8px;text-align:right;font-size:13px;font-weight:700;color:${INK};font-variant-numeric:tabular-nums;">${num(total)}</td></tr>
+      </table>`);
+  }
+
+  if (d.quotaItems && d.quotaItems.length > 0) {
+    const total = d.quotaItems.reduce((s, x) => s + x.points, 0);
+    const rows = d.quotaItems
+      .map(
+        (it) =>
+          `<tr>${td(`${esc(it.label)}${it.detail ? ` <span style="color:${MUTED};">· ${esc(it.detail)}</span>` : ""}`)}${td(esc(it.dateLabel), "left")}${td(num(it.points, 1), "right")}</tr>`,
+      )
+      .join("");
+    blocks.push(`
+      <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${MUTED};margin:${blocks.length ? "22px" : "0"} 0 6px;">Projects credited to points</div>
+      <table role="presentation" width="100%" style="border-collapse:collapse;">
+        <tr>${th("Project")}${th("Date")}${th("Points", "right")}</tr>
+        ${rows}
+        <tr><td colspan="2" style="padding:8px;font-size:13px;font-weight:700;color:${INK};">Total points</td><td style="padding:8px;text-align:right;font-size:13px;font-weight:700;color:${INK};font-variant-numeric:tabular-nums;">${num(total, 1)}</td></tr>
+      </table>`);
+  }
+
+  if (blocks.length === 0) return "";
+
+  return `
+<div style="page-break-before:always;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:560px;margin:24px auto 0;background:#ffffff;border:1px solid ${LINE};border-radius:14px;overflow:hidden;">
+  <div style="background:${BRAND};padding:18px 28px;color:#ffffff;">
+    <div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.85;">Payslip detail</div>
+    <div style="font-size:15px;font-weight:700;margin-top:2px;">${esc(d.fullName)} · ${d.from} → ${d.to}</div>
+  </div>
+  <div style="padding:22px 28px;">
+    ${blocks.join("")}
+  </div>
+</div>`;
+}
 
 function earningRow(label: string, sub: string, amount: number) {
   return `
@@ -99,5 +167,6 @@ export function renderPayslipHtml(d: PayslipData): string {
       Generated ${new Date().toISOString().slice(0, 10)} · Amounts in Philippine peso. This is a computer-generated payslip.
     </div>
   </div>
-</div>`;
+</div>
+${detailPage(d)}`;
 }

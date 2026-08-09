@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
+import { buildPayslipDetail } from "@/lib/payroll/payslip-detail";
 import { PrintButton } from "./print-button";
 import { EmailPayslipButton } from "./email-button";
 
@@ -47,6 +48,8 @@ export default async function PayslipPage({
     );
   }
 
+  const { hourlySessions, quotaItems } = await buildPayslipDetail({ userId, from, to, quota, hourly, slip });
+
   const html = renderPayslipHtml({
     fullName: slip.fullName,
     from,
@@ -54,10 +57,12 @@ export default async function PayslipPage({
     quota: quota
       ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: slip.quotaSalary }
       : undefined,
-    hourly: hourly ? { hours: hourly.approvedHours, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
+    hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
     gross: slip.gross,
     cashAdvance: slip.cashAdvance,
     net: slip.net,
+    hourlySessions,
+    quotaItems,
   });
 
   return (

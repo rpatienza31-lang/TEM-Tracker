@@ -13,6 +13,7 @@ import { editLinePoints, type LineKind } from "@/lib/payroll/edit-line";
 import { recordPayrollPayment, type PaymentItem } from "@/lib/payroll/payments";
 import { getPointsBreakdown } from "@/lib/payroll/breakdown";
 import { splitPaidUnpaid } from "@/lib/payroll/paid-split";
+import { buildPayslipDetail } from "@/lib/payroll/payslip-detail";
 import { updateTimeLogTimes } from "@/lib/time-logs/mutations";
 import { sendMail } from "@/lib/email/mailer";
 
@@ -38,6 +39,7 @@ export async function emailPayslipAction(
   if (!slip) return { ok: false, message: "No payslip for this staff member in this period." };
   const quota = report.quotaRows.find((r) => r.userId === userId);
   const hourly = report.hourlyRows.find((r) => r.userId === userId);
+  const { hourlySessions, quotaItems } = await buildPayslipDetail({ userId, from, to, quota, hourly, slip });
 
   const html = renderPayslipHtml({
     fullName: slip.fullName,
@@ -46,10 +48,12 @@ export async function emailPayslipAction(
     quota: quota
       ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: slip.quotaSalary }
       : undefined,
-    hourly: hourly ? { hours: hourly.approvedHours, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
+    hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
     gross: slip.gross,
     cashAdvance: slip.cashAdvance,
     net: slip.net,
+    hourlySessions,
+    quotaItems,
   });
 
   return sendMail({ to: staff.email, subject: `Your payslip — ${from} to ${to}`, html });
