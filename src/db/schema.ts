@@ -142,6 +142,9 @@ export const workItems = pgTable(
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }),
     dueDate: date("due_date").notNull(),
+    // The day the owner/admin plans for this item to be worked on (the "project
+    // schedule"). Nullable — an item is unscheduled until someone plans it.
+    scheduledFor: date("scheduled_for"),
     pointsValue: numeric("points_value", { precision: 4, scale: 2 }).notNull(),
     pointsAwarded: numeric("points_awarded", { precision: 4, scale: 2 }),
     fileUrl: text("file_url"),
@@ -156,6 +159,7 @@ export const workItems = pgTable(
     index("work_items_term_status_idx").on(t.termId, t.status),
     index("work_items_assignee_status_idx").on(t.assigneeId, t.status),
     index("work_items_term_week_grade_idx").on(t.termId, t.weekNumber, t.grade),
+    index("work_items_scheduled_for_idx").on(t.scheduledFor),
     check("work_items_week_number_check", sql`${t.weekNumber} between 1 and 10`),
   ],
 );

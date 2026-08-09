@@ -1,8 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
 
-import { requireUser } from "@/lib/auth";
+import { requireRole, requireUser } from "@/lib/auth";
+import { db } from "@/db/client";
+import { workItems } from "@/db/schema";
 import { deleteWorkItem, transitionWorkItem, type DeleteResult, type TransitionResult } from "@/lib/work-items/transitions";
 
 function refresh() {
@@ -11,7 +14,27 @@ function refresh() {
   revalidatePath("/my-work");
   revalidatePath("/review");
   revalidatePath("/productivity");
+  revalidatePath("/schedule");
   revalidatePath("/");
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Owner/admin sets (or clears, with an empty date) the day an item is planned to
+ * be worked on. This drives the project-schedule grid without touching status or
+ * the hard deadline.
+ */
+export async function setScheduledDateAction(
+  itemId: string,
+  date: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  await requireRole("owner", "admin");
+  const value = date && date.trim() ? date.trim() : null;
+  if (value && !ISO_DATE.test(value)) return { ok: false, message: "Invalid date." };
+  await db.update(workItems).set({ scheduledFor: value, updatedAt: new Date() }).where(eq(workItems.id, itemId));
+  refresh();
+  return { ok: true };
 }
 
 export async function claimItemAction(itemId: string): Promise<TransitionResult> {
