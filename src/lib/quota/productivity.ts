@@ -46,7 +46,7 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
   const quotaSize = await getQuotaSize();
 
   const editors = await db
-    .select({ id: users.id, fullName: users.fullName })
+    .select({ id: users.id, fullName: users.fullName, cycleOffset: users.cycleOffset })
     .from(users)
     .where(eq(users.role, "editor"))
     .orderBy(asc(users.fullName));
@@ -147,9 +147,10 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
     const paid = paymentTotals.get(editor.id);
     const pointsPaid = paid?.pointsPaid ?? 0;
     const pointsUnpaid = Math.round(Math.max(0, totalPoints - pointsPaid) * 100) / 100;
-    // Which payout cycle they're building (from paid points), and the unpaid
-    // progress into it — the same figure payroll shows.
-    const ledgerCycleNumber = quotaSize > 0 ? Math.floor(pointsPaid / quotaSize) + 1 : 1;
+    // Which payout cycle they're building (from paid points, plus the owner's
+    // reconciliation baseline), and the unpaid progress into it — the same
+    // figure payroll shows.
+    const ledgerCycleNumber = (quotaSize > 0 ? Math.floor(pointsPaid / quotaSize) + 1 : 1) + (editor.cycleOffset ?? 0);
     const ledgerCyclePoints = pointsUnpaid;
 
     return {

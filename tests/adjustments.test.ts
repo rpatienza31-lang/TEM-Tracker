@@ -55,6 +55,22 @@ describe("manual point adjustments", () => {
     expect(stats.totalPoints).toBe(4);
   });
 
+  it("lets a cycle_offset baseline shift the displayed cycle number", async () => {
+    const { db } = await import("@/db/client");
+    const { users } = await import("@/db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await recordPointAdjustment({ editorId, points: 3 });
+    let stats = await productivityFor(editorId);
+    expect(stats.ledgerCycleNumber).toBe(1); // no payments, no offset
+
+    // Owner reconciles: this editor is really on cycle 4.
+    await db.update(users).set({ cycleOffset: 3 }).where(eq(users.id, editorId));
+    stats = await productivityFor(editorId);
+    expect(stats.ledgerCycleNumber).toBe(4);
+    expect(stats.pointsUnpaid).toBe(3); // points unaffected by the cycle baseline
+  });
+
   it("shows the unpaid balance as the current cycle progress", async () => {
     await recordPointAdjustment({ editorId, points: 23 });
     // Nothing paid yet: all 23 are unpaid, building the 1st payout cycle.

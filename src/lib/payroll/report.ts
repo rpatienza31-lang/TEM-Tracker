@@ -10,6 +10,8 @@ import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 export type QuotaPayrollRow = {
   userId: string;
   fullName: string;
+  // The cycle the editor is currently on (includes the owner reconciliation baseline).
+  cycleNumber: number;
   // Total points earned within this payroll period (all projects; the breakdown).
   pointsEarned: number;
   // Points already settled by a recorded payout this period.
@@ -119,6 +121,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
     return {
       userId: p.editorId,
       fullName: p.fullName,
+      cycleNumber: p.ledgerCycleNumber,
       pointsEarned: p.totalPoints,
       pointsPaid: p.pointsPaid,
       pointsUnpaid,

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RateCell } from "./rate-cell";
 import { AdjustPointsForm } from "./adjust-points-form";
+import { ReconcileForm } from "./reconcile-form";
 import { adjustPointsAction, editLinePointsAction, markQuotaPaidAction, type SetRateState } from "./actions";
 
 export type BreakdownLine = {
@@ -24,6 +25,7 @@ export type BreakdownLine = {
 export type QuotaRow = {
   userId: string;
   fullName: string;
+  cycleNumber: number;
   pointsEarned: number;
   pointsPaid: number;
   pointsUnpaid: number;
@@ -238,12 +240,11 @@ export function QuotaStaffTable({
                   )}
                 </TableCell>
                 <TableCell className="tabular-nums">
+                  <span className="text-muted-foreground">#{row.cycleNumber} · </span>
                   {row.quotaReached ? (
-                    <span className="text-status-approved">
-                      ✓ {row.completedCycles} {row.completedCycles === 1 ? "cycle" : "cycles"}
-                    </span>
+                    <span className="text-status-approved">✓ {row.pointsUnpaid.toFixed(0)}/21</span>
                   ) : (
-                    <span className="text-muted-foreground">{row.pointsUnpaid.toFixed(0)} / 21</span>
+                    <span className="text-muted-foreground">{row.pointsUnpaid.toFixed(0)}/21</span>
                   )}
                 </TableCell>
                 <TableCell className="tabular-nums">{row.remainderCarried.toFixed(1)}</TableCell>
@@ -326,6 +327,13 @@ export function QuotaStaffTable({
                             </li>
                           ))}
                         </ul>
+                      )}
+                      {isOwner && (
+                        <ReconcileForm
+                          editorId={row.userId}
+                          cycleNumber={row.cycleNumber}
+                          currentPoints={row.pointsUnpaid}
+                        />
                       )}
                       {isOwner && <AdjustPointsForm editorId={row.userId} editorName={row.fullName} />}
                     </div>

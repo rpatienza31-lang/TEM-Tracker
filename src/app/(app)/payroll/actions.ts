@@ -9,6 +9,8 @@ import { users } from "@/db/schema";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
+import { getProductivityStats } from "@/lib/quota/productivity";
+import { getQuotaSize } from "@/lib/settings";
 import { editLinePoints, type LineKind } from "@/lib/payroll/edit-line";
 import { recordPayrollPayment, type PaymentItem } from "@/lib/payroll/payments";
 import { getPointsBreakdown } from "@/lib/payroll/breakdown";
@@ -239,6 +241,51 @@ export async function markHourlyPaidAction(_prev: SetRateState, formData: FormDa
     status: "ok",
     message: appliedCA > 0 ? `Paid — net ₱${net.toFixed(2)} after ₱${appliedCA.toFixed(2)} CA.` : "Marked as paid.",
   };
+}
+
+/**
+ * Owner reconciliation: set an editor to the cycle number and current points
+ * they are really on, without touching past approvals. The cycle number is a
+ * display baseline (cycle_offset); the current points are set with a one-off
+ * adjustment so the dashboard and payroll match. Both fields are optional.
+ */
+export async function reconcileEditorAction(_prev: SetRateState, formData: FormData): Promise<SetRateState> {
+  await requireRole("owner");
+
+  const editorId = String(formData.get("editorId") ?? "");
+  const cycleRaw = String(formData.get("cycleNumber") ?? "").trim();
+  const pointsRaw = String(formData.get("points") ?? "").trim();
+  if (!editorId) return { status: "error", message: "Missing editor." };
+  if (!cycleRaw && !pointsRaw) return { status: "error", message: "Enter a cycle number or current points." };
+
+  const quotaSize = await getQuotaSize();
+  const stats = await getProductivityStats();
+  const row = stats.find((r) => r.editorId === editorId);
+  if (!row) return { status: "error", message: "Editor not found." };
+
+  if (cycleRaw) {
+    const cycleNumber = Number(cycleRaw);
+    if (!Number.isInteger(cycleNumber) || cycleNumber < 1) {
+      return { status: "error", message: "Cycle number must be a whole number (1 or more)." };
+    }
+    const derivedRaw = quotaSize > 0 ? Math.floor(row.pointsPaid / quotaSize) + 1 : 1;
+    await db.update(users).set({ cycleOffset: cycleNumber - derivedRaw }).where(eq(users.id, editorId));
+  }
+
+  if (pointsRaw) {
+    const points = Number(pointsRaw);
+    if (!Number.isFinite(points) || points < 0) {
+      return { status: "error", message: "Current points must be 0 or more." };
+    }
+    const delta = Math.round((points - row.pointsUnpaid) * 100) / 100;
+    if (delta !== 0) {
+      await recordPointAdjustment({ editorId, points: delta, note: "Reconciliation baseline" });
+    }
+  }
+
+  revalidatePath("/payroll");
+  revalidatePath("/");
+  return { status: "ok", message: "Reconciled." };
 }
 
 const LINE_KINDS: LineKind[] = ["catalog", "cot", "adjustment"];
