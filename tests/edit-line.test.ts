@@ -5,7 +5,8 @@ import { db } from "@/db/client";
 import { pointAdjustments, quotaCycleItems, quotaCycles, settings, workItems } from "@/db/schema";
 import { transitionWorkItem } from "@/lib/work-items/transitions";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
-import { editLinePoints } from "@/lib/payroll/edit-line";
+import { editLinePoints, removeLine } from "@/lib/payroll/edit-line";
+import { getPointsBreakdown } from "@/lib/payroll/breakdown";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { makeSubject, makeTerm, makeUser, makeWorkItem, resetDb, seedSettings } from "./helpers";
 
@@ -120,6 +121,37 @@ describe("editing a breakdown line's points", () => {
 
     const [open] = await cyclesOf(editorId);
     expect(Number(open.pointsTotal)).toBe(5);
+  });
+
+  it("truly removes a catalog line so it disappears from the breakdown", async () => {
+    const dlp = await makeWorkItem({ termId, subjectId, weekNumber: 1, type: "DLP" });
+    await approve(dlp.id, editorId, adminId);
+
+    let lines = (await getPointsBreakdown("2000-01-01", "2100-12-31")).get(editorId) ?? [];
+    expect(lines).toHaveLength(1);
+
+    const res = await removeLine({ kind: "catalog", refId: dlp.id });
+    expect(res.ok).toBe(true);
+
+    lines = (await getPointsBreakdown("2000-01-01", "2100-12-31")).get(editorId) ?? [];
+    expect(lines).toHaveLength(0); // gone, not offset
+
+    const [open] = await cyclesOf(editorId);
+    expect(Number(open.pointsTotal)).toBe(0);
+  });
+
+  it("truly removes a manual adjustment line", async () => {
+    await recordPointAdjustment({ editorId, points: 3, note: "Bonus" });
+    const { pointAdjustments } = await import("@/db/schema");
+    const [adj] = await db.select().from(pointAdjustments).where(eq(pointAdjustments.editorId, editorId));
+
+    const res = await removeLine({ kind: "adjustment", refId: adj.id });
+    expect(res.ok).toBe(true);
+
+    const remaining = await db.select().from(pointAdjustments).where(eq(pointAdjustments.editorId, editorId));
+    expect(remaining).toHaveLength(0);
+    const [open] = await cyclesOf(editorId);
+    expect(Number(open.pointsTotal)).toBe(0);
   });
 
   it("rejects a negative value for a real project", async () => {

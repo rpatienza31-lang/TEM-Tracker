@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { RateCell } from "./rate-cell";
 import { AdjustPointsForm } from "./adjust-points-form";
 import { ReconcileForm } from "./reconcile-form";
-import { adjustPointsAction, editLinePointsAction, markQuotaPaidAction, type SetRateState } from "./actions";
+import { editLinePointsAction, markQuotaPaidAction, removeLineAction, type SetRateState } from "./actions";
 
 export type BreakdownLine = {
   kind: "catalog" | "cot" | "adjustment";
@@ -144,25 +144,22 @@ function EditableLinePoints({
 }
 
 /**
- * Owner control to take a wrongly-counted project out of an editor's points.
- * It records a compensating correction (the line's points, negated) rather than
- * touching the underlying approval, so the change is auditable and reversible;
- * the correction shows as its own "Removed: …" line and nets the total.
+ * Owner control that truly removes a project line: reverses its points and drops
+ * the source row, so the line disappears from the breakdown.
  */
-function RemoveLineButton({ editorId, points, label }: { editorId: string; points: number; label: string }) {
-  const [state, formAction, pending] = useActionState(adjustPointsAction, removeInitial);
+function RemoveLineButton({ kind, refId, label }: { kind: BreakdownLine["kind"]; refId: string; label: string }) {
+  const [state, formAction, pending] = useActionState(removeLineAction, removeInitial);
   return (
     <form
       action={formAction}
       onSubmit={(e) => {
-        if (!window.confirm(`Remove "${label}" (${signed(points)}) from this editor's points? A compensating correction will be recorded.`)) {
+        if (!window.confirm(`Remove "${label}" from this editor's points? This deletes the credit.`)) {
           e.preventDefault();
         }
       }}
     >
-      <input type="hidden" name="editorId" value={editorId} />
-      <input type="hidden" name="points" value={String(-points)} />
-      <input type="hidden" name="note" value={`Removed: ${label}`} />
+      <input type="hidden" name="kind" value={kind} />
+      <input type="hidden" name="refId" value={refId} />
       <Button
         type="submit"
         size="sm"
@@ -318,8 +315,8 @@ export function QuotaStaffTable({
                                 )}
                                 {isOwner && (
                                   <RemoveLineButton
-                                    editorId={row.userId}
-                                    points={line.points}
+                                    kind={line.kind}
+                                    refId={line.refId}
                                     label={line.subtitle ? `${lineLabel(line)} — ${line.subtitle}` : lineLabel(line)}
                                   />
                                 )}

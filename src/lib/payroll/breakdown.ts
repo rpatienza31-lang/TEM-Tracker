@@ -73,6 +73,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
         and(
           eq(customOrderItems.status, "approved"),
           isNotNull(customOrderItems.assigneeId),
+          isNotNull(customOrderItems.pointsAwarded), // a removed COT credit drops out
           between(customOrderItems.approvedAt, from, to),
         ),
       ),

@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { customOrderItems, pointAdjustments, quotaCycleItems, workItems } from "@/db/schema";
-import { applyDeltaToCycle } from "@/lib/quota/cycles";
+import { applyDeltaToCycle, reverseApprovalPoints, reverseCotItemPoints } from "@/lib/quota/cycles";
 
 export type LineKind = "catalog" | "cot" | "adjustment";
 export type EditLineResult = { ok: boolean; message?: string };
@@ -64,6 +64,45 @@ export async function editLinePoints(params: {
     const delta = round2(value - Number(adj.points));
     await tx.update(pointAdjustments).set({ points: value.toFixed(2) }).where(eq(pointAdjustments.id, refId));
     if (adj.cycleId) await applyDeltaToCycle(tx, adj.cycleId, delta);
+    return { ok: true };
+  });
+}
+
+/**
+ * Truly removes a breakdown line: reverses its points from the cycle and drops
+ * the source so it disappears from the breakdown — a catalog credit's ledger row
+ * (and its work item's awarded points), a COT item's award, or a manual
+ * adjustment row. Owner-gated at the action layer.
+ */
+export async function removeLine(params: { kind: LineKind; refId: string }): Promise<EditLineResult> {
+  const { kind, refId } = params;
+
+  return db.transaction(async (tx): Promise<EditLineResult> => {
+    if (kind === "catalog") {
+      const [row] = await tx.select().from(quotaCycleItems).where(eq(quotaCycleItems.workItemId, refId)).limit(1);
+      if (!row) return { ok: false, message: "Project not found." };
+      await reverseApprovalPoints(tx, refId); // deletes the ledger row + reverses the cycle
+      await tx.update(workItems).set({ pointsAwarded: null, updatedAt: new Date() }).where(eq(workItems.id, refId));
+      return { ok: true };
+    }
+
+    if (kind === "cot") {
+      const [item] = await tx.select().from(customOrderItems).where(eq(customOrderItems.id, refId)).limit(1);
+      if (!item) return { ok: false, message: "Project not found." };
+      if (item.awardedCycleId && item.pointsAwarded) {
+        await reverseCotItemPoints(tx, item.awardedCycleId, Number(item.pointsAwarded));
+      }
+      await tx
+        .update(customOrderItems)
+        .set({ pointsAwarded: null, awardedCycleId: null, updatedAt: new Date() })
+        .where(eq(customOrderItems.id, refId));
+      return { ok: true };
+    }
+
+    const [adj] = await tx.select().from(pointAdjustments).where(eq(pointAdjustments.id, refId)).limit(1);
+    if (!adj) return { ok: false, message: "Adjustment not found." };
+    if (adj.cycleId) await applyDeltaToCycle(tx, adj.cycleId, -Number(adj.points));
+    await tx.delete(pointAdjustments).where(eq(pointAdjustments.id, refId));
     return { ok: true };
   });
 }

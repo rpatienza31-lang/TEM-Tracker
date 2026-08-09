@@ -11,7 +11,7 @@ import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { getQuotaSize } from "@/lib/settings";
-import { editLinePoints, type LineKind } from "@/lib/payroll/edit-line";
+import { editLinePoints, removeLine, type LineKind } from "@/lib/payroll/edit-line";
 import { recordPayrollPayment, type PaymentItem } from "@/lib/payroll/payments";
 import { getPointsBreakdown } from "@/lib/payroll/breakdown";
 import { splitPaidUnpaid } from "@/lib/payroll/paid-split";
@@ -241,6 +241,26 @@ export async function markHourlyPaidAction(_prev: SetRateState, formData: FormDa
     status: "ok",
     message: appliedCA > 0 ? `Paid — net ₱${net.toFixed(2)} after ₱${appliedCA.toFixed(2)} CA.` : "Marked as paid.",
   };
+}
+
+const LINE_KINDS_FOR_REMOVE: LineKind[] = ["catalog", "cot", "adjustment"];
+
+/**
+ * Truly removes a breakdown line (owner only): reverses its points and drops the
+ * source, so the line disappears from the breakdown instead of being offset.
+ */
+export async function removeLineAction(_prev: SetRateState, formData: FormData): Promise<SetRateState> {
+  await requireRole("owner");
+  const kind = String(formData.get("kind") ?? "");
+  const refId = String(formData.get("refId") ?? "");
+  if (!LINE_KINDS_FOR_REMOVE.includes(kind as LineKind)) return { status: "error", message: "Unknown line type." };
+  if (!refId) return { status: "error", message: "Missing line." };
+
+  const res = await removeLine({ kind: kind as LineKind, refId });
+  if (!res.ok) return { status: "error", message: res.message };
+  revalidatePath("/payroll");
+  revalidatePath("/");
+  return { status: "ok", message: "Removed." };
 }
 
 /**

@@ -16,7 +16,9 @@ export function splitPaidUnpaid(lines: PointLine[], paidPoints: number): PaidSpl
   const eps = 1e-9;
   let acc = 0;
   for (const line of sorted) {
-    if (acc + line.points <= paidPoints + eps) {
+    // Only positive-earning lines consume the paid budget; negative corrections
+    // (removals/deductions) always stay on the unpaid side so they're visible.
+    if (line.points > 0 && acc + line.points <= paidPoints + eps) {
       paidLines.push(line);
       acc += line.points;
     } else {
