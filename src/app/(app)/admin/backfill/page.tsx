@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 import { requireRole } from "@/lib/auth";
 import { db } from "@/db/client";
@@ -32,10 +32,12 @@ export default async function BackfillPage({ searchParams }: { searchParams: Pro
     termId ? getBackfillCandidates(filters) : Promise.resolve([]),
     getCotBackfillCandidates(),
     db.select().from(subjects).where(eq(subjects.isActive, true)).orderBy(asc(subjects.name)),
+    // Any active user can be credited (mirrors the Work Board, where anyone can
+    // be assigned) — not just those with the editor role.
     db
       .select({ id: users.id, fullName: users.fullName })
       .from(users)
-      .where(and(eq(users.role, "editor"), eq(users.isActive, true)))
+      .where(eq(users.isActive, true))
       .orderBy(asc(users.fullName)),
   ]);
 
