@@ -58,25 +58,41 @@ function StatCard({
   );
 }
 
+const HEADER_TONES = {
+  emerald: "border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30",
+  blue: "border-blue-500 bg-blue-50/60 dark:bg-blue-950/30",
+  amber: "border-amber-500 bg-amber-50/60 dark:bg-amber-950/30",
+  violet: "border-violet-500 bg-violet-50/60 dark:bg-violet-950/30",
+} as const;
+
 function SectionCard({
   icon: Icon,
   title,
   description,
+  tone,
+  badge,
   children,
 }: {
   icon: typeof Wallet;
   title: string;
   description?: string;
+  tone: keyof typeof HEADER_TONES;
+  badge?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border bg-card shadow-sm">
-      <div className="flex items-center gap-2.5 border-b border-border px-4 py-3 md:px-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground/70">
-          <Icon className="h-4 w-4" />
+    <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className={cn("flex items-center gap-3 border-b-2 px-4 py-3.5 md:px-5", HEADER_TONES[tone])}>
+        <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", TONES[tone])}>
+          <Icon className="h-5 w-5" />
         </span>
-        <div>
-          <h2 className="text-base font-semibold leading-tight">{title}</h2>
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-lg font-bold leading-tight tracking-tight">
+            {title}
+            {badge && (
+              <span className={cn("rounded-full px-2 py-0.5 text-xs font-bold tabular-nums", TONES[tone])}>{badge}</span>
+            )}
+          </h2>
           {description && <p className="text-xs text-muted-foreground">{description}</p>}
         </div>
       </div>
@@ -237,7 +253,9 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
 
       <SectionCard
         icon={Clock}
-        title={`Time logs awaiting approval (${pending.length})`}
+        title="Approvals"
+        badge={pending.length ? `${pending.length} pending` : undefined}
+        tone="violet"
         description="Approve hourly staff time before it counts toward pay."
       >
         <PendingApprovals
@@ -256,6 +274,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
       <SectionCard
         icon={Users}
         title="Quota staff"
+        tone="blue"
         description={
           isOwner
             ? "Unpaid points × per-subject rate. Click a figure to see or correct the projects, then Mark paid."
@@ -268,6 +287,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
       <SectionCard
         icon={Clock}
         title="Hourly staff"
+        tone="amber"
         description="Approved hours for the period — click a figure to see the clock-in / clock-out history."
       >
         <HourlyStaffTable rows={report.hourlyRows} sessions={sessionsByUser} isOwner={isOwner} from={from} to={to} />
@@ -277,6 +297,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         <SectionCard
           icon={Banknote}
           title="Payslips"
+          tone="emerald"
           description="Gross combines quota and hourly pay; net is gross minus the editable cash advance (CA)."
         >
           <div className="overflow-x-auto">
