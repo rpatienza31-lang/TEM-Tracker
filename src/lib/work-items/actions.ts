@@ -118,6 +118,45 @@ export async function setAvailabilityAction(
   return { ok: true };
 }
 
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Owner/admin marks a staff member's status across an inclusive date range in
+ * one go (e.g. vacation Aug 12–16). Every day in the range is upserted, so it
+ * overwrites any existing markers there. The span is capped to keep it sane.
+ */
+export async function setAvailabilityRangeAction(
+  editorId: string,
+  from: string,
+  to: string,
+  kind: AvailabilityKind,
+): Promise<{ ok: boolean; message?: string }> {
+  await requireRole("owner", "admin");
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to)) return { ok: false, message: "Invalid date." };
+  if (!AVAILABILITY_KINDS.includes(kind)) return { ok: false, message: "Invalid status." };
+  if (to < from) return { ok: false, message: "The end date is before the start date." };
+
+  const dates: string[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    dates.push(d);
+    if (dates.length > 92) return { ok: false, message: "Please pick a range of 3 months or less." };
+  }
+
+  await db
+    .insert(staffAvailability)
+    .values(dates.map((date) => ({ editorId, date, kind })))
+    .onConflictDoUpdate({
+      target: [staffAvailability.editorId, staffAvailability.date],
+      set: { kind },
+    });
+  refresh();
+  return { ok: true, message: `Marked ${dates.length} day${dates.length === 1 ? "" : "s"}.` };
+}
+
 export async function claimItemAction(itemId: string): Promise<TransitionResult> {
   const actor = await requireUser();
   const result = await transitionWorkItem({ action: "claim", itemId, actor });

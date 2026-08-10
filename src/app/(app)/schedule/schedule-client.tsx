@@ -13,6 +13,7 @@ import {
 } from "@/lib/work-items/actions";
 import type { AvailabilityKind, ScheduleEntry, StaffAvailability } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
+import { AvailabilityDialog } from "./availability-dialog";
 
 type ScheduleItem = ScheduleEntry;
 type Option = { id: string; name: string };
@@ -529,6 +530,7 @@ export function ScheduleClient({
               Show all staff
             </label>
           )}
+          {isAdmin && <AvailabilityDialog allStaff={allStaff} defaultFrom={from} />}
         </div>
       </div>
 
