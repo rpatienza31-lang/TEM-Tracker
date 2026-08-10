@@ -64,6 +64,23 @@ describe("catalog generator", () => {
     expect(rows.every((r) => r.dueDate === null)).toBe(true);
   });
 
+  it("supports weeks up to 14", async () => {
+    const term = await makeTerm();
+    const math = await makeSubject("Mathematics", "MATH");
+
+    const result = await generateCatalog({
+      termId: term.id,
+      grades: [4],
+      dlpByGrade: { 4: [math.id] },
+      pptByGrade: { 4: [math.id] },
+      weeks: [{ weekNumber: 11 }, { weekNumber: 12 }, { weekNumber: 13 }, { weekNumber: 14 }],
+    });
+
+    expect(result.created).toBe(8); // 4 weeks x (DLP + PPT)
+    const rows = await db.select().from(workItems).where(eq(workItems.termId, term.id));
+    expect(Math.max(...rows.map((r) => r.weekNumber))).toBe(14);
+  });
+
   it("backfills only the missing items when a subject is added after the first run", async () => {
     const term = await makeTerm();
     const math = await makeSubject("Mathematics", "MATH");

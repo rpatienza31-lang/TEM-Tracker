@@ -50,7 +50,8 @@ export const DELIVERABLE_POINTS: Record<DeliverableType, number> = {
   COT_PPT: 0.5,
 };
 
-export const WEEK_NUMBERS = Array.from({ length: 10 }, (_, i) => i + 1);
+export const MAX_WEEK_NUMBER = 14;
+export const WEEK_NUMBERS = Array.from({ length: MAX_WEEK_NUMBER }, (_, i) => i + 1);
 
 export const DEFAULT_WIP_LIMIT = 5;
 export const DEFAULT_QUOTA_SIZE = 21;

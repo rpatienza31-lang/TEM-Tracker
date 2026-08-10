@@ -118,7 +118,7 @@ export const termWeeks = pgTable(
   },
   (t) => [
     unique("term_weeks_term_week_key").on(t.termId, t.weekNumber),
-    check("term_weeks_week_number_check", sql`${t.weekNumber} between 1 and 10`),
+    check("term_weeks_week_number_check", sql`${t.weekNumber} between 1 and 14`),
   ],
 );
 
@@ -160,7 +160,7 @@ export const workItems = pgTable(
     index("work_items_assignee_status_idx").on(t.assigneeId, t.status),
     index("work_items_term_week_grade_idx").on(t.termId, t.weekNumber, t.grade),
     index("work_items_due_date_idx").on(t.dueDate),
-    check("work_items_week_number_check", sql`${t.weekNumber} between 1 and 10`),
+    check("work_items_week_number_check", sql`${t.weekNumber} between 1 and 14`),
   ],
 );
 
