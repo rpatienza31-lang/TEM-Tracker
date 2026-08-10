@@ -157,6 +157,44 @@ export async function getActiveCotOrders(): Promise<CotOrderView[]> {
   return all.filter((o) => !o.completed);
 }
 
+export type CotBackfillCandidate = {
+  id: string;
+  customerName: string;
+  subjectName: string | null;
+  topic: string | null;
+  type: DeliverableType;
+  status: ItemStatus;
+  deadline: string;
+  pointsValue: string;
+  assigneeName: string | null;
+};
+
+/**
+ * Not-yet-finished COT order items — the candidates for a COT bulk backfill.
+ * Excludes approved/uploaded/cancelled so already-done custom work is never
+ * offered for re-crediting. Soonest deadline first.
+ */
+export async function getCotBackfillCandidates(): Promise<CotBackfillCandidate[]> {
+  const rows = await db
+    .select({
+      id: customOrderItems.id,
+      customerName: customOrders.customerName,
+      subjectName: customOrders.subjectName,
+      topic: customOrders.topic,
+      type: customOrderItems.type,
+      status: customOrderItems.status,
+      deadline: customOrders.deadline,
+      pointsValue: customOrderItems.pointsValue,
+      assigneeName: users.fullName,
+    })
+    .from(customOrderItems)
+    .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
+    .leftJoin(users, eq(users.id, customOrderItems.assigneeId))
+    .where(inArray(customOrderItems.status, ["available", "claimed", "in_review", "revision"]))
+    .orderBy(asc(customOrders.deadline), asc(customOrders.customerName));
+  return rows as CotBackfillCandidate[];
+}
+
 /** A completed COT order tagged with the term its order date falls within. */
 export type CotLibraryOrder = CotOrderView & { termName: string; termSortKey: string };
 

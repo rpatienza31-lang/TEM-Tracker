@@ -4,9 +4,11 @@ import { requireRole } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms, subjects, users } from "@/db/schema";
 import { getBackfillCandidates, type BoardFilters } from "@/lib/work-items/queries";
+import { getCotBackfillCandidates } from "@/lib/cot/queries";
 import { ALL_DELIVERABLE_TYPES, DELIVERABLE_TYPE_LABELS, WEEK_NUMBERS, type DeliverableType } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { BackfillClient } from "./backfill-client";
+import { CotBackfillClient } from "./cot-backfill-client";
 
 type SearchParams = Record<string, string | undefined>;
 
@@ -26,8 +28,9 @@ export default async function BackfillPage({ searchParams }: { searchParams: Pro
     type: (sp.type as DeliverableType) || undefined,
   };
 
-  const [items, subjectRows, editorRows] = await Promise.all([
+  const [items, cotItems, subjectRows, editorRows] = await Promise.all([
     termId ? getBackfillCandidates(filters) : Promise.resolve([]),
+    getCotBackfillCandidates(),
     db.select().from(subjects).where(eq(subjects.isActive, true)).orderBy(asc(subjects.name)),
     db
       .select({ id: users.id, fullName: users.fullName })
@@ -43,11 +46,13 @@ export default async function BackfillPage({ searchParams }: { searchParams: Pro
       <div>
         <h1 className="text-xl font-semibold">Bulk backfill</h1>
         <p className="text-sm text-muted-foreground">
-          Catch up on overdue work that was really done: filter the not-yet-finished catalog items, pick who did them,
-          and mark them done in one go. Their points are credited to that editor and show up in payroll. Already-finished
-          items are never touched.
+          Catch up on overdue work that was really done: pick the not-yet-finished items, choose who did them, and mark
+          them done in one go. Their points are credited to that editor and show up in payroll. Already-finished items
+          are never touched.
         </p>
       </div>
+
+      <h2 className="text-lg font-semibold">Catalog work items</h2>
 
       <form className="flex flex-wrap items-end gap-3">
         <Field label="Term">
@@ -114,6 +119,31 @@ export default async function BackfillPage({ searchParams }: { searchParams: Pro
           status: i.status,
           points: i.pointsValue,
           dueDate: i.dueDate,
+          assigneeName: i.assigneeName,
+        }))}
+        editors={editorRows}
+      />
+
+      <hr className="border-border" />
+
+      <div>
+        <h2 className="text-lg font-semibold">COT orders</h2>
+        <p className="text-sm text-muted-foreground">
+          Custom orders that were done offline. Pick the ones to credit, choose the editor, and mark them done — same as
+          the catalog, but for COT.
+        </p>
+      </div>
+
+      <CotBackfillClient
+        items={cotItems.map((i) => ({
+          id: i.id,
+          customerName: i.customerName,
+          subjectName: i.subjectName,
+          topic: i.topic,
+          type: i.type,
+          status: i.status,
+          deadline: i.deadline,
+          points: i.pointsValue,
           assigneeName: i.assigneeName,
         }))}
         editors={editorRows}
