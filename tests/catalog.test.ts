@@ -46,6 +46,24 @@ describe("catalog generator", () => {
     expect(rowsAfterRerun).toHaveLength(80);
   });
 
+  it("creates items with no deadline when weeks carry none (deadlines are set later on assignment)", async () => {
+    const term = await makeTerm();
+    const math = await makeSubject("Mathematics", "MATH");
+
+    const result = await generateCatalog({
+      termId: term.id,
+      grades: [4],
+      dlpByGrade: { 4: [math.id] },
+      pptByGrade: { 4: [math.id] },
+      weeks: Array.from({ length: 3 }, (_, i) => ({ weekNumber: i + 1 })), // no uploadDeadline
+    });
+
+    expect(result.created).toBe(6); // 1 subject x 3 weeks x (DLP + PPT)
+    const rows = await db.select().from(workItems).where(eq(workItems.termId, term.id));
+    expect(rows).toHaveLength(6);
+    expect(rows.every((r) => r.dueDate === null)).toBe(true);
+  });
+
   it("backfills only the missing items when a subject is added after the first run", async () => {
     const term = await makeTerm();
     const math = await makeSubject("Mathematics", "MATH");

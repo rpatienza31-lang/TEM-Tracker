@@ -29,8 +29,7 @@ export type BoardItem = {
   status: ItemStatus;
   assigneeId: string | null;
   assigneeName: string | null;
-  dueDate: string;
-  scheduledFor: string | null;
+  dueDate: string | null;
   pointsValue: string;
   pointsAwarded: string | null;
   fileUrl: string | null;
@@ -53,7 +52,6 @@ const boardColumns = {
   assigneeId: workItems.assigneeId,
   assigneeName: users.fullName,
   dueDate: workItems.dueDate,
-  scheduledFor: workItems.scheduledFor,
   pointsValue: workItems.pointsValue,
   pointsAwarded: workItems.pointsAwarded,
   fileUrl: workItems.fileUrl,
@@ -119,42 +117,37 @@ export async function getBackfillCandidates(filters: BoardFilters): Promise<Boar
 }
 
 /**
- * Items for the project schedule in [from, to]. An item's planned day is its
- * `scheduledFor` when the owner has set one, otherwise its `dueDate` — so the
- * schedule is useful immediately (everything lands on its deadline) and the
- * owner can drag individual items to the day they want them worked on. Finished
- * work (uploaded/cancelled) is left off so the schedule shows only what's still
- * to do. `plannedFor` is the resolved day used for grouping.
+ * Items for the project schedule in [from, to], keyed by their deadline
+ * (`dueDate`). Deadlines are set when the owner/admin assigns or schedules an
+ * item, so an item appears here exactly once it has a deadline in range and is
+ * still unfinished (uploaded/cancelled work drops off). `dueDate` is guaranteed
+ * non-null on these rows.
  */
 export async function getScheduleItems(
   from: string,
   to: string,
   filters: { termId?: string; assigneeId?: string } = {},
-): Promise<(BoardItem & { plannedFor: string; isScheduled: boolean })[]> {
-  const planned = sql`coalesce(${workItems.scheduledFor}, ${workItems.dueDate})`;
+): Promise<(BoardItem & { dueDate: string })[]> {
   const conditions: SQL[] = [
-    sql`${planned} >= ${from}`,
-    sql`${planned} <= ${to}`,
+    sql`${workItems.dueDate} is not null`,
+    sql`${workItems.dueDate} >= ${from}`,
+    sql`${workItems.dueDate} <= ${to}`,
     sql`${workItems.status} not in ('uploaded','cancelled')`,
   ];
   if (filters.termId) conditions.push(eq(workItems.termId, filters.termId));
   if (filters.assigneeId) conditions.push(eq(workItems.assigneeId, filters.assigneeId));
 
   const rows = await db
-    .select({
-      ...boardColumns,
-      plannedFor: sql<string>`${planned}`,
-      isScheduled: sql<boolean>`${workItems.scheduledFor} is not null`,
-    })
+    .select(boardColumns)
     .from(workItems)
     .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
     .innerJoin(terms, eq(terms.id, workItems.termId))
     .leftJoin(users, eq(users.id, workItems.assigneeId))
     .where(and(...conditions))
-    .orderBy(asc(sql`${planned}`), asc(workItems.grade), asc(subjects.name), asc(workItems.weekNumber))
+    .orderBy(asc(workItems.dueDate), asc(workItems.grade), asc(subjects.name), asc(workItems.weekNumber))
     .limit(2000);
 
-  return rows;
+  return rows as (BoardItem & { dueDate: string })[];
 }
 
 export async function getTermGrades(termId: string) {

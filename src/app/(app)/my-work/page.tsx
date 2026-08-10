@@ -9,8 +9,8 @@ import { SubmitDialog } from "@/components/work-items/submit-dialog";
 import { CotSubmitDialog } from "./cot-submit-dialog";
 import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 
-function isOverdue(dueDate: string, status: string) {
-  return dueDate < new Date().toISOString().slice(0, 10) && status !== "uploaded" && status !== "cancelled";
+function isOverdue(dueDate: string | null, status: string) {
+  return !!dueDate && dueDate < new Date().toISOString().slice(0, 10) && status !== "uploaded" && status !== "cancelled";
 }
 
 export default async function MyWorkPage() {
@@ -56,7 +56,7 @@ export default async function MyWorkPage() {
                 <TableCell>
                   <StatusBadge status={item.status} overdue={isOverdue(item.dueDate, item.status)} />
                 </TableCell>
-                <TableCell>{item.dueDate}</TableCell>
+                <TableCell>{item.dueDate ?? <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell>
                   <SubmitDialog itemId={item.id} type={item.type} label="Submit" />
                 </TableCell>

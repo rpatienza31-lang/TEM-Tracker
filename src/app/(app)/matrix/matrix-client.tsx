@@ -47,7 +47,12 @@ function initials(name: string | null) {
 }
 
 function isOverdue(item: BoardItem) {
-  return item.dueDate < new Date().toISOString().slice(0, 10) && item.status !== "uploaded" && item.status !== "cancelled";
+  return (
+    !!item.dueDate &&
+    item.dueDate < new Date().toISOString().slice(0, 10) &&
+    item.status !== "uploaded" &&
+    item.status !== "cancelled"
+  );
 }
 
 export function MatrixClient({
@@ -251,7 +256,7 @@ export function MatrixClient({
                   Grade {selectedItem.grade} · {selectedItem.subjectName} · Week {selectedItem.weekNumber} ·{" "}
                   {DELIVERABLE_TYPE_LABELS[selectedItem.type]}
                 </DialogTitle>
-                <DialogDescription>Due {selectedItem.dueDate}</DialogDescription>
+                <DialogDescription>{selectedItem.dueDate ? `Due ${selectedItem.dueDate}` : "No deadline set"}</DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-2 text-sm">
                 <div className="flex items-center gap-2">

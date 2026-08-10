@@ -5,8 +5,6 @@ import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ALL_GRADES, WEEK_NUMBERS } from "@/lib/constants";
@@ -16,12 +14,6 @@ import type { CatalogGeneratorInput } from "@/lib/catalog/generator";
 type Term = { id: string; name: string; schoolYear: string };
 type Subject = { id: string; name: string; shortCode: string };
 type GradeMap = Record<number, Set<string>>;
-
-function addDays(iso: string, days: number) {
-  const d = new Date(iso + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 function toArrays(map: GradeMap): Record<number, string[]> {
   return Object.fromEntries(Object.entries(map).map(([g, s]) => [g, [...s]]));
@@ -33,8 +25,6 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
   const [dlpByGrade, setDlpByGrade] = useState<GradeMap>({});
   const [pptByGrade, setPptByGrade] = useState<GradeMap>({});
   const [weeks, setWeeks] = useState<Set<number>>(new Set(WEEK_NUMBERS));
-  const [startDate, setStartDate] = useState("");
-  const [deadlines, setDeadlines] = useState<Record<number, string>>({});
   const [preview, setPreview] = useState<{ toCreate: number; toSkip: number } | null>(null);
   const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
   const [pending, setPending] = useState<"preview" | "generate" | null>(null);
@@ -83,27 +73,17 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
     clearOutput();
   }
 
-  function autofillDeadlines() {
-    if (!startDate) return;
-    const next: Record<number, string> = { ...deadlines };
-    for (const week of [...weeks].sort((a, b) => a - b)) {
-      next[week] = addDays(startDate, (week - 1) * 7);
-    }
-    setDeadlines(next);
-  }
-
   function buildInput(): CatalogGeneratorInput | null {
     if (!termId || sortedGrades.length === 0) return null;
     const selectedWeeks = [...weeks].sort((a, b) => a - b);
-    for (const week of selectedWeeks) {
-      if (!deadlines[week]) return null;
-    }
+    if (selectedWeeks.length === 0) return null;
     return {
       termId,
       grades: sortedGrades,
       dlpByGrade: toArrays(dlpByGrade),
       pptByGrade: toArrays(pptByGrade),
-      weeks: selectedWeeks.map((weekNumber) => ({ weekNumber, uploadDeadline: deadlines[weekNumber] })),
+      // Deadlines are set later, on the Work Board, when items are assigned.
+      weeks: selectedWeeks.map((weekNumber) => ({ weekNumber })),
     };
   }
 
@@ -111,7 +91,7 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
     setError(null);
     const input = buildInput();
     if (!input) {
-      setError("Select a term, at least one grade, and a deadline for every selected week.");
+      setError("Select a term, at least one grade, and at least one week.");
       return;
     }
     setPending("preview");
@@ -128,7 +108,7 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
     setError(null);
     const input = buildInput();
     if (!input) {
-      setError("Select a term, at least one grade, and a deadline for every selected week.");
+      setError("Select a term, at least one grade, and at least one week.");
       return;
     }
     setPending("generate");
@@ -213,33 +193,19 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
 
       <Card>
         <CardHeader>
-          <CardTitle>4. Weeks &amp; upload deadlines</CardTitle>
-          <CardDescription>Default Weeks 1–10. Auto-fill sets each week 7 days after the previous.</CardDescription>
+          <CardTitle>4. Weeks</CardTitle>
+          <CardDescription>
+            Pick which weeks to generate (default Weeks 1–10). Deadlines are no longer set here — you set an item&apos;s
+            deadline on the Work Board when you assign it, and that date is what places it on the Project Schedule.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="start-date">Week 1 deadline</Label>
-              <Input id="start-date" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-44" />
-            </div>
-            <Button type="button" variant="secondary" onClick={autofillDeadlines} disabled={!startDate}>
-              Auto-fill weekly
-            </Button>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        <CardContent>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             {WEEK_NUMBERS.map((week) => (
-              <div key={week} className="flex items-center gap-2">
-                <label className="flex w-20 items-center gap-2 text-sm">
-                  <Checkbox checked={weeks.has(week)} onCheckedChange={(c) => toggleWeek(week, c === true)} />
-                  Week {week}
-                </label>
-                <Input
-                  type="date"
-                  disabled={!weeks.has(week)}
-                  value={deadlines[week] ?? ""}
-                  onChange={(e) => setDeadlines((prev) => ({ ...prev, [week]: e.target.value }))}
-                />
-              </div>
+              <label key={week} className="flex items-center gap-2 text-sm">
+                <Checkbox checked={weeks.has(week)} onCheckedChange={(c) => toggleWeek(week, c === true)} />
+                Week {week}
+              </label>
             ))}
           </div>
         </CardContent>

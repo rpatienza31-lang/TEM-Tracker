@@ -4,11 +4,11 @@ import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DELIVERABLE_TYPE_LABELS, type DeliverableType } from "@/lib/constants";
-import { setScheduledDateAction } from "@/lib/work-items/actions";
+import { setDueDateAction } from "@/lib/work-items/actions";
 import type { BoardItem } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
 
-type ScheduleItem = BoardItem & { plannedFor: string; isScheduled: boolean };
+type ScheduleItem = BoardItem & { dueDate: string };
 type Option = { id: string; name: string };
 
 const UNASSIGNED = "__unassigned__";
@@ -73,10 +73,10 @@ function isWeekend(iso: string): boolean {
 }
 
 /**
- * One work item as a schedule card. Colored by deliverable type with a matching
- * accent bar; items only present because their deadline lands here (not yet
- * planned) get a dashed, dimmed treatment with a "due" flag so planned work
- * reads as the real plan. Admins get an inline date control to move it.
+ * One work item as a schedule card, colored by deliverable type with a matching
+ * accent bar. The card sits on its deadline day; past-due items get an "overdue"
+ * flag. Admins get an inline date control to move it to another day (which
+ * changes its deadline) or clear it off the schedule.
  */
 function ScheduleCard({
   item,
@@ -96,22 +96,20 @@ function ScheduleCard({
     <div
       className={cn(
         "relative overflow-hidden rounded-lg border pl-2.5 pr-2 py-2 shadow-sm transition-shadow hover:shadow-md",
-        item.isScheduled ? style.card : "border-dashed border-border bg-muted/30",
+        overdue ? "border-destructive/40 bg-destructive/5" : style.card,
         pending && "opacity-50",
       )}
     >
-      <span className={cn("absolute inset-y-0 left-0 w-1.5", item.isScheduled ? style.bar : "bg-muted-foreground/30")} />
+      <span className={cn("absolute inset-y-0 left-0 w-1.5", overdue ? "bg-destructive" : style.bar)} />
       <div className="flex items-center justify-between gap-1">
         <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", style.badge)}>
           {DELIVERABLE_TYPE_LABELS[item.type]}
         </span>
-        {overdue ? (
+        {overdue && (
           <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-destructive">
             overdue
           </span>
-        ) : !item.isScheduled ? (
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">due</span>
-        ) : null}
+        )}
       </div>
       <div className="mt-1.5 text-sm font-semibold leading-tight text-foreground">
         {item.subjectCode || item.subjectName}
@@ -123,23 +121,21 @@ function ScheduleCard({
         <div className="mt-1.5 flex items-center gap-1 border-t border-border/60 pt-1.5">
           <input
             type="date"
-            defaultValue={item.isScheduled ? item.plannedFor : ""}
+            defaultValue={item.dueDate}
             disabled={pending}
             onChange={(e) => onReschedule(item.id, e.target.value || null)}
             className="h-6 w-[7.5rem] rounded border border-input bg-background px-1 text-[11px]"
-            aria-label="Planned date"
+            aria-label="Deadline"
           />
-          {item.isScheduled && (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => onReschedule(item.id, null)}
-              className="text-[11px] text-muted-foreground underline hover:text-destructive"
-              title="Clear planned date (revert to deadline)"
-            >
-              clear
-            </button>
-          )}
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onReschedule(item.id, null)}
+            className="text-[11px] text-muted-foreground underline hover:text-destructive"
+            title="Remove from schedule (clears the deadline)"
+          >
+            clear
+          </button>
         </div>
       )}
     </div>
@@ -187,7 +183,7 @@ export function ScheduleClient({
     setBusyId(id);
     setError(null);
     startTransition(async () => {
-      const res = await setScheduledDateAction(id, date);
+      const res = await setDueDateAction(id, date);
       setBusyId(null);
       if (!res.ok) setError(res.message ?? "Could not update the schedule.");
     });
@@ -218,11 +214,11 @@ export function ScheduleClient({
     const m = new Map<string, Map<string, ScheduleItem[]>>();
     for (const it of items) {
       const col = it.assigneeId ?? UNASSIGNED;
-      const byCol = m.get(it.plannedFor) ?? new Map<string, ScheduleItem[]>();
+      const byCol = m.get(it.dueDate) ?? new Map<string, ScheduleItem[]>();
       const list = byCol.get(col) ?? [];
       list.push(it);
       byCol.set(col, list);
-      m.set(it.plannedFor, byCol);
+      m.set(it.dueDate, byCol);
     }
     return m;
   }, [items]);
@@ -245,7 +241,7 @@ export function ScheduleClient({
           <h1 className="text-2xl font-bold tracking-tight">📅 Project Schedule</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {isAdmin
-              ? "Set a planned date to pin work to a day. Items with no plan show on their deadline."
+              ? "Items appear on their deadline. Set a deadline when assigning on the Work Board, or move a card here to change it."
               : "What to prioritize each day — your own column is highlighted."}
           </p>
         </div>
@@ -308,8 +304,8 @@ export function ScheduleClient({
       {columns.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 px-3 py-16 text-center">
           <span className="text-4xl">🗓️</span>
-          <p className="text-sm font-medium text-muted-foreground">Nothing scheduled or due in this range.</p>
-          <p className="text-xs text-muted-foreground">Try the Next arrow, or plan items from the Work Board.</p>
+          <p className="text-sm font-medium text-muted-foreground">Nothing scheduled in this range.</p>
+          <p className="text-xs text-muted-foreground">Try the Next arrow, or set deadlines when you assign work on the Work Board.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
@@ -430,8 +426,8 @@ export function ScheduleClient({
             {DELIVERABLE_TYPE_LABELS[t]}
           </span>
         ))}
-        <span className="flex items-center gap-1.5 text-muted-foreground">
-          <span className="h-3 w-3 rounded border border-dashed border-muted-foreground/50 bg-muted/30" /> Shown on deadline (not planned yet)
+        <span className="flex items-center gap-1.5 text-destructive">
+          <span className="h-3 w-3 rounded bg-destructive" /> Overdue
         </span>
       </div>
     </div>

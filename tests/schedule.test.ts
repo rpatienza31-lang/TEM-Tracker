@@ -6,7 +6,7 @@ import { workItems } from "@/db/schema";
 import { getScheduleItems } from "@/lib/work-items/queries";
 import { makeSubject, makeTerm, makeUser, makeWorkItem, resetDb, seedSettings } from "./helpers";
 
-describe("project schedule", () => {
+describe("project schedule (deadline-driven)", () => {
   let termId: string;
   let subjectId: string;
   let editorId: string;
@@ -22,28 +22,27 @@ describe("project schedule", () => {
     editorId = editor.id;
   });
 
-  it("falls back to the deadline when nothing is planned", async () => {
+  it("places an item on its deadline day", async () => {
     await makeWorkItem({ termId, subjectId, weekNumber: 1, dueDate: "2099-03-10" });
 
     const rows = await getScheduleItems("2099-03-01", "2099-03-31");
     expect(rows).toHaveLength(1);
-    expect(rows[0].plannedFor).toBe("2099-03-10");
-    expect(rows[0].isScheduled).toBe(false);
+    expect(rows[0].dueDate).toBe("2099-03-10");
   });
 
-  it("uses the planned date over the deadline once set", async () => {
+  it("leaves items with no deadline off the schedule until one is set", async () => {
     const item = await makeWorkItem({ termId, subjectId, weekNumber: 1, dueDate: "2099-03-10" });
-    await db.update(workItems).set({ scheduledFor: "2099-03-05", assigneeId: editorId }).where(eq(workItems.id, item.id));
+    await db.update(workItems).set({ dueDate: null }).where(eq(workItems.id, item.id));
 
-    // The deadline day no longer contains it…
-    const onDeadline = await getScheduleItems("2099-03-10", "2099-03-10");
-    expect(onDeadline).toHaveLength(0);
+    let rows = await getScheduleItems("2099-03-01", "2099-03-31");
+    expect(rows).toHaveLength(0); // no deadline → not scheduled
 
-    // …the planned day does.
-    const onPlanned = await getScheduleItems("2099-03-05", "2099-03-05");
-    expect(onPlanned).toHaveLength(1);
-    expect(onPlanned[0].isScheduled).toBe(true);
-    expect(onPlanned[0].assigneeId).toBe(editorId);
+    // Setting a deadline (as assignment does) puts it on the board on that day.
+    await db.update(workItems).set({ dueDate: "2099-03-12", assigneeId: editorId }).where(eq(workItems.id, item.id));
+    rows = await getScheduleItems("2099-03-01", "2099-03-31");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].dueDate).toBe("2099-03-12");
+    expect(rows[0].assigneeId).toBe(editorId);
   });
 
   it("hides finished (uploaded/cancelled) work", async () => {
@@ -54,6 +53,15 @@ describe("project schedule", () => {
     const rows = await getScheduleItems("2099-03-01", "2099-03-31");
     expect(rows).toHaveLength(1);
     expect(rows[0].weekNumber).toBe(2);
+  });
+
+  it("only returns deadlines inside the window", async () => {
+    await makeWorkItem({ termId, subjectId, weekNumber: 1, dueDate: "2099-03-10" });
+    await makeWorkItem({ termId, subjectId, weekNumber: 2, dueDate: "2099-04-10" });
+
+    const rows = await getScheduleItems("2099-03-01", "2099-03-31");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].weekNumber).toBe(1);
   });
 
   it("filters by term", async () => {

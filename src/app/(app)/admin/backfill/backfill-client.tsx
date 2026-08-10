@@ -16,7 +16,7 @@ export type BackfillItem = {
   type: DeliverableType;
   status: ItemStatus;
   points: string;
-  dueDate: string;
+  dueDate: string | null;
   assigneeName: string | null;
 };
 
@@ -122,7 +122,7 @@ export function BackfillClient({ items, editors }: { items: BackfillItem[]; edit
               <TableCell>{DELIVERABLE_TYPE_LABELS[i.type]}</TableCell>
               <TableCell className="text-muted-foreground">{STATUS_LABELS[i.status]}</TableCell>
               <TableCell className="text-muted-foreground">{i.assigneeName ?? "—"}</TableCell>
-              <TableCell className="whitespace-nowrap text-muted-foreground">{i.dueDate}</TableCell>
+              <TableCell className="whitespace-nowrap text-muted-foreground">{i.dueDate ?? "—"}</TableCell>
               <TableCell className="text-right tabular-nums">{Number(i.points).toFixed(1)}</TableCell>
             </TableRow>
           ))}

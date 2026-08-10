@@ -21,18 +21,18 @@ function refresh() {
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Owner/admin sets (or clears, with an empty date) the day an item is planned to
- * be worked on. This drives the project-schedule grid without touching status or
- * the hard deadline.
+ * Owner/admin sets (or clears, with an empty date) an item's deadline. This same
+ * date is what places the item on the Project Schedule, so setting a deadline
+ * here makes it show up on that day; clearing it takes it off the schedule.
  */
-export async function setScheduledDateAction(
+export async function setDueDateAction(
   itemId: string,
   date: string | null,
 ): Promise<{ ok: boolean; message?: string }> {
   await requireRole("owner", "admin");
   const value = date && date.trim() ? date.trim() : null;
   if (value && !ISO_DATE.test(value)) return { ok: false, message: "Invalid date." };
-  await db.update(workItems).set({ scheduledFor: value, updatedAt: new Date() }).where(eq(workItems.id, itemId));
+  await db.update(workItems).set({ dueDate: value, updatedAt: new Date() }).where(eq(workItems.id, itemId));
   refresh();
   return { ok: true };
 }
@@ -48,10 +48,19 @@ export async function assignItemAction(
   itemId: string,
   assigneeId: string,
   overrideWip = false,
+  dueDate?: string | null,
 ): Promise<TransitionResult> {
   const actor = await requireUser();
   const result = await transitionWorkItem({ action: "assign", itemId, actor, assigneeId, overrideWip });
-  if (result.ok) refresh();
+  if (result.ok) {
+    // Assigning is also when the deadline gets set, and that deadline is what
+    // places the item on the Project Schedule.
+    const value = dueDate && dueDate.trim() ? dueDate.trim() : null;
+    if (value && ISO_DATE.test(value)) {
+      await db.update(workItems).set({ dueDate: value, updatedAt: new Date() }).where(eq(workItems.id, itemId));
+    }
+    refresh();
+  }
   return result;
 }
 

@@ -11,7 +11,7 @@ import { SubmitDialog } from "@/components/work-items/submit-dialog";
 import { AssignDialog } from "@/components/work-items/assign-dialog";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { DeleteItemButton } from "@/components/work-items/delete-item-button";
-import { releaseItemAction, setScheduledDateAction, uploadItemAction } from "@/lib/work-items/actions";
+import { releaseItemAction, setDueDateAction, uploadItemAction } from "@/lib/work-items/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import { ALL_DELIVERABLE_TYPES, ALL_GRADES, DELIVERABLE_TYPE_LABELS, STATUS_LABELS, WEEK_NUMBERS, type ItemStatus } from "@/lib/constants";
 import type { BoardItem } from "@/lib/work-items/queries";
@@ -23,38 +23,46 @@ type Staff = { id: string; fullName: string; role: string };
 const STATUSES: ItemStatus[] = ["available", "claimed", "in_review", "revision", "approved", "uploaded", "cancelled"];
 
 function isOverdue(item: BoardItem) {
-  return item.dueDate < new Date().toISOString().slice(0, 10) && item.status !== "uploaded" && item.status !== "cancelled";
+  return (
+    !!item.dueDate &&
+    item.dueDate < new Date().toISOString().slice(0, 10) &&
+    item.status !== "uploaded" &&
+    item.status !== "cancelled"
+  );
 }
 
 /**
- * Admin control to set (or clear) the day an item is planned to be worked on.
- * Feeds the Project Schedule grid without changing the deadline or status.
+ * Admin control to set (or clear) an item's deadline. This is also the day it
+ * shows on the Project Schedule, so setting it here schedules the item.
  */
-function PlanCell({ item, onError }: { item: BoardItem; onError: (m: string) => void }) {
+function DueCell({ item, overdue, onError }: { item: BoardItem; overdue: boolean; onError: (m: string) => void }) {
   const [pending, startTransition] = useTransition();
   function save(date: string | null) {
     startTransition(async () => {
-      const res = await setScheduledDateAction(item.id, date);
-      if (!res.ok) onError(res.message ?? "Could not set the planned date.");
+      const res = await setDueDateAction(item.id, date);
+      if (!res.ok) onError(res.message ?? "Could not set the deadline.");
     });
   }
   return (
     <div className="flex items-center gap-1">
       <input
         type="date"
-        defaultValue={item.scheduledFor ?? ""}
+        defaultValue={item.dueDate ?? ""}
         disabled={pending}
         onChange={(e) => save(e.target.value || null)}
-        className="h-8 w-[8rem] rounded-md border border-input bg-background px-1 text-xs"
-        aria-label="Planned date"
+        className={cn(
+          "h-8 w-[8.5rem] rounded-md border border-input bg-background px-1 text-xs",
+          overdue && "border-destructive/50 text-destructive",
+        )}
+        aria-label="Deadline"
       />
-      {item.scheduledFor && (
+      {item.dueDate && (
         <button
           type="button"
           disabled={pending}
           onClick={() => save(null)}
           className="text-xs text-muted-foreground underline hover:text-destructive"
-          title="Clear planned date"
+          title="Clear deadline (removes it from the schedule)"
         >
           ✕
         </button>
@@ -263,8 +271,7 @@ export function BoardClient({
             <TableHead>Type</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Assignee</TableHead>
-            <TableHead>Due</TableHead>
-            {isAdmin && <TableHead>Plan</TableHead>}
+            <TableHead>Deadline</TableHead>
             <TableHead>Points</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
@@ -288,12 +295,13 @@ export function BoardClient({
                   <StatusBadge status={item.status} overdue={overdue} />
                 </TableCell>
                 <TableCell>{item.assigneeName ?? <span className="text-muted-foreground">—</span>}</TableCell>
-                <TableCell className={cn(overdue && "font-medium text-destructive")}>{item.dueDate}</TableCell>
-                {isAdmin && (
-                  <TableCell>
-                    <PlanCell item={item} onError={(m) => setBanner({ kind: "error", message: m })} />
-                  </TableCell>
-                )}
+                <TableCell className={cn(overdue && "font-medium text-destructive")}>
+                  {isAdmin ? (
+                    <DueCell item={item} overdue={overdue} onError={(m) => setBanner({ kind: "error", message: m })} />
+                  ) : (
+                    item.dueDate ?? <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell>{item.pointsValue}</TableCell>
                 <TableCell className="flex flex-wrap gap-1">
                   {currentUser.role === "editor" && item.status === "available" && (
@@ -342,7 +350,7 @@ export function BoardClient({
           })}
           {items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 11 : 9} className="text-center text-muted-foreground">
+              <TableCell colSpan={isAdmin ? 10 : 9} className="text-center text-muted-foreground">
                 No work items match these filters.
               </TableCell>
             </TableRow>

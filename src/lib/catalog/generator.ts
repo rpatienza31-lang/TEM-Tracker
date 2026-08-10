@@ -6,7 +6,10 @@ import { getPointsTable } from "@/lib/settings";
 import { getSubjectPointsMap, pointsForItem } from "@/lib/catalog/subject-points";
 import type { DeliverableType } from "@/lib/constants";
 
-export type CatalogWeekInput = { weekNumber: number; uploadDeadline: string };
+// Deadlines are no longer set here — items are created without one and get a
+// deadline when they're assigned/scheduled. `uploadDeadline` stays optional for
+// callers that still want to pre-set week deadlines.
+export type CatalogWeekInput = { weekNumber: number; uploadDeadline?: string | null };
 
 export type CatalogGeneratorInput = {
   termId: string;
@@ -75,10 +78,13 @@ export async function generateCatalog(input: CatalogGeneratorInput) {
       }
     }
 
-    if (input.weeks.length) {
+    // Only record week deadlines when a caller actually provides them; the
+    // catalog wizard no longer does, leaving items deadline-less until assigned.
+    const weeksWithDeadline = input.weeks.filter((w) => w.uploadDeadline);
+    if (weeksWithDeadline.length) {
       await tx
         .insert(termWeeks)
-        .values(input.weeks.map((w) => ({ termId: input.termId, weekNumber: w.weekNumber, uploadDeadline: w.uploadDeadline })))
+        .values(weeksWithDeadline.map((w) => ({ termId: input.termId, weekNumber: w.weekNumber, uploadDeadline: w.uploadDeadline! })))
         .onConflictDoNothing();
     }
 
@@ -103,21 +109,16 @@ export async function generateCatalog(input: CatalogGeneratorInput) {
       [...new Set(planned.map((p) => p.subjectId))],
     );
 
-    const itemRows = planned
-      .map((item) => {
-        const dueDate = deadlineByWeek.get(item.weekNumber);
-        if (!dueDate) return null;
-        return {
-          termId: input.termId,
-          grade: item.grade,
-          subjectId: item.subjectId,
-          weekNumber: item.weekNumber,
-          type: item.type,
-          dueDate,
-          pointsValue: String(pointsForItem(subjectOverrides, pointsTable, item.subjectId, item.type)),
-        };
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null);
+    const itemRows = planned.map((item) => ({
+      termId: input.termId,
+      grade: item.grade,
+      subjectId: item.subjectId,
+      weekNumber: item.weekNumber,
+      type: item.type,
+      // No deadline at creation; set later when assigned/scheduled.
+      dueDate: deadlineByWeek.get(item.weekNumber) ?? null,
+      pointsValue: String(pointsForItem(subjectOverrides, pointsTable, item.subjectId, item.type)),
+    }));
 
     let created: { id: string }[] = [];
     if (itemRows.length) {

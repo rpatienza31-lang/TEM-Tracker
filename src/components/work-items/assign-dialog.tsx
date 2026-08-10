@@ -32,12 +32,15 @@ export function AssignDialog({
   const [open, setOpen] = useState(false);
   const [assigneeId, setAssigneeId] = useState("");
   const [overrideWip, setOverrideWip] = useState(false);
+  const [dueDate, setDueDate] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function submit() {
     if (!assigneeId) return;
     startTransition(async () => {
-      const results = await Promise.all(itemIds.map((id) => assignItemAction(id, assigneeId, overrideWip)));
+      const results = await Promise.all(
+        itemIds.map((id) => assignItemAction(id, assigneeId, overrideWip, dueDate || null)),
+      );
       const failed = results.filter((r) => !r.ok);
       if (failed.length > 0) {
         onDone(`${itemIds.length - failed.length} assigned, ${failed.length} failed: ${failed[0].ok ? "" : failed[0].error.message}`);
@@ -47,6 +50,7 @@ export function AssignDialog({
       setOpen(false);
       setAssigneeId("");
       setOverrideWip(false);
+      setDueDate("");
     });
   }
 
@@ -75,6 +79,18 @@ export function AssignDialog({
               ))}
             </SelectContent>
           </Select>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium" htmlFor="assign-due">
+              Deadline <span className="font-normal text-muted-foreground">(optional — sets the Project Schedule day)</span>
+            </label>
+            <input
+              id="assign-due"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="h-9 w-44 rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </div>
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <Checkbox checked={overrideWip} onCheckedChange={(c) => setOverrideWip(c === true)} />
             Override WIP limit
