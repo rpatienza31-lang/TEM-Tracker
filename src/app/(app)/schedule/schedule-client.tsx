@@ -5,16 +5,26 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DELIVERABLE_TYPE_LABELS, STATUS_LABELS, type DeliverableType, type ItemStatus } from "@/lib/constants";
 import {
+  setAvailabilityAction,
   setCotDeadlineAction,
   setCotScheduleNoteAction,
   setDueDateAction,
   setScheduleNoteAction,
 } from "@/lib/work-items/actions";
-import type { ScheduleEntry } from "@/lib/work-items/queries";
+import type { AvailabilityKind, ScheduleEntry, StaffAvailability } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
 
 type ScheduleItem = ScheduleEntry;
 type Option = { id: string; name: string };
+
+// Staff non-working-day markers shown in a cell.
+const AVAILABILITY: Record<AvailabilityKind, { label: string; emoji: string; box: string }> = {
+  day_off: { label: "Day off", emoji: "😴", box: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" },
+  vacation: { label: "Vacation", emoji: "🌴", box: "border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-200" },
+  school: { label: "School", emoji: "🎓", box: "border-indigo-300 bg-indigo-100 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-200" },
+  absent: { label: "Absent", emoji: "🚫", box: "border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200" },
+};
+const AVAILABILITY_KINDS = Object.keys(AVAILABILITY) as AvailabilityKind[];
 
 const UNASSIGNED = "__unassigned__";
 
@@ -103,6 +113,91 @@ function addDays(iso: string, days: number): string {
 function isWeekend(iso: string): boolean {
   const d = new Date(`${iso}T00:00:00Z`).getUTCDay();
   return d === 0 || d === 6;
+}
+
+/**
+ * The staff non-working-day marker at the top of a cell. Shows a coloured
+ * banner (Day off / Vacation / School / Absent) when set. Admins can pick a
+ * status from a small menu, or clear the current one.
+ */
+function AvailabilityCell({
+  editorId,
+  date,
+  current,
+  isAdmin,
+  onSet,
+  pending,
+}: {
+  editorId: string;
+  date: string;
+  current: AvailabilityKind | null;
+  isAdmin: boolean;
+  onSet: (editorId: string, date: string, kind: AvailabilityKind | null) => void;
+  pending: boolean;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  if (current) {
+    const a = AVAILABILITY[current];
+    return (
+      <div className={cn("mb-1 flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold", a.box)}>
+        <span aria-hidden>{a.emoji}</span>
+        <span className="uppercase tracking-wide">{a.label}</span>
+        {isAdmin && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onSet(editorId, date, null)}
+            className="ml-auto text-[11px] opacity-70 hover:opacity-100"
+            title="Clear"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (!isAdmin) return null;
+
+  if (!menuOpen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setMenuOpen(true)}
+        className="mb-1 w-full rounded border border-dashed border-border/70 py-0.5 text-[10px] text-muted-foreground opacity-0 transition-opacity hover:bg-muted/50 focus:opacity-100 group-hover:opacity-100"
+      >
+        ＋ off
+      </button>
+    );
+  }
+
+  return (
+    <div className="mb-1 flex flex-wrap gap-1 rounded-md border border-border bg-background p-1">
+      {AVAILABILITY_KINDS.map((k) => (
+        <button
+          key={k}
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            onSet(editorId, date, k);
+            setMenuOpen(false);
+          }}
+          className={cn("rounded px-1 py-0.5 text-[10px] font-medium", AVAILABILITY[k].box)}
+          title={AVAILABILITY[k].label}
+        >
+          {AVAILABILITY[k].emoji}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => setMenuOpen(false)}
+        className="rounded px-1 py-0.5 text-[10px] text-muted-foreground"
+      >
+        ✕
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -232,6 +327,8 @@ function ScheduleCard({
 
 export function ScheduleClient({
   items,
+  availability,
+  allStaff,
   dates,
   from,
   days,
@@ -242,6 +339,8 @@ export function ScheduleClient({
   currentUserId,
 }: {
   items: ScheduleItem[];
+  availability: StaffAvailability[];
+  allStaff: Option[];
   dates: string[];
   from: string;
   days: number;
@@ -257,6 +356,24 @@ export function ScheduleClient({
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAllStaff, setShowAllStaff] = useState(false);
+
+  // key `${editorId}|${date}` -> kind
+  const availByKey = useMemo(() => {
+    const m = new Map<string, AvailabilityKind>();
+    for (const a of availability) m.set(`${a.editorId}|${a.date}`, a.kind);
+    return m;
+  }, [availability]);
+
+  function setAvailability(editorId: string, date: string, kind: AvailabilityKind | null) {
+    setBusyId(`${editorId}|${date}`);
+    setError(null);
+    startTransition(async () => {
+      const res = await setAvailabilityAction(editorId, date, kind);
+      setBusyId(null);
+      if (!res.ok) setError(res.message ?? "Could not update availability.");
+    });
+  }
 
   function setParam(patch: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -293,17 +410,26 @@ export function ScheduleClient({
     });
   }
 
-  // Columns: every assignee that appears in the window, plus an Unassigned
-  // bucket when needed. The current user's own column sorts to the front.
+  // Columns: staff with work or a day-off marker in the window (or every active
+  // staffer when "Show all staff" is on, so anyone can be marked off), plus an
+  // Unassigned bucket when needed. The current user's own column sorts first.
   const columns = useMemo(() => {
-    const map = new Map<string, string>();
+    const nameById = new Map<string, string>();
+    for (const s of allStaff) nameById.set(s.id, s.name);
+    for (const it of items) if (it.assigneeId && it.assigneeName) nameById.set(it.assigneeId, it.assigneeName);
+    for (const a of availability) nameById.set(a.editorId, a.editorName);
+
     let hasUnassigned = false;
+    const present = new Set<string>();
     for (const it of items) {
-      if (it.assigneeId) map.set(it.assigneeId, it.assigneeName ?? "—");
+      if (it.assigneeId) present.add(it.assigneeId);
       else hasUnassigned = true;
     }
-    const cols = [...map.entries()]
-      .map(([id, name]) => ({ id, name }))
+    for (const a of availability) present.add(a.editorId);
+
+    const ids = showAllStaff ? allStaff.map((s) => s.id) : [...present];
+    const cols = [...new Set(ids)]
+      .map((id) => ({ id, name: nameById.get(id) ?? "—" }))
       .sort((a, b) => {
         if (a.id === currentUserId) return -1;
         if (b.id === currentUserId) return 1;
@@ -311,7 +437,7 @@ export function ScheduleClient({
       });
     if (hasUnassigned) cols.push({ id: UNASSIGNED, name: "Unassigned" });
     return cols;
-  }, [items, currentUserId]);
+  }, [items, availability, allStaff, showAllStaff, currentUserId]);
 
   // date -> column -> items
   const grid = useMemo(() => {
@@ -392,6 +518,17 @@ export function ScheduleClient({
             <option value="7">7 days</option>
             <option value="14">14 days</option>
           </select>
+          {isAdmin && (
+            <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showAllStaff}
+                onChange={(e) => setShowAllStaff(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              Show all staff
+            </label>
+          )}
         </div>
       </div>
 
@@ -486,18 +623,30 @@ export function ScheduleClient({
                       const color = colorFor(c.id);
                       const cell = byCol?.get(c.id) ?? [];
                       const isMe = c.id === currentUserId;
+                      const availKey = `${c.id}|${date}`;
+                      const avail = c.id === UNASSIGNED ? null : availByKey.get(availKey) ?? null;
                       return (
                         <td
                           key={c.id}
                           className={cn(
-                            "border-b border-l border-border p-2 align-top",
+                            "group border-b border-l border-border p-2 align-top",
                             weekend && "bg-muted/20",
                             isMe && "bg-primary/[0.03]",
                           )}
                           style={{ borderLeftColor: `${color}33` }}
                         >
+                          {c.id !== UNASSIGNED && (
+                            <AvailabilityCell
+                              editorId={c.id}
+                              date={date}
+                              current={avail}
+                              isAdmin={isAdmin}
+                              onSet={setAvailability}
+                              pending={pending && busyId === availKey}
+                            />
+                          )}
                           {cell.length === 0 ? (
-                            <div className="min-h-[2rem]" />
+                            <div className="min-h-[1.5rem]" />
                           ) : (
                             <div className="flex flex-col gap-2">
                               {cell.map((it) => (
@@ -535,6 +684,15 @@ export function ScheduleClient({
         <span className="flex items-center gap-1.5 text-destructive">
           <span className="h-3 w-3 rounded bg-destructive/70" /> Overdue tag = past deadline
         </span>
+        <span className="ml-2 border-l border-border pl-3 font-semibold uppercase tracking-wide text-muted-foreground">
+          Off
+        </span>
+        {AVAILABILITY_KINDS.map((k) => (
+          <span key={k} className="flex items-center gap-1">
+            <span aria-hidden>{AVAILABILITY[k].emoji}</span>
+            {AVAILABILITY[k].label}
+          </span>
+        ))}
       </div>
     </div>
   );

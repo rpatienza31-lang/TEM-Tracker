@@ -8,7 +8,7 @@ import { DELIVERABLE_POINTS, type DeliverableType } from "@/lib/constants";
 export async function resetDb() {
   await db.execute(sql`truncate table
     notifications, custom_order_items, custom_orders, payroll_payments, point_adjustments, quota_cycle_items, quota_cycles, time_logs,
-    work_item_events, work_items, subject_points, term_weeks, term_offerings, terms, subjects, users, settings
+    staff_availability, work_item_events, work_items, subject_points, term_weeks, term_offerings, terms, subjects, users, settings
     restart identity cascade`);
 }
 

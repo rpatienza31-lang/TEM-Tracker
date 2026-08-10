@@ -30,6 +30,7 @@ export const itemStatus = pgEnum("item_status", [
 ]);
 export const notificationType = pgEnum("notification_type", ["revision_requested", "approved", "unapproved"]);
 export const orderType = pgEnum("order_type", ["rush", "regular"]);
+export const availabilityKind = pgEnum("availability_kind", ["day_off", "vacation", "school", "absent"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -365,4 +366,24 @@ export const customOrderItems = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique("custom_order_items_order_type_key").on(t.orderId, t.type)],
+);
+
+// A staff member's non-working day on the Project Schedule: day off, vacation
+// leave, school, or absent. One marker per person per day.
+export const staffAvailability = pgTable(
+  "staff_availability",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    editorId: uuid("editor_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    kind: availabilityKind("kind").notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("staff_availability_editor_date_key").on(t.editorId, t.date),
+    index("staff_availability_date_idx").on(t.date),
+  ],
 );

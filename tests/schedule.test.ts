@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { customOrderItems, customOrders, workItems } from "@/db/schema";
-import { getScheduleItems } from "@/lib/work-items/queries";
+import { customOrderItems, customOrders, staffAvailability, workItems } from "@/db/schema";
+import { getScheduleItems, getStaffAvailability } from "@/lib/work-items/queries";
 import { makeSubject, makeTerm, makeUser, makeWorkItem, resetDb, seedSettings } from "./helpers";
 
 async function makeCotOrder(opts: { customerName?: string; deadline: string; type?: "COT_DLP" | "COT_PPT"; assigneeId?: string }) {
@@ -104,6 +104,19 @@ describe("project schedule (deadline-driven, catalog + COT)", () => {
     const rows = await getScheduleItems("2099-03-01", "2099-03-31");
     expect(rows).toHaveLength(1);
     expect(rows[0].subtitle).toBe("Grade 4 · Week 1");
+  });
+
+  it("returns staff availability markers in the window", async () => {
+    await db.insert(staffAvailability).values([
+      { editorId, date: "2099-03-10", kind: "vacation" },
+      { editorId, date: "2099-04-10", kind: "day_off" }, // outside window
+    ]);
+
+    const rows = await getStaffAvailability("2099-03-01", "2099-03-31");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe("vacation");
+    expect(rows[0].date).toBe("2099-03-10");
+    expect(rows[0].editorName).toBe("Editor One");
   });
 
   it("filters by term", async () => {

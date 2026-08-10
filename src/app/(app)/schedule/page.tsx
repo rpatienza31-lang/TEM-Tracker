@@ -1,10 +1,10 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { formatInTimeZone } from "date-fns-tz";
 
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
-import { terms } from "@/db/schema";
-import { getScheduleItems } from "@/lib/work-items/queries";
+import { terms, users } from "@/db/schema";
+import { getScheduleItems, getStaffAvailability } from "@/lib/work-items/queries";
 import { ScheduleClient } from "./schedule-client";
 
 type SearchParams = Record<string, string | undefined>;
@@ -32,7 +32,15 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const from = sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : today;
   const to = addDays(from, days - 1);
 
-  const items = await getScheduleItems(from, to, { termId });
+  const [items, availability, staffRows] = await Promise.all([
+    getScheduleItems(from, to, { termId }),
+    getStaffAvailability(from, to),
+    db
+      .select({ id: users.id, name: users.fullName })
+      .from(users)
+      .where(eq(users.isActive, true))
+      .orderBy(asc(users.fullName)),
+  ]);
 
   const dates: string[] = [];
   for (let i = 0; i < days; i++) dates.push(addDays(from, i));
@@ -40,6 +48,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   return (
     <ScheduleClient
       items={items}
+      availability={availability}
+      allStaff={staffRows}
       dates={dates}
       from={from}
       days={days}

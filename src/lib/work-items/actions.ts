@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { requireRole, requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
-import { customOrders, workItems } from "@/db/schema";
+import { customOrders, staffAvailability, workItems } from "@/db/schema";
+import type { AvailabilityKind } from "@/lib/work-items/queries";
 import { deleteWorkItem, transitionWorkItem, type DeleteResult, type TransitionResult } from "@/lib/work-items/transitions";
 
 function refresh() {
@@ -78,6 +79,41 @@ export async function setCotScheduleNoteAction(
   await requireRole("owner", "admin");
   const value = note && note.trim() ? note.trim().slice(0, 500) : null;
   await db.update(customOrders).set({ scheduleNote: value }).where(eq(customOrders.id, orderId));
+  refresh();
+  return { ok: true };
+}
+
+const AVAILABILITY_KINDS = ["day_off", "vacation", "school", "absent"] as const;
+
+/**
+ * Owner/admin marks a staff member's non-working day (day off / vacation /
+ * school / absent) on the schedule, or clears it when `kind` is null. One marker
+ * per person per day, so setting again overwrites the previous one.
+ */
+export async function setAvailabilityAction(
+  editorId: string,
+  date: string,
+  kind: AvailabilityKind | null,
+): Promise<{ ok: boolean; message?: string }> {
+  await requireRole("owner", "admin");
+  if (!ISO_DATE.test(date)) return { ok: false, message: "Invalid date." };
+
+  if (kind === null) {
+    await db
+      .delete(staffAvailability)
+      .where(and(eq(staffAvailability.editorId, editorId), eq(staffAvailability.date, date)));
+    refresh();
+    return { ok: true };
+  }
+
+  if (!AVAILABILITY_KINDS.includes(kind)) return { ok: false, message: "Invalid status." };
+  await db
+    .insert(staffAvailability)
+    .values({ editorId, date, kind })
+    .onConflictDoUpdate({
+      target: [staffAvailability.editorId, staffAvailability.date],
+      set: { kind },
+    });
   refresh();
   return { ok: true };
 }

@@ -1,8 +1,35 @@
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { customOrderItems, customOrders, workItems, subjects, users, terms, termOfferings } from "@/db/schema";
+import { customOrderItems, customOrders, staffAvailability, workItems, subjects, users, terms, termOfferings } from "@/db/schema";
 import type { DeliverableType, ItemStatus } from "@/lib/constants";
+
+export type AvailabilityKind = "day_off" | "vacation" | "school" | "absent";
+
+export type StaffAvailability = {
+  editorId: string;
+  editorName: string;
+  date: string;
+  kind: AvailabilityKind;
+  note: string | null;
+};
+
+/** Staff non-working days (day off / vacation / school / absent) in [from, to]. */
+export async function getStaffAvailability(from: string, to: string): Promise<StaffAvailability[]> {
+  const rows = await db
+    .select({
+      editorId: staffAvailability.editorId,
+      editorName: users.fullName,
+      date: staffAvailability.date,
+      kind: staffAvailability.kind,
+      note: staffAvailability.note,
+    })
+    .from(staffAvailability)
+    .innerJoin(users, eq(users.id, staffAvailability.editorId))
+    .where(and(sql`${staffAvailability.date} >= ${from}`, sql`${staffAvailability.date} <= ${to}`))
+    .limit(2000);
+  return rows as StaffAvailability[];
+}
 
 export type BoardFilters = {
   termId?: string;
