@@ -119,9 +119,10 @@ export async function getBackfillCandidates(filters: BoardFilters): Promise<Boar
 /**
  * Items for the project schedule in [from, to], keyed by their deadline
  * (`dueDate`). Deadlines are set when the owner/admin assigns or schedules an
- * item, so an item appears here exactly once it has a deadline in range and is
- * still unfinished (uploaded/cancelled work drops off). `dueDate` is guaranteed
- * non-null on these rows.
+ * item, so an item appears here once it has a deadline in range. The whole
+ * lifecycle is shown so the grid is colour-codeable by status (available →
+ * uploaded); only cancelled work drops off. `dueDate` is guaranteed non-null on
+ * these rows.
  */
 export async function getScheduleItems(
   from: string,
@@ -132,7 +133,7 @@ export async function getScheduleItems(
     sql`${workItems.dueDate} is not null`,
     sql`${workItems.dueDate} >= ${from}`,
     sql`${workItems.dueDate} <= ${to}`,
-    sql`${workItems.status} not in ('uploaded','cancelled')`,
+    sql`${workItems.status} <> 'cancelled'`,
   ];
   if (filters.termId) conditions.push(eq(workItems.termId, filters.termId));
   if (filters.assigneeId) conditions.push(eq(workItems.assigneeId, filters.assigneeId));

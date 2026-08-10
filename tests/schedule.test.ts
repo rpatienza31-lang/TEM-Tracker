@@ -45,14 +45,16 @@ describe("project schedule (deadline-driven)", () => {
     expect(rows[0].assigneeId).toBe(editorId);
   });
 
-  it("hides finished (uploaded/cancelled) work", async () => {
-    const done = await makeWorkItem({ termId, subjectId, weekNumber: 1, dueDate: "2099-03-10" });
-    await db.update(workItems).set({ status: "uploaded" }).where(eq(workItems.id, done.id));
-    await makeWorkItem({ termId, subjectId, weekNumber: 2, dueDate: "2099-03-10" });
+  it("keeps uploaded work visible (for status colour) but hides cancelled", async () => {
+    const uploaded = await makeWorkItem({ termId, subjectId, weekNumber: 1, dueDate: "2099-03-10" });
+    await db.update(workItems).set({ status: "uploaded" }).where(eq(workItems.id, uploaded.id));
+    const cancelled = await makeWorkItem({ termId, subjectId, weekNumber: 2, dueDate: "2099-03-10" });
+    await db.update(workItems).set({ status: "cancelled" }).where(eq(workItems.id, cancelled.id));
+    await makeWorkItem({ termId, subjectId, weekNumber: 3, dueDate: "2099-03-10" });
 
     const rows = await getScheduleItems("2099-03-01", "2099-03-31");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].weekNumber).toBe(2);
+    const weeks = rows.map((r) => r.weekNumber).sort();
+    expect(weeks).toEqual([1, 3]); // uploaded (wk1) shown, cancelled (wk2) hidden, available (wk3) shown
   });
 
   it("only returns deadlines inside the window", async () => {

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { DELIVERABLE_TYPE_LABELS, type DeliverableType } from "@/lib/constants";
+import { DELIVERABLE_TYPE_LABELS, STATUS_LABELS, type DeliverableType, type ItemStatus } from "@/lib/constants";
 import { setDueDateAction } from "@/lib/work-items/actions";
 import type { BoardItem } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
@@ -37,29 +37,57 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-// Deliverable-type look: solid badge + tinted card, both dark-mode aware.
-const TYPE_STYLES: Record<DeliverableType, { badge: string; card: string; bar: string }> = {
-  DLP: {
-    badge: "bg-blue-600 text-white",
-    card: "border-blue-200 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/40",
+// Small deliverable-type badge colour (DLP/PPT/COT), kept subtle so status is
+// the dominant signal on the card.
+const TYPE_BADGE: Record<DeliverableType, string> = {
+  DLP: "bg-blue-600 text-white",
+  PPT: "bg-violet-600 text-white",
+  COT_DLP: "bg-amber-500 text-white",
+  COT_PPT: "bg-rose-600 text-white",
+};
+
+// Progress-status look: the card body/border tint, the left accent bar, and the
+// status pill — so a glance down a column reads as available → uploaded.
+const STATUS_STYLES: Record<ItemStatus, { card: string; bar: string; pill: string }> = {
+  available: {
+    card: "border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900/40",
+    bar: "bg-slate-400",
+    pill: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  },
+  claimed: {
+    card: "border-blue-200 bg-blue-50/80 dark:border-blue-900 dark:bg-blue-950/40",
     bar: "bg-blue-500",
+    pill: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
   },
-  PPT: {
-    badge: "bg-violet-600 text-white",
-    card: "border-violet-200 bg-violet-50/70 dark:border-violet-900 dark:bg-violet-950/40",
-    bar: "bg-violet-500",
-  },
-  COT_DLP: {
-    badge: "bg-amber-500 text-white",
-    card: "border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/40",
+  in_review: {
+    card: "border-amber-200 bg-amber-50/80 dark:border-amber-900 dark:bg-amber-950/40",
     bar: "bg-amber-500",
+    pill: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
   },
-  COT_PPT: {
-    badge: "bg-rose-600 text-white",
-    card: "border-rose-200 bg-rose-50/70 dark:border-rose-900 dark:bg-rose-950/40",
-    bar: "bg-rose-500",
+  revision: {
+    card: "border-orange-200 bg-orange-50/80 dark:border-orange-900 dark:bg-orange-950/40",
+    bar: "bg-orange-500",
+    pill: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
+  },
+  approved: {
+    card: "border-green-200 bg-green-50/80 dark:border-green-900 dark:bg-green-950/40",
+    bar: "bg-green-500",
+    pill: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
+  },
+  uploaded: {
+    card: "border-emerald-300 bg-emerald-50/80 dark:border-emerald-800 dark:bg-emerald-950/50",
+    bar: "bg-emerald-600",
+    pill: "bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-200",
+  },
+  cancelled: {
+    card: "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40",
+    bar: "bg-slate-300",
+    pill: "bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
   },
 };
+
+// Lifecycle order shown in the legend (cancelled work never reaches the grid).
+const SCHEDULE_STATUSES: ItemStatus[] = ["available", "claimed", "in_review", "revision", "approved", "uploaded"];
 
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -73,10 +101,11 @@ function isWeekend(iso: string): boolean {
 }
 
 /**
- * One work item as a schedule card, colored by deliverable type with a matching
- * accent bar. The card sits on its deadline day; past-due items get an "overdue"
- * flag. Admins get an inline date control to move it to another day (which
- * changes its deadline) or clear it off the schedule.
+ * One work item as a schedule card, colour-coded by progress status (available →
+ * uploaded) via the card tint, left accent bar and status pill, so it's easy to
+ * see at a glance what's claimed, in review, or done. A small type badge keeps
+ * DLP/PPT/COT identifiable, and past-due items get an "overdue" flag. Admins get
+ * an inline date control to move the deadline or clear it off the schedule.
  */
 function ScheduleCard({
   item,
@@ -91,31 +120,34 @@ function ScheduleCard({
   onReschedule: (id: string, date: string | null) => void;
   pending: boolean;
 }) {
-  const style = TYPE_STYLES[item.type];
+  const status = STATUS_STYLES[item.status];
   return (
     <div
       className={cn(
         "relative overflow-hidden rounded-lg border pl-2.5 pr-2 py-2 shadow-sm transition-shadow hover:shadow-md",
-        overdue ? "border-destructive/40 bg-destructive/5" : style.card,
+        status.card,
         pending && "opacity-50",
       )}
     >
-      <span className={cn("absolute inset-y-0 left-0 w-1.5", overdue ? "bg-destructive" : style.bar)} />
+      <span className={cn("absolute inset-y-0 left-0 w-1.5", status.bar)} />
       <div className="flex items-center justify-between gap-1">
-        <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", style.badge)}>
+        <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", TYPE_BADGE[item.type])}>
           {DELIVERABLE_TYPE_LABELS[item.type]}
         </span>
-        {overdue && (
-          <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-destructive">
-            overdue
-          </span>
-        )}
+        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", status.pill)}>
+          {STATUS_LABELS[item.status]}
+        </span>
       </div>
       <div className="mt-1.5 text-sm font-semibold leading-tight text-foreground">
         {item.subjectCode || item.subjectName}
       </div>
-      <div className="text-xs text-muted-foreground">
-        Grade {item.grade} · Week {item.weekNumber}
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span>Grade {item.grade} · Week {item.weekNumber}</span>
+        {overdue && item.status !== "uploaded" && (
+          <span className="rounded bg-destructive/15 px-1 py-0.5 text-[10px] font-semibold uppercase text-destructive">
+            overdue
+          </span>
+        )}
       </div>
       {isAdmin && (
         <div className="mt-1.5 flex items-center gap-1 border-t border-border/60 pt-1.5">
@@ -400,7 +432,7 @@ export function ScheduleClient({
                                   key={it.id}
                                   item={it}
                                   isAdmin={isAdmin}
-                                  overdue={past && it.status !== "approved"}
+                                  overdue={past && it.status !== "uploaded"}
                                   onReschedule={reschedule}
                                   pending={pending && busyId === it.id}
                                 />
@@ -419,15 +451,15 @@ export function ScheduleClient({
       )}
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-border bg-card p-3 text-xs">
-        <span className="font-semibold uppercase tracking-wide text-muted-foreground">Legend</span>
-        {(Object.keys(TYPE_STYLES) as DeliverableType[]).map((t) => (
-          <span key={t} className="flex items-center gap-1.5">
-            <span className={cn("h-3 w-3 rounded", TYPE_STYLES[t].bar)} />
-            {DELIVERABLE_TYPE_LABELS[t]}
+        <span className="font-semibold uppercase tracking-wide text-muted-foreground">Status</span>
+        {SCHEDULE_STATUSES.map((s) => (
+          <span key={s} className="flex items-center gap-1.5">
+            <span className={cn("h-3 w-3 rounded", STATUS_STYLES[s].bar)} />
+            {STATUS_LABELS[s]}
           </span>
         ))}
         <span className="flex items-center gap-1.5 text-destructive">
-          <span className="h-3 w-3 rounded bg-destructive" /> Overdue
+          <span className="h-3 w-3 rounded bg-destructive/70" /> Overdue tag = past deadline
         </span>
       </div>
     </div>
