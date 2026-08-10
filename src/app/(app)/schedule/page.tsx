@@ -23,8 +23,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const isAdmin = user.role === "owner" || user.role === "admin";
 
   const termRows = await db.select().from(terms).orderBy(asc(terms.name));
-  const activeTerm = termRows.find((t) => t.isActive) ?? termRows[0];
-  const termId = sp.term || activeTerm?.id || undefined;
+  // Default to ALL terms in one combined calendar; each card is labelled with
+  // its term so nothing gets missed on a separate tab.
+  const termId = sp.term || undefined;
 
   const days = Math.min(Math.max(Number(sp.days) || 7, 1), 14);
   const today = formatInTimeZone(new Date(), PH_TZ, "yyyy-MM-dd");

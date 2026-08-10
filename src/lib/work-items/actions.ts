@@ -37,6 +37,21 @@ export async function setDueDateAction(
   return { ok: true };
 }
 
+/**
+ * Owner/admin sets (or clears) the free-text note shown on an item's Project
+ * Schedule card — a reminder or instruction for the assigned editor.
+ */
+export async function setScheduleNoteAction(
+  itemId: string,
+  note: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  await requireRole("owner", "admin");
+  const value = note && note.trim() ? note.trim().slice(0, 500) : null;
+  await db.update(workItems).set({ scheduleNote: value, updatedAt: new Date() }).where(eq(workItems.id, itemId));
+  refresh();
+  return { ok: true };
+}
+
 export async function claimItemAction(itemId: string): Promise<TransitionResult> {
   const actor = await requireUser();
   const result = await transitionWorkItem({ action: "claim", itemId, actor });

@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DELIVERABLE_TYPE_LABELS, STATUS_LABELS, type DeliverableType, type ItemStatus } from "@/lib/constants";
-import { setDueDateAction } from "@/lib/work-items/actions";
+import { setDueDateAction, setScheduleNoteAction } from "@/lib/work-items/actions";
 import type { BoardItem } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
 
@@ -112,15 +112,18 @@ function ScheduleCard({
   isAdmin,
   overdue,
   onReschedule,
+  onSaveNote,
   pending,
 }: {
   item: ScheduleItem;
   isAdmin: boolean;
   overdue: boolean;
   onReschedule: (id: string, date: string | null) => void;
+  onSaveNote: (id: string, note: string) => void;
   pending: boolean;
 }) {
   const status = STATUS_STYLES[item.status];
+  const [noteOpen, setNoteOpen] = useState(false);
   return (
     <div
       className={cn(
@@ -130,11 +133,14 @@ function ScheduleCard({
       )}
     >
       <span className={cn("absolute inset-y-0 left-0 w-1.5", status.bar)} />
-      <div className="flex items-center justify-between gap-1">
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-foreground/80">
+          {item.termName}
+        </span>
         <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", TYPE_BADGE[item.type])}>
           {DELIVERABLE_TYPE_LABELS[item.type]}
         </span>
-        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", status.pill)}>
+        <span className={cn("ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold", status.pill)}>
           {STATUS_LABELS[item.status]}
         </span>
       </div>
@@ -149,25 +155,63 @@ function ScheduleCard({
           </span>
         )}
       </div>
+
+      {item.scheduleNote && !noteOpen && (
+        <div className="mt-1.5 flex items-start gap-1 rounded bg-background/70 px-1.5 py-1 text-[11px] leading-snug text-foreground">
+          <span aria-hidden>📝</span>
+          <span className="whitespace-pre-wrap break-words">{item.scheduleNote}</span>
+        </div>
+      )}
+
       {isAdmin && (
-        <div className="mt-1.5 flex items-center gap-1 border-t border-border/60 pt-1.5">
-          <input
-            type="date"
-            defaultValue={item.dueDate}
-            disabled={pending}
-            onChange={(e) => onReschedule(item.id, e.target.value || null)}
-            className="h-6 w-[7.5rem] rounded border border-input bg-background px-1 text-[11px]"
-            aria-label="Deadline"
-          />
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => onReschedule(item.id, null)}
-            className="text-[11px] text-muted-foreground underline hover:text-destructive"
-            title="Remove from schedule (clears the deadline)"
-          >
-            clear
-          </button>
+        <div className="mt-1.5 flex flex-col gap-1 border-t border-border/60 pt-1.5">
+          <div className="flex items-center gap-1">
+            <input
+              type="date"
+              defaultValue={item.dueDate}
+              disabled={pending}
+              onChange={(e) => onReschedule(item.id, e.target.value || null)}
+              className="h-6 w-[7.5rem] rounded border border-input bg-background px-1 text-[11px]"
+              aria-label="Deadline"
+            />
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onReschedule(item.id, null)}
+              className="text-[11px] text-muted-foreground underline hover:text-destructive"
+              title="Remove from schedule (clears the deadline)"
+            >
+              clear
+            </button>
+            {!noteOpen && (
+              <button
+                type="button"
+                onClick={() => setNoteOpen(true)}
+                className="ml-auto text-[11px] text-primary underline"
+              >
+                {item.scheduleNote ? "Edit note" : "+ Note"}
+              </button>
+            )}
+          </div>
+          {noteOpen && (
+            <div className="flex flex-col gap-1">
+              <textarea
+                defaultValue={item.scheduleNote ?? ""}
+                disabled={pending}
+                rows={2}
+                placeholder="Note for this project…"
+                onBlur={(e) => {
+                  if ((e.target.value.trim() || "") !== (item.scheduleNote ?? "")) {
+                    onSaveNote(item.id, e.target.value);
+                  }
+                  setNoteOpen(false);
+                }}
+                autoFocus
+                className="w-full rounded border border-input bg-background px-1.5 py-1 text-[11px] leading-snug"
+              />
+              <span className="text-[10px] text-muted-foreground">Click away to save.</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -218,6 +262,16 @@ export function ScheduleClient({
       const res = await setDueDateAction(id, date);
       setBusyId(null);
       if (!res.ok) setError(res.message ?? "Could not update the schedule.");
+    });
+  }
+
+  function saveNote(id: string, note: string) {
+    setBusyId(id);
+    setError(null);
+    startTransition(async () => {
+      const res = await setScheduleNoteAction(id, note);
+      setBusyId(null);
+      if (!res.ok) setError(res.message ?? "Could not save the note.");
     });
   }
 
@@ -283,6 +337,7 @@ export function ScheduleClient({
             value={termId}
             onChange={(e) => setParam({ term: e.target.value || null })}
           >
+            <option value="">All terms</option>
             {terms.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -434,6 +489,7 @@ export function ScheduleClient({
                                   isAdmin={isAdmin}
                                   overdue={past && it.status !== "uploaded"}
                                   onReschedule={reschedule}
+                                  onSaveNote={saveNote}
                                   pending={pending && busyId === it.id}
                                 />
                               ))}

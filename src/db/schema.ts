@@ -149,6 +149,10 @@ export const workItems = pgTable(
     pointsAwarded: numeric("points_awarded", { precision: 4, scale: 2 }),
     fileUrl: text("file_url"),
     notes: text("notes"),
+    // A free-text note shown on the Project Schedule card (e.g. reminders or
+    // instructions for the assigned editor). Separate from `notes`, which is the
+    // editor's submission note.
+    scheduleNote: text("schedule_note"),
     revisionCount: integer("revision_count").notNull().default(0),
     version: integer("version").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -34,6 +34,7 @@ export type BoardItem = {
   pointsAwarded: string | null;
   fileUrl: string | null;
   notes: string | null;
+  scheduleNote: string | null;
   revisionCount: number;
   version: number;
 };
@@ -56,6 +57,7 @@ const boardColumns = {
   pointsAwarded: workItems.pointsAwarded,
   fileUrl: workItems.fileUrl,
   notes: workItems.notes,
+  scheduleNote: workItems.scheduleNote,
   revisionCount: workItems.revisionCount,
   version: workItems.version,
 };
