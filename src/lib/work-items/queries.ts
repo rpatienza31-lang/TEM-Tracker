@@ -1,7 +1,7 @@
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { workItems, subjects, users, terms, termOfferings } from "@/db/schema";
+import { customOrderItems, customOrders, workItems, subjects, users, terms, termOfferings } from "@/db/schema";
 import type { DeliverableType, ItemStatus } from "@/lib/constants";
 
 export type BoardFilters = {
@@ -119,38 +119,137 @@ export async function getBackfillCandidates(filters: BoardFilters): Promise<Boar
 }
 
 /**
- * Items for the project schedule in [from, to], keyed by their deadline
- * (`dueDate`). Deadlines are set when the owner/admin assigns or schedules an
- * item, so an item appears here once it has a deadline in range. The whole
- * lifecycle is shown so the grid is colour-codeable by status (available →
- * uploaded); only cancelled work drops off. `dueDate` is guaranteed non-null on
- * these rows.
+ * A single card on the Project Schedule, whether it comes from the catalog
+ * (DLP/PPT work items) or a COT order. `dueDate` is the deadline that places it
+ * on a day. `kind`/`actionRefId` tell the UI which action to call when the owner
+ * reschedules it or edits its note (a work item vs. a COT order).
+ */
+export type ScheduleEntry = {
+  kind: "catalog" | "cot";
+  id: string; // unique per card
+  actionRefId: string; // work item id (catalog) or custom order id (cot)
+  type: DeliverableType;
+  status: ItemStatus;
+  dueDate: string;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  termName: string | null; // catalog term; null for COT
+  title: string; // catalog: subject; cot: customer name
+  subtitle: string; // catalog: "Grade X · Week Y"; cot: subject · topic
+  scheduleNote: string | null;
+};
+
+/**
+ * Entries for the project schedule in [from, to], keyed by their deadline.
+ * Catalog items appear once they have a deadline; COT orders always carry one.
+ * The whole lifecycle is shown so the grid is colour-codeable by status
+ * (available → uploaded); only cancelled work drops off. A term filter narrows
+ * to catalog items of that term (COT orders aren't term-bound, so they show only
+ * in the combined "all terms" view).
  */
 export async function getScheduleItems(
   from: string,
   to: string,
   filters: { termId?: string; assigneeId?: string } = {},
-): Promise<(BoardItem & { dueDate: string })[]> {
-  const conditions: SQL[] = [
+): Promise<ScheduleEntry[]> {
+  const catalogConditions: SQL[] = [
     sql`${workItems.dueDate} is not null`,
     sql`${workItems.dueDate} >= ${from}`,
     sql`${workItems.dueDate} <= ${to}`,
     sql`${workItems.status} <> 'cancelled'`,
   ];
-  if (filters.termId) conditions.push(eq(workItems.termId, filters.termId));
-  if (filters.assigneeId) conditions.push(eq(workItems.assigneeId, filters.assigneeId));
+  if (filters.termId) catalogConditions.push(eq(workItems.termId, filters.termId));
+  if (filters.assigneeId) catalogConditions.push(eq(workItems.assigneeId, filters.assigneeId));
 
-  const rows = await db
-    .select(boardColumns)
+  const catalogRows = await db
+    .select({
+      id: workItems.id,
+      type: workItems.type,
+      status: workItems.status,
+      dueDate: workItems.dueDate,
+      assigneeId: workItems.assigneeId,
+      assigneeName: users.fullName,
+      termName: terms.name,
+      grade: workItems.grade,
+      weekNumber: workItems.weekNumber,
+      subjectName: subjects.name,
+      subjectCode: subjects.shortCode,
+      scheduleNote: workItems.scheduleNote,
+    })
     .from(workItems)
     .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
     .innerJoin(terms, eq(terms.id, workItems.termId))
     .leftJoin(users, eq(users.id, workItems.assigneeId))
-    .where(and(...conditions))
+    .where(and(...catalogConditions))
     .orderBy(asc(workItems.dueDate), asc(workItems.grade), asc(subjects.name), asc(workItems.weekNumber))
     .limit(2000);
 
-  return rows as (BoardItem & { dueDate: string })[];
+  const catalog: ScheduleEntry[] = catalogRows.map((r) => ({
+    kind: "catalog",
+    id: r.id,
+    actionRefId: r.id,
+    type: r.type,
+    status: r.status,
+    dueDate: r.dueDate as string,
+    assigneeId: r.assigneeId,
+    assigneeName: r.assigneeName,
+    termName: r.termName,
+    title: r.subjectCode || r.subjectName,
+    subtitle: `Grade ${r.grade} · Week ${r.weekNumber}`,
+    scheduleNote: r.scheduleNote,
+  }));
+
+  // COT orders aren't tied to a term, so only include them in the combined view.
+  if (filters.termId) return catalog;
+
+  const cotConditions: SQL[] = [
+    sql`${customOrders.deadline} >= ${from}`,
+    sql`${customOrders.deadline} <= ${to}`,
+    sql`${customOrderItems.status} <> 'cancelled'`,
+  ];
+  if (filters.assigneeId) cotConditions.push(eq(customOrderItems.assigneeId, filters.assigneeId));
+
+  const cotRows = await db
+    .select({
+      id: customOrderItems.id,
+      orderId: customOrders.id,
+      type: customOrderItems.type,
+      status: customOrderItems.status,
+      deadline: customOrders.deadline,
+      assigneeId: customOrderItems.assigneeId,
+      assigneeName: users.fullName,
+      customerName: customOrders.customerName,
+      grade: customOrders.grade,
+      subjectName: customOrders.subjectName,
+      topic: customOrders.topic,
+      scheduleNote: customOrders.scheduleNote,
+    })
+    .from(customOrderItems)
+    .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
+    .leftJoin(users, eq(users.id, customOrderItems.assigneeId))
+    .where(and(...cotConditions))
+    .orderBy(asc(customOrders.deadline))
+    .limit(2000);
+
+  const cot: ScheduleEntry[] = cotRows.map((r) => {
+    const parts = [r.grade ? `Grade ${r.grade}` : null, r.subjectName, r.topic].filter(Boolean);
+    return {
+      kind: "cot",
+      id: r.id,
+      actionRefId: r.orderId,
+      type: r.type,
+      status: r.status,
+      dueDate: r.deadline as string,
+      assigneeId: r.assigneeId,
+      assigneeName: r.assigneeName,
+      termName: null,
+      title: r.customerName,
+      subtitle: parts.length ? parts.join(" · ") : "Custom order",
+      scheduleNote: r.scheduleNote,
+    };
+  });
+
+  return [...catalog, ...cot];
 }
 
 export async function getTermGrades(termId: string) {

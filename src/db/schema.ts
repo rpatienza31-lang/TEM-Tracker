@@ -336,6 +336,8 @@ export const customOrders = pgTable("custom_orders", {
   orderType: orderType("order_type").notNull().default("regular"),
   orderDate: date("order_date").notNull(),
   deadline: date("deadline").notNull(),
+  // Free-text note shown on the Project Schedule card for this order.
+  scheduleNote: text("schedule_note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

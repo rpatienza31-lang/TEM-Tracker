@@ -2,11 +2,29 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { db } from "@/db/client";
-import { workItems } from "@/db/schema";
+import { customOrderItems, customOrders, workItems } from "@/db/schema";
 import { getScheduleItems } from "@/lib/work-items/queries";
 import { makeSubject, makeTerm, makeUser, makeWorkItem, resetDb, seedSettings } from "./helpers";
 
-describe("project schedule (deadline-driven)", () => {
+async function makeCotOrder(opts: { customerName?: string; deadline: string; type?: "COT_DLP" | "COT_PPT"; assigneeId?: string }) {
+  const [order] = await db
+    .insert(customOrders)
+    .values({
+      customerName: opts.customerName ?? "Customer A",
+      orderDate: opts.deadline,
+      deadline: opts.deadline,
+      subjectName: "Science",
+      topic: "Photosynthesis",
+    })
+    .returning();
+  const [item] = await db
+    .insert(customOrderItems)
+    .values({ orderId: order.id, type: opts.type ?? "COT_DLP", assigneeId: opts.assigneeId })
+    .returning();
+  return { order, item };
+}
+
+describe("project schedule (deadline-driven, catalog + COT)", () => {
   let termId: string;
   let subjectId: string;
   let editorId: string;
@@ -28,6 +46,7 @@ describe("project schedule (deadline-driven)", () => {
     const rows = await getScheduleItems("2099-03-01", "2099-03-31");
     expect(rows).toHaveLength(1);
     expect(rows[0].dueDate).toBe("2099-03-10");
+    expect(rows[0].kind).toBe("catalog");
   });
 
   it("leaves items with no deadline off the schedule until one is set", async () => {
@@ -35,14 +54,35 @@ describe("project schedule (deadline-driven)", () => {
     await db.update(workItems).set({ dueDate: null }).where(eq(workItems.id, item.id));
 
     let rows = await getScheduleItems("2099-03-01", "2099-03-31");
-    expect(rows).toHaveLength(0); // no deadline → not scheduled
+    expect(rows).toHaveLength(0);
 
-    // Setting a deadline (as assignment does) puts it on the board on that day.
     await db.update(workItems).set({ dueDate: "2099-03-12", assigneeId: editorId }).where(eq(workItems.id, item.id));
     rows = await getScheduleItems("2099-03-01", "2099-03-31");
     expect(rows).toHaveLength(1);
     expect(rows[0].dueDate).toBe("2099-03-12");
     expect(rows[0].assigneeId).toBe(editorId);
+  });
+
+  it("includes COT orders on their deadline in the combined (all-terms) view", async () => {
+    await makeWorkItem({ termId, subjectId, weekNumber: 1, dueDate: "2099-03-10" });
+    await makeCotOrder({ customerName: "Mary Joy", deadline: "2099-03-11", assigneeId: editorId });
+
+    const rows = await getScheduleItems("2099-03-01", "2099-03-31");
+    expect(rows).toHaveLength(2);
+    const cot = rows.find((r) => r.kind === "cot")!;
+    expect(cot.title).toBe("Mary Joy");
+    expect(cot.dueDate).toBe("2099-03-11");
+    expect(cot.assigneeId).toBe(editorId);
+    expect(cot.type).toBe("COT_DLP");
+  });
+
+  it("excludes COT orders when narrowed to a specific term", async () => {
+    await makeWorkItem({ termId, subjectId, weekNumber: 1, dueDate: "2099-03-10" });
+    await makeCotOrder({ deadline: "2099-03-11" });
+
+    const rows = await getScheduleItems("2099-03-01", "2099-03-31", { termId });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe("catalog");
   });
 
   it("keeps uploaded work visible (for status colour) but hides cancelled", async () => {
@@ -53,8 +93,8 @@ describe("project schedule (deadline-driven)", () => {
     await makeWorkItem({ termId, subjectId, weekNumber: 3, dueDate: "2099-03-10" });
 
     const rows = await getScheduleItems("2099-03-01", "2099-03-31");
-    const weeks = rows.map((r) => r.weekNumber).sort();
-    expect(weeks).toEqual([1, 3]); // uploaded (wk1) shown, cancelled (wk2) hidden, available (wk3) shown
+    const subtitles = rows.map((r) => r.subtitle).sort();
+    expect(subtitles).toEqual(["Grade 4 · Week 1", "Grade 4 · Week 3"]);
   });
 
   it("only returns deadlines inside the window", async () => {
@@ -63,7 +103,7 @@ describe("project schedule (deadline-driven)", () => {
 
     const rows = await getScheduleItems("2099-03-01", "2099-03-31");
     expect(rows).toHaveLength(1);
-    expect(rows[0].weekNumber).toBe(1);
+    expect(rows[0].subtitle).toBe("Grade 4 · Week 1");
   });
 
   it("filters by term", async () => {
@@ -73,6 +113,6 @@ describe("project schedule (deadline-driven)", () => {
 
     const rows = await getScheduleItems("2099-03-01", "2099-03-31", { termId });
     expect(rows).toHaveLength(1);
-    expect(rows[0].termId).toBe(termId);
+    expect(rows[0].termName).toBe("Test Term");
   });
 });

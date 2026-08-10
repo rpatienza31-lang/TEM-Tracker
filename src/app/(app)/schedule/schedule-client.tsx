@@ -4,11 +4,16 @@ import { useMemo, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DELIVERABLE_TYPE_LABELS, STATUS_LABELS, type DeliverableType, type ItemStatus } from "@/lib/constants";
-import { setDueDateAction, setScheduleNoteAction } from "@/lib/work-items/actions";
-import type { BoardItem } from "@/lib/work-items/queries";
+import {
+  setCotDeadlineAction,
+  setCotScheduleNoteAction,
+  setDueDateAction,
+  setScheduleNoteAction,
+} from "@/lib/work-items/actions";
+import type { ScheduleEntry } from "@/lib/work-items/queries";
 import { cn } from "@/lib/utils";
 
-type ScheduleItem = BoardItem & { dueDate: string };
+type ScheduleItem = ScheduleEntry;
 type Option = { id: string; name: string };
 
 const UNASSIGNED = "__unassigned__";
@@ -118,11 +123,12 @@ function ScheduleCard({
   item: ScheduleItem;
   isAdmin: boolean;
   overdue: boolean;
-  onReschedule: (id: string, date: string | null) => void;
-  onSaveNote: (id: string, note: string) => void;
+  onReschedule: (item: ScheduleItem, date: string | null) => void;
+  onSaveNote: (item: ScheduleItem, note: string) => void;
   pending: boolean;
 }) {
   const status = STATUS_STYLES[item.status];
+  const isCot = item.kind === "cot";
   const [noteOpen, setNoteOpen] = useState(false);
   return (
     <div
@@ -134,9 +140,15 @@ function ScheduleCard({
     >
       <span className={cn("absolute inset-y-0 left-0 w-1.5", status.bar)} />
       <div className="flex flex-wrap items-center gap-1">
-        <span className="rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-foreground/80">
-          {item.termName}
-        </span>
+        {isCot ? (
+          <span className="rounded bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            COT
+          </span>
+        ) : (
+          <span className="rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-foreground/80">
+            {item.termName}
+          </span>
+        )}
         <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", TYPE_BADGE[item.type])}>
           {DELIVERABLE_TYPE_LABELS[item.type]}
         </span>
@@ -144,11 +156,9 @@ function ScheduleCard({
           {STATUS_LABELS[item.status]}
         </span>
       </div>
-      <div className="mt-1.5 text-sm font-semibold leading-tight text-foreground">
-        {item.subjectCode || item.subjectName}
-      </div>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span>Grade {item.grade} · Week {item.weekNumber}</span>
+      <div className="mt-1.5 text-sm font-semibold leading-tight text-foreground">{item.title}</div>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <span>{item.subtitle}</span>
         {overdue && item.status !== "uploaded" && (
           <span className="rounded bg-destructive/15 px-1 py-0.5 text-[10px] font-semibold uppercase text-destructive">
             overdue
@@ -170,19 +180,21 @@ function ScheduleCard({
               type="date"
               defaultValue={item.dueDate}
               disabled={pending}
-              onChange={(e) => onReschedule(item.id, e.target.value || null)}
+              onChange={(e) => onReschedule(item, e.target.value || null)}
               className="h-6 w-[7.5rem] rounded border border-input bg-background px-1 text-[11px]"
               aria-label="Deadline"
             />
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => onReschedule(item.id, null)}
-              className="text-[11px] text-muted-foreground underline hover:text-destructive"
-              title="Remove from schedule (clears the deadline)"
-            >
-              clear
-            </button>
+            {!isCot && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onReschedule(item, null)}
+                className="text-[11px] text-muted-foreground underline hover:text-destructive"
+                title="Remove from schedule (clears the deadline)"
+              >
+                clear
+              </button>
+            )}
             {!noteOpen && (
               <button
                 type="button"
@@ -202,7 +214,7 @@ function ScheduleCard({
                 placeholder="Note for this project…"
                 onBlur={(e) => {
                   if ((e.target.value.trim() || "") !== (item.scheduleNote ?? "")) {
-                    onSaveNote(item.id, e.target.value);
+                    onSaveNote(item, e.target.value);
                   }
                   setNoteOpen(false);
                 }}
@@ -255,21 +267,27 @@ export function ScheduleClient({
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  function reschedule(id: string, date: string | null) {
-    setBusyId(id);
+  function reschedule(item: ScheduleItem, date: string | null) {
+    setBusyId(item.id);
     setError(null);
     startTransition(async () => {
-      const res = await setDueDateAction(id, date);
+      const res =
+        item.kind === "cot"
+          ? await setCotDeadlineAction(item.actionRefId, date)
+          : await setDueDateAction(item.actionRefId, date);
       setBusyId(null);
       if (!res.ok) setError(res.message ?? "Could not update the schedule.");
     });
   }
 
-  function saveNote(id: string, note: string) {
-    setBusyId(id);
+  function saveNote(item: ScheduleItem, note: string) {
+    setBusyId(item.id);
     setError(null);
     startTransition(async () => {
-      const res = await setScheduleNoteAction(id, note);
+      const res =
+        item.kind === "cot"
+          ? await setCotScheduleNoteAction(item.actionRefId, note)
+          : await setScheduleNoteAction(item.actionRefId, note);
       setBusyId(null);
       if (!res.ok) setError(res.message ?? "Could not save the note.");
     });
@@ -327,8 +345,8 @@ export function ScheduleClient({
           <h1 className="text-2xl font-bold tracking-tight">📅 Project Schedule</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {isAdmin
-              ? "Items appear on their deadline. Set a deadline when assigning on the Work Board, or move a card here to change it."
-              : "What to prioritize each day — your own column is highlighted."}
+              ? "All terms and COT orders in one calendar, on their deadline. Set a deadline when assigning on the Work Board, or move a card here to change it."
+              : "What to prioritize each day — all terms and COT in one view; your own column is highlighted."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-2 shadow-sm">

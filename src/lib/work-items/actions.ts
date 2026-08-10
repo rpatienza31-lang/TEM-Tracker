@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { requireRole, requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
-import { workItems } from "@/db/schema";
+import { customOrders, workItems } from "@/db/schema";
 import { deleteWorkItem, transitionWorkItem, type DeleteResult, type TransitionResult } from "@/lib/work-items/transitions";
 
 function refresh() {
@@ -15,6 +15,7 @@ function refresh() {
   revalidatePath("/review");
   revalidatePath("/productivity");
   revalidatePath("/schedule");
+  revalidatePath("/cot");
   revalidatePath("/");
 }
 
@@ -48,6 +49,35 @@ export async function setScheduleNoteAction(
   await requireRole("owner", "admin");
   const value = note && note.trim() ? note.trim().slice(0, 500) : null;
   await db.update(workItems).set({ scheduleNote: value, updatedAt: new Date() }).where(eq(workItems.id, itemId));
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Owner/admin sets (or clears) a COT order's deadline from the schedule. The
+ * deadline lives on the order, so this moves both of its items (DLP + PPT).
+ */
+export async function setCotDeadlineAction(
+  orderId: string,
+  date: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  await requireRole("owner", "admin");
+  const value = date && date.trim() ? date.trim() : null;
+  if (!value) return { ok: false, message: "A COT order must keep a deadline." };
+  if (!ISO_DATE.test(value)) return { ok: false, message: "Invalid date." };
+  await db.update(customOrders).set({ deadline: value }).where(eq(customOrders.id, orderId));
+  refresh();
+  return { ok: true };
+}
+
+/** Owner/admin sets (or clears) the schedule note on a COT order. */
+export async function setCotScheduleNoteAction(
+  orderId: string,
+  note: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  await requireRole("owner", "admin");
+  const value = note && note.trim() ? note.trim().slice(0, 500) : null;
+  await db.update(customOrders).set({ scheduleNote: value }).where(eq(customOrders.id, orderId));
   refresh();
   return { ok: true };
 }
