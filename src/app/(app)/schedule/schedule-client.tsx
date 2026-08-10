@@ -552,7 +552,7 @@ export function ScheduleClient({
           <p className="text-xs text-muted-foreground">Try the Next arrow, or set deadlines when you assign work on the Work Board.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
+        <div className="max-h-[calc(100vh-11rem)] overflow-auto rounded-xl border border-border shadow-sm">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
@@ -565,10 +565,7 @@ export function ScheduleClient({
                   return (
                     <th
                       key={c.id}
-                      className={cn(
-                        "min-w-[12rem] border-b border-l border-border bg-card p-2.5 text-left align-middle",
-                        isMe && "bg-primary/5",
-                      )}
+                      className="sticky top-0 z-10 min-w-[12rem] border-b border-l border-border bg-card p-2.5 text-left align-middle"
                       style={{ borderBottomWidth: 3, borderBottomColor: color }}
                     >
                       <div className="flex items-center gap-2">
