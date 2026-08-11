@@ -24,20 +24,20 @@ const AVAILABILITY: Record<AvailabilityKind, { label: string; emoji: string; box
   day_off: {
     label: "Day off",
     emoji: "😴",
-    box: "border-slate-300 bg-slate-200 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
-    cell: "bg-slate-100 dark:bg-slate-800/50",
+    box: "border-sky-300 bg-sky-200 text-sky-800 dark:border-sky-800 dark:bg-sky-900 dark:text-sky-100",
+    cell: "bg-sky-100 dark:bg-sky-950/40",
   },
   vacation: {
     label: "Vacation",
     emoji: "🌴",
-    box: "border-teal-300 bg-teal-200 text-teal-800 dark:border-teal-800 dark:bg-teal-900 dark:text-teal-100",
-    cell: "bg-teal-100 dark:bg-teal-950/40",
+    box: "border-yellow-300 bg-yellow-200 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
+    cell: "bg-yellow-100 dark:bg-yellow-950/40",
   },
   school: {
     label: "School",
     emoji: "🎓",
-    box: "border-indigo-300 bg-indigo-200 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-900 dark:text-indigo-100",
-    cell: "bg-indigo-100 dark:bg-indigo-950/40",
+    box: "border-purple-300 bg-purple-200 text-purple-800 dark:border-purple-800 dark:bg-purple-900 dark:text-purple-100",
+    cell: "bg-purple-100 dark:bg-purple-950/40",
   },
   absent: {
     label: "Absent",
@@ -162,15 +162,17 @@ function AvailabilityCell({
   if (current) {
     const a = AVAILABILITY[current];
     return (
-      <div className={cn("mb-1 flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-semibold", a.box)}>
-        <span aria-hidden>{a.emoji}</span>
+      <div className={cn("mb-1 flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm font-bold", a.box)}>
+        <span aria-hidden className="text-base">
+          {a.emoji}
+        </span>
         <span className="uppercase tracking-wide">{a.label}</span>
         {isAdmin && (
           <button
             type="button"
             disabled={pending}
             onClick={() => onSet(editorId, date, null)}
-            className="ml-auto text-[11px] opacity-70 hover:opacity-100"
+            className="ml-auto text-sm opacity-70 hover:opacity-100"
             title="Clear"
           >
             ✕
