@@ -356,6 +356,10 @@ export const customOrderItems = pgTable(
     type: deliverableType("type").notNull(),
     status: itemStatus("status").notNull().default("available"),
     assigneeId: uuid("assignee_id").references(() => users.id),
+    // Per-deliverable schedule day on the Project Schedule. Nullable — when unset
+    // the item falls on the order's deadline; set it to place DLP and PPT on
+    // different days.
+    scheduledFor: date("scheduled_for"),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),

@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DELIVERABLE_TYPE_LABELS, STATUS_LABELS, type DeliverableType, type ItemStatus } from "@/lib/constants";
 import {
   setAvailabilityAction,
-  setCotDeadlineAction,
+  setCotItemScheduleAction,
   setCotScheduleNoteAction,
   setDueDateAction,
   setScheduleNoteAction,
@@ -317,17 +317,15 @@ function ScheduleCard({
               className="h-6 w-[7.5rem] rounded border border-input bg-background px-1 text-[11px]"
               aria-label="Deadline"
             />
-            {!isCot && (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => onReschedule(item, null)}
-                className="text-[11px] text-muted-foreground underline hover:text-destructive"
-                title="Remove from schedule (clears the deadline)"
-              >
-                clear
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onReschedule(item, null)}
+              className="text-[11px] text-muted-foreground underline hover:text-destructive"
+              title={isCot ? "Revert to the order deadline" : "Remove from schedule (clears the deadline)"}
+            >
+              clear
+            </button>
             {!noteOpen && (
               <button
                 type="button"
@@ -428,7 +426,7 @@ export function ScheduleClient({
     startTransition(async () => {
       const res =
         item.kind === "cot"
-          ? await setCotDeadlineAction(item.actionRefId, date)
+          ? await setCotItemScheduleAction(item.id, date) // per-deliverable day
           : await setDueDateAction(item.actionRefId, date);
       setBusyId(null);
       if (!res.ok) setError(res.message ?? "Could not update the schedule.");

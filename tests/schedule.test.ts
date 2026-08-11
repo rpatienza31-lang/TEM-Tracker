@@ -76,6 +76,26 @@ describe("project schedule (deadline-driven, catalog + COT)", () => {
     expect(cot.type).toBe("COT_DLP");
   });
 
+  it("lets a COT deliverable sit on its own day, apart from the order deadline", async () => {
+    const [order] = await db
+      .insert(customOrders)
+      .values({ customerName: "Split", orderDate: "2099-03-10", deadline: "2099-03-10" })
+      .returning();
+    const [dlp] = await db
+      .insert(customOrderItems)
+      .values({ orderId: order.id, type: "COT_DLP" })
+      .returning();
+    await db.insert(customOrderItems).values({ orderId: order.id, type: "COT_PPT" });
+
+    // Move only the DLP to the 14th; PPT stays on the order deadline (10th).
+    await db.update(customOrderItems).set({ scheduledFor: "2099-03-14" }).where(eq(customOrderItems.id, dlp.id));
+
+    const rows = await getScheduleItems("2099-03-01", "2099-03-31");
+    const byType = Object.fromEntries(rows.filter((r) => r.kind === "cot").map((r) => [r.type, r.dueDate]));
+    expect(byType.COT_DLP).toBe("2099-03-14");
+    expect(byType.COT_PPT).toBe("2099-03-10");
+  });
+
   it("excludes COT orders when narrowed to a specific term", async () => {
     await makeWorkItem({ termId, subjectId, weekNumber: 1, dueDate: "2099-03-10" });
     await makeCotOrder({ deadline: "2099-03-11" });

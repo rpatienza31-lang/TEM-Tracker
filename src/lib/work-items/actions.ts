@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 
 import { requireRole, requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
-import { customOrders, staffAvailability, workItems } from "@/db/schema";
+import { customOrderItems, customOrders, staffAvailability, workItems } from "@/db/schema";
 import type { AvailabilityKind } from "@/lib/work-items/queries";
 import { deleteWorkItem, transitionWorkItem, type DeleteResult, type TransitionResult } from "@/lib/work-items/transitions";
 
@@ -67,6 +67,23 @@ export async function setCotDeadlineAction(
   if (!value) return { ok: false, message: "A COT order must keep a deadline." };
   if (!ISO_DATE.test(value)) return { ok: false, message: "Invalid date." };
   await db.update(customOrders).set({ deadline: value }).where(eq(customOrders.id, orderId));
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Owner/admin sets (or clears) a single COT deliverable's schedule day, so DLP
+ * and PPT of one order can sit on different days. Clearing it (null) reverts the
+ * item to the order's deadline.
+ */
+export async function setCotItemScheduleAction(
+  itemId: string,
+  date: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  await requireRole("owner", "admin");
+  const value = date && date.trim() ? date.trim() : null;
+  if (value && !ISO_DATE.test(value)) return { ok: false, message: "Invalid date." };
+  await db.update(customOrderItems).set({ scheduledFor: value, updatedAt: new Date() }).where(eq(customOrderItems.id, itemId));
   refresh();
   return { ok: true };
 }

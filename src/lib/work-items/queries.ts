@@ -231,9 +231,11 @@ export async function getScheduleItems(
   // COT orders aren't tied to a term, so only include them in the combined view.
   if (filters.termId) return catalog;
 
+  // A COT item lands on its own scheduled_for when set, otherwise the order deadline.
+  const cotPlanned = sql`coalesce(${customOrderItems.scheduledFor}, ${customOrders.deadline})`;
   const cotConditions: SQL[] = [
-    sql`${customOrders.deadline} >= ${from}`,
-    sql`${customOrders.deadline} <= ${to}`,
+    sql`${cotPlanned} >= ${from}`,
+    sql`${cotPlanned} <= ${to}`,
     sql`${customOrderItems.status} <> 'cancelled'`,
   ];
   if (filters.assigneeId) cotConditions.push(eq(customOrderItems.assigneeId, filters.assigneeId));
@@ -244,7 +246,7 @@ export async function getScheduleItems(
       orderId: customOrders.id,
       type: customOrderItems.type,
       status: customOrderItems.status,
-      deadline: customOrders.deadline,
+      plannedFor: sql<string>`${cotPlanned}`,
       assigneeId: customOrderItems.assigneeId,
       assigneeName: users.fullName,
       customerName: customOrders.customerName,
@@ -258,7 +260,7 @@ export async function getScheduleItems(
     .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
     .leftJoin(users, eq(users.id, customOrderItems.assigneeId))
     .where(and(...cotConditions))
-    .orderBy(asc(customOrders.deadline))
+    .orderBy(asc(sql`${cotPlanned}`))
     .limit(2000);
 
   const cot: ScheduleEntry[] = cotRows.map((r) => {
@@ -269,7 +271,7 @@ export async function getScheduleItems(
       actionRefId: r.orderId,
       type: r.type,
       status: r.status,
-      dueDate: r.deadline as string,
+      dueDate: r.plannedFor,
       assigneeId: r.assigneeId,
       assigneeName: r.assigneeName,
       termName: null,
