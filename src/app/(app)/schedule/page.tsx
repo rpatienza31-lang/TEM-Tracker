@@ -27,7 +27,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // its term so nothing gets missed on a separate tab.
   const termId = sp.term || undefined;
 
-  const days = Math.min(Math.max(Number(sp.days) || 7, 1), 14);
+  const days = Math.min(Math.max(Number(sp.days) || 7, 1), 31);
   const today = formatInTimeZone(new Date(), PH_TZ, "yyyy-MM-dd");
   const from = sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : today;
   const to = addDays(from, days - 1);

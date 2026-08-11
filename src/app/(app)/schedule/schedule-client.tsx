@@ -546,6 +546,16 @@ export function ScheduleClient({
               →
             </button>
           </div>
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            Jump to
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setParam({ from: e.target.value || null })}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              aria-label="Jump to a start date"
+            />
+          </label>
           <select
             className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={days}
@@ -553,6 +563,7 @@ export function ScheduleClient({
           >
             <option value="7">7 days</option>
             <option value="14">14 days</option>
+            <option value="30">30 days</option>
           </select>
           {isAdmin && (
             <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
