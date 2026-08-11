@@ -7,7 +7,7 @@ import { buildPayslipDetail } from "@/lib/payroll/payslip-detail";
 import { PrintButton } from "./print-button";
 import { EmailPayslipButton } from "./email-button";
 
-type SearchParams = { from?: string; to?: string };
+type SearchParams = { from?: string; to?: string; include?: string };
 
 function defaultRange() {
   const to = new Date();
@@ -29,11 +29,15 @@ export default async function PayslipPage({
   const defaults = defaultRange();
   const from = sp.from || defaults.from;
   const to = sp.to || defaults.to;
+  // What to pay this period: both, quota only, or hourly only.
+  const include = sp.include === "quota" || sp.include === "hourly" ? sp.include : "both";
+  const includeQuota = include !== "hourly";
+  const includeHourly = include !== "quota";
 
   const report = await getPayrollReport(from, to);
   const slip = report.payslips.find((p) => p.userId === userId);
-  const quota = report.quotaRows.find((r) => r.userId === userId);
-  const hourly = report.hourlyRows.find((r) => r.userId === userId);
+  const quota = includeQuota ? report.quotaRows.find((r) => r.userId === userId) : undefined;
+  const hourly = includeHourly ? report.hourlyRows.find((r) => r.userId === userId) : undefined;
 
   if (!slip) {
     return (
@@ -50,17 +54,24 @@ export default async function PayslipPage({
 
   const { hourlySessions, quotaItems } = await buildPayslipDetail({ userId, from, to, quota, hourly, slip });
 
+  // Recompute the totals for the chosen components so an hourly-only (or
+  // quota-only) slip pays exactly that.
+  const quotaAmount = includeQuota ? slip.quotaSalary : 0;
+  const hourlyAmount = includeHourly ? slip.hourlySalary : 0;
+  const gross = quotaAmount + hourlyAmount;
+  const net = gross - slip.cashAdvance;
+
   const html = renderPayslipHtml({
     fullName: slip.fullName,
     from,
     to,
     quota: quota
-      ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: slip.quotaSalary }
+      ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: quotaAmount }
       : undefined,
-    hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
-    gross: slip.gross,
+    hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: hourlyAmount } : undefined,
+    gross,
     cashAdvance: slip.cashAdvance,
-    net: slip.net,
+    net,
     hourlySessions,
     quotaItems,
   });

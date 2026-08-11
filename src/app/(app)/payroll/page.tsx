@@ -6,15 +6,14 @@ import { getActiveClockIns, getApprovedTimeLogsForPeriod, getPendingTimeLogs } f
 import { getPayrollReport } from "@/lib/payroll/report";
 import { getPointsBreakdown } from "@/lib/payroll/breakdown";
 import { splitPaidUnpaid } from "@/lib/payroll/paid-split";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PendingApprovals } from "./pending-approvals";
 import { ActiveClockIns } from "./active-clock-ins";
-import { CashAdvanceCell } from "./cash-advance-cell";
 import { QuotaStaffTable } from "./quota-staff-table";
 import { HourlyStaffTable } from "./hourly-staff-table";
+import { PayslipsTable } from "./payslips-table";
 
 type SearchParams = { from?: string; to?: string };
 
@@ -300,74 +299,17 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
           tone="emerald"
           description="Gross combines quota and hourly pay; net is gross minus the editable cash advance (CA)."
         >
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead>Name</TableHead>
-                  <TableHead className="text-right">Quota</TableHead>
-                  <TableHead className="text-right">Hourly</TableHead>
-                  <TableHead className="text-right">Gross</TableHead>
-                  <TableHead>Cash advance (CA)</TableHead>
-                  <TableHead className="text-right">Net pay</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {report.payslips.map((p) => (
-                  <TableRow key={p.userId}>
-                    <TableCell className="font-medium">{p.fullName}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{peso.format(p.quotaSalary)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{peso.format(p.hourlySalary)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{peso.format(p.gross)}</TableCell>
-                    <TableCell>
-                      <CashAdvanceCell userId={p.userId} amount={p.cashAdvance} />
-                    </TableCell>
-                    <TableCell className="text-right font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                      {peso.format(p.net)}
-                    </TableCell>
-                    <TableCell>
-                      <a
-                        href={`/payroll/payslip/${p.userId}?from=${from}&to=${to}`}
-                        target="_blank"
-                        rel="noopener"
-                        className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-accent"
-                      >
-                        <Receipt className="h-3.5 w-3.5" />
-                        Payslip
-                      </a>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {report.payslips.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                      No payslips for this period yet.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-              {report.payslips.length > 0 && (
-                <tfoot>
-                  <TableRow className="border-t-2 border-border bg-muted/40 font-semibold">
-                    <TableCell>Total</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {peso.format(report.payslips.reduce((s, p) => s + p.quotaSalary, 0))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {peso.format(report.payslips.reduce((s, p) => s + p.hourlySalary, 0))}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{peso.format(grossTotal)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{peso.format(caTotal)}</TableCell>
-                    <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400">
-                      {peso.format(report.totalNet)}
-                    </TableCell>
-                    <TableCell />
-                  </TableRow>
-                </tfoot>
-              )}
-            </Table>
-          </div>
+          <PayslipsTable
+            rows={report.payslips.map((p) => ({
+              userId: p.userId,
+              fullName: p.fullName,
+              quotaSalary: p.quotaSalary,
+              hourlySalary: p.hourlySalary,
+              cashAdvance: p.cashAdvance,
+            }))}
+            from={from}
+            to={to}
+          />
         </SectionCard>
       )}
     </div>
