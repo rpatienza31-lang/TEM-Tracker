@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_BADGE_CLASS, STATUS_LABELS, DELIVERABLE_TYPE_LABELS, type ItemStatus, type DeliverableType } from "@/lib/constants";
+import { setCotItemScheduleAction } from "@/lib/work-items/actions";
 import { approveCotAction, assignCotAction, claimCotAction, releaseCotAction, submitCotAction, unapproveCotAction } from "./actions";
 
 type Item = {
@@ -15,6 +16,7 @@ type Item = {
   status: string;
   assigneeName: string | null;
   fileUrl: string | null;
+  scheduledFor: string | null;
 };
 
 export type EditorOption = { id: string; fullName: string };
@@ -24,11 +26,13 @@ export function CotItemControls({
   isAdmin,
   canClaim,
   editors,
+  orderDeadline,
 }: {
   item: Item;
   isAdmin: boolean;
   canClaim: boolean;
   editors: EditorOption[];
+  orderDeadline: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +60,36 @@ export function CotItemControls({
         <a href={item.fileUrl} target="_blank" rel="noopener" className="text-xs text-accent underline">
           View file
         </a>
+      )}
+
+      {isAdmin && (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor={`sched-${item.id}`}>
+            Schedule day {item.scheduledFor ? "" : "(= order deadline)"}
+          </label>
+          <div className="flex items-center gap-1">
+            <Input
+              id={`sched-${item.id}`}
+              type="date"
+              value={item.scheduledFor ?? orderDeadline}
+              disabled={pending}
+              onChange={(e) => run(() => setCotItemScheduleAction(item.id, e.target.value || null))}
+              className="h-8 w-40"
+            />
+            {item.scheduledFor && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={pending}
+                className="h-8 px-2 text-xs"
+                onClick={() => run(() => setCotItemScheduleAction(item.id, null))}
+                title="Revert to the order deadline"
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+        </div>
       )}
 
       <div className="flex flex-wrap items-center gap-2">

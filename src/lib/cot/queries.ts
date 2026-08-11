@@ -79,6 +79,7 @@ export type CotItemView = {
   status: string;
   assigneeName: string | null;
   fileUrl: string | null;
+  scheduledFor: string | null;
 };
 
 export type CotOrderView = {
@@ -114,6 +115,7 @@ async function loadOrders(orderRows: (typeof customOrders.$inferSelect)[]): Prom
       status: customOrderItems.status,
       fileUrl: customOrderItems.fileUrl,
       assigneeName: assignee.fullName,
+      scheduledFor: customOrderItems.scheduledFor,
     })
     .from(customOrderItems)
     .leftJoin(assignee, eq(assignee.id, customOrderItems.assigneeId))
@@ -122,7 +124,14 @@ async function loadOrders(orderRows: (typeof customOrders.$inferSelect)[]): Prom
   const itemsByOrder = new Map<string, CotItemView[]>();
   for (const it of itemRows) {
     const list = itemsByOrder.get(it.orderId) ?? [];
-    list.push({ id: it.id, type: it.type, status: it.status, assigneeName: it.assigneeName ?? null, fileUrl: it.fileUrl });
+    list.push({
+      id: it.id,
+      type: it.type,
+      status: it.status,
+      assigneeName: it.assigneeName ?? null,
+      fileUrl: it.fileUrl,
+      scheduledFor: it.scheduledFor,
+    });
     itemsByOrder.set(it.orderId, list);
   }
 

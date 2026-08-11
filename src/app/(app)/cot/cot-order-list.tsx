@@ -273,7 +273,14 @@ export function CotOrderList({
 
             <div className="grid gap-3 sm:grid-cols-2">
               {o.items.map((item) => (
-                <CotItemControls key={item.id} item={item} isAdmin={isAdmin} canClaim={canClaim} editors={editors} />
+                <CotItemControls
+                  key={item.id}
+                  item={item}
+                  isAdmin={isAdmin}
+                  canClaim={canClaim}
+                  editors={editors}
+                  orderDeadline={o.deadline}
+                />
               ))}
             </div>
           </CardContent>
