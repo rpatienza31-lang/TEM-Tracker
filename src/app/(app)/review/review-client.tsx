@@ -30,6 +30,9 @@ export function ReviewClient({
 }) {
   const [banner, setBanner] = useState<string | null>(null);
   const [selectedUploads, setSelectedUploads] = useState<Set<string>>(new Set());
+  const [selectedReview, setSelectedReview] = useState<Set<string>>(new Set());
+  const [selectedCot, setSelectedCot] = useState<Set<string>>(new Set());
+  const [cotPending, startCotTransition] = useTransition();
   const [q, setQ] = useState("");
   const [grade, setGrade] = useState("");
   const [subject, setSubject] = useState("");
@@ -65,6 +68,36 @@ export function ReviewClient({
       if (checked) next.add(id);
       else next.delete(id);
       return next;
+    });
+  }
+
+  function toggleInSet(setter: typeof setSelectedReview, id: string, checked: boolean) {
+    setter((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  const reviewIds = filteredInReview.map((i) => i.id);
+  const allReviewSelected = reviewIds.length > 0 && reviewIds.every((id) => selectedReview.has(id));
+  const cotIds = cotInReview.map((i) => i.id);
+  const allCotSelected = cotIds.length > 0 && cotIds.every((id) => selectedCot.has(id));
+
+  // COT approvals return a different result shape, so bulk-approve them directly.
+  function approveSelectedCot() {
+    const ids = [...selectedCot];
+    if (ids.length === 0) return;
+    startCotTransition(async () => {
+      const results = await Promise.all(ids.map((id) => approveCotAction(id)));
+      const failed = results.filter((r) => !r.ok).length;
+      setBanner(
+        failed > 0
+          ? `${ids.length - failed} approved, ${failed} failed.`
+          : `Approved ${ids.length} COT deliverable${ids.length > 1 ? "s" : ""}.`,
+      );
+      setSelectedCot(new Set());
     });
   }
 
@@ -123,9 +156,32 @@ export function ReviewClient({
           )}
         </div>
 
+        <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
+          <span className="text-sm text-muted-foreground">{selectedReview.size} selected</span>
+          <BulkActionButton
+            itemIds={[...selectedReview]}
+            label="Approve selected"
+            pendingLabel="Approving…"
+            variant="default"
+            action={approveItemAction}
+            onDone={(m) => {
+              setBanner(m);
+              setSelectedReview(new Set());
+            }}
+          />
+          {selectedReview.size > 0 && (
+            <button className="text-sm text-muted-foreground underline" onClick={() => setSelectedReview(new Set())}>
+              Clear
+            </button>
+          )}
+        </div>
+
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8">
+                <Checkbox checked={allReviewSelected} onCheckedChange={() => setSelectedReview(allReviewSelected ? new Set() : new Set(reviewIds))} aria-label="Select all" />
+              </TableHead>
               <TableHead>Grade</TableHead>
               <TableHead>Subject</TableHead>
               <TableHead>Week</TableHead>
@@ -138,6 +194,9 @@ export function ReviewClient({
           <TableBody>
             {filteredInReview.map((item) => (
               <TableRow key={item.id}>
+                <TableCell>
+                  <Checkbox checked={selectedReview.has(item.id)} onCheckedChange={(c) => toggleInSet(setSelectedReview, item.id, c === true)} />
+                </TableCell>
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
@@ -165,7 +224,7 @@ export function ReviewClient({
             ))}
             {filteredInReview.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   {inReview.length === 0 ? "Nothing waiting on review." : "No items match these filters."}
                 </TableCell>
               </TableRow>
@@ -176,9 +235,25 @@ export function ReviewClient({
 
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold">COT deliverables in review ({cotInReview.length})</h2>
+        {cotInReview.length > 0 && (
+          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
+            <span className="text-sm text-muted-foreground">{selectedCot.size} selected</span>
+            <Button size="sm" disabled={cotPending || selectedCot.size === 0} onClick={approveSelectedCot}>
+              {cotPending ? "Approving…" : "Approve selected"}
+            </Button>
+            {selectedCot.size > 0 && (
+              <button className="text-sm text-muted-foreground underline" onClick={() => setSelectedCot(new Set())}>
+                Clear
+              </button>
+            )}
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8">
+                <Checkbox checked={allCotSelected} onCheckedChange={() => setSelectedCot(allCotSelected ? new Set() : new Set(cotIds))} aria-label="Select all" />
+              </TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Subject / Topic</TableHead>
               <TableHead>Type</TableHead>
@@ -191,6 +266,9 @@ export function ReviewClient({
           <TableBody>
             {cotInReview.map((item) => (
               <TableRow key={item.id}>
+                <TableCell>
+                  <Checkbox checked={selectedCot.has(item.id)} onCheckedChange={(c) => toggleInSet(setSelectedCot, item.id, c === true)} />
+                </TableCell>
                 <TableCell>{item.customerName}</TableCell>
                 <TableCell>{[item.subjectName, item.topic].filter(Boolean).join(" · ") || "—"}</TableCell>
                 <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
@@ -210,7 +288,7 @@ export function ReviewClient({
             ))}
             {cotInReview.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   No COT deliverables awaiting review.
                 </TableCell>
               </TableRow>
