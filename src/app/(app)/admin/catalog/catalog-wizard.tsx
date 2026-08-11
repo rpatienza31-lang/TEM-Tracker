@@ -73,6 +73,20 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
     clearOutput();
   }
 
+  // Bulk-set a whole grade's subject deliverables so the owner doesn't tick each
+  // subject one by one.
+  function bulkGrade(grade: number, dlpOn: boolean, pptOn: boolean) {
+    const all = () => new Set(subjects.map((s) => s.id));
+    setDlpByGrade((s) => ({ ...s, [grade]: dlpOn ? all() : new Set() }));
+    setPptByGrade((s) => ({ ...s, [grade]: pptOn ? all() : new Set() }));
+    clearOutput();
+  }
+
+  function setAllWeeks(on: boolean) {
+    setWeeks(on ? new Set(WEEK_NUMBERS) : new Set());
+    clearOutput();
+  }
+
   function buildInput(): CatalogGeneratorInput | null {
     if (!termId || sortedGrades.length === 0) return null;
     const selectedWeeks = [...weeks].sort((a, b) => a - b);
@@ -166,7 +180,15 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
 
           {sortedGrades.map((grade) => (
             <div key={grade} className="rounded-md border border-border p-3">
-              <p className="mb-3 text-sm font-medium">Grade {grade}</p>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Grade {grade}</p>
+                <div className="flex flex-wrap items-center gap-1">
+                  <BulkBtn onClick={() => bulkGrade(grade, true, true)}>Check all</BulkBtn>
+                  <BulkBtn onClick={() => bulkGrade(grade, false, false)}>Uncheck all</BulkBtn>
+                  <BulkBtn onClick={() => bulkGrade(grade, true, false)}>DLP only</BulkBtn>
+                  <BulkBtn onClick={() => bulkGrade(grade, false, true)}>PPT only</BulkBtn>
+                </div>
+              </div>
               <div className="flex flex-col gap-2">
                 {subjects.map((subject) => (
                   <div key={subject.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border/50 pb-2 text-sm last:border-b-0">
@@ -199,7 +221,11 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
             deadline on the Work Board when you assign it, and that date is what places it on the Project Schedule.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-1">
+            <BulkBtn onClick={() => setAllWeeks(true)}>Check all</BulkBtn>
+            <BulkBtn onClick={() => setAllWeeks(false)}>Uncheck all</BulkBtn>
+          </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             {WEEK_NUMBERS.map((week) => (
               <label key={week} className="flex items-center gap-2 text-sm">
@@ -233,6 +259,19 @@ export function CatalogWizard({ terms, subjects }: { terms: Term[]; subjects: Su
         )}
       </div>
     </div>
+  );
+}
+
+/** Small pill button for the bulk check/uncheck shortcuts. */
+function BulkBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border border-input px-2.5 py-1 text-xs font-medium hover:bg-accent"
+    >
+      {children}
+    </button>
   );
 }
 
