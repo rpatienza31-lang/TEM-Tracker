@@ -3,7 +3,7 @@ import { getPointsTable, getQuotaSize, getWipLimit } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ALL_DELIVERABLE_TYPES, DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
+import { ALL_DELIVERABLE_TYPES, COT_ALIGN_KEYS, COT_ALIGN_LABELS, DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 import { updateSettingsAction } from "./actions";
 
 export default async function SettingsAdminPage() {
@@ -34,6 +34,12 @@ export default async function SettingsAdminPage() {
           <div key={type} className="flex flex-col gap-1">
             <Label htmlFor={`points_${type}`}>{DELIVERABLE_TYPE_LABELS[type]} points</Label>
             <Input id={`points_${type}`} name={`points_${type}`} type="number" step="0.5" defaultValue={points[type]} />
+          </div>
+        ))}
+        {COT_ALIGN_KEYS.map((key) => (
+          <div key={key} className="flex flex-col gap-1">
+            <Label htmlFor={`points_${key}`}>{COT_ALIGN_LABELS[key]} points</Label>
+            <Input id={`points_${key}`} name={`points_${key}`} type="number" step="0.1" defaultValue={points[key]} />
           </div>
         ))}
         <Button type="submit" className="w-fit">

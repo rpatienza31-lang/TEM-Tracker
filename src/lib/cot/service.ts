@@ -1,10 +1,13 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { customOrders, customOrderItems } from "@/db/schema";
 import { awardPointsForCotItem, reverseCotItemPoints } from "@/lib/quota/cycles";
 import { computeDeadline, type OrderType } from "@/lib/cot/deadline";
-import { DELIVERABLE_POINTS } from "@/lib/constants";
+import { cotPointsFor, getPointsTable } from "@/lib/settings";
+
+// COT item statuses that haven't been credited yet, so re-pricing them is safe.
+const UNFINISHED_COT = ["available", "claimed", "in_review", "revision"] as const;
 
 export type CotActor = { id: string; role: "owner" | "admin" | "sales" | "editor" };
 
@@ -78,9 +81,11 @@ export async function createCotOrder(input: CreateCotOrderInput): Promise<CotRes
       })
       .returning({ id: customOrders.id });
 
+    // New orders default to "new" work; points come from the settings table.
+    const points = await getPointsTable(tx);
     await tx.insert(customOrderItems).values([
-      { orderId: order.id, type: "COT_DLP", pointsValue: String(DELIVERABLE_POINTS.COT_DLP) },
-      { orderId: order.id, type: "COT_PPT", pointsValue: String(DELIVERABLE_POINTS.COT_PPT) },
+      { orderId: order.id, type: "COT_DLP", pointsValue: String(cotPointsFor(points, "COT_DLP", "new")) },
+      { orderId: order.id, type: "COT_PPT", pointsValue: String(cotPointsFor(points, "COT_PPT", "new")) },
     ]);
 
     return order.id;
@@ -162,6 +167,24 @@ export async function updateCotOrderDetails(
       ...(patch.workKind ? { workKind: patch.workKind } : {}),
     })
     .where(eq(customOrders.id, orderId));
+
+  // Switching New ⇄ Align re-prices the order's not-yet-credited items with the
+  // matching rate. Already-approved items keep their snapshot (no history rewrite).
+  if (patch.workKind) {
+    const points = await getPointsTable();
+    for (const type of ["COT_DLP", "COT_PPT"] as const) {
+      await db
+        .update(customOrderItems)
+        .set({ pointsValue: String(cotPointsFor(points, type, patch.workKind)), updatedAt: new Date() })
+        .where(
+          and(
+            eq(customOrderItems.orderId, orderId),
+            eq(customOrderItems.type, type),
+            inArray(customOrderItems.status, [...UNFINISHED_COT]),
+          ),
+        );
+    }
+  }
   return { ok: true };
 }
 

@@ -50,6 +50,23 @@ export const DELIVERABLE_POINTS: Record<DeliverableType, number> = {
   COT_PPT: 0.5,
 };
 
+// Extra points keys for COT "align only" work — a COT that only aligns an
+// existing lesson can be worth fewer points than a brand-new one.
+export const COT_ALIGN_KEYS = ["COT_DLP_ALIGN", "COT_PPT_ALIGN"] as const;
+export type PointsKey = DeliverableType | (typeof COT_ALIGN_KEYS)[number];
+
+export const COT_ALIGN_LABELS: Record<(typeof COT_ALIGN_KEYS)[number], string> = {
+  COT_DLP_ALIGN: "COT (DLP) — Align only",
+  COT_PPT_ALIGN: "COT (PPT) — Align only",
+};
+
+// Full points config incl. the align variants (default: same as the new COT).
+export const DEFAULT_POINTS: Record<PointsKey, number> = {
+  ...DELIVERABLE_POINTS,
+  COT_DLP_ALIGN: 0.5,
+  COT_PPT_ALIGN: 0.5,
+};
+
 export const MAX_WEEK_NUMBER = 14;
 export const WEEK_NUMBERS = Array.from({ length: MAX_WEEK_NUMBER }, (_, i) => i + 1);
 
