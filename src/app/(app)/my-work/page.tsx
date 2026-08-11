@@ -10,7 +10,13 @@ import { CotSubmitDialog } from "./cot-submit-dialog";
 import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 
 function isOverdue(dueDate: string | null, status: string) {
-  return !!dueDate && dueDate < new Date().toISOString().slice(0, 10) && status !== "uploaded" && status !== "cancelled";
+  return (
+    !!dueDate &&
+    dueDate < new Date().toISOString().slice(0, 10) &&
+    status !== "approved" &&
+    status !== "uploaded" &&
+    status !== "cancelled"
+  );
 }
 
 export default async function MyWorkPage() {

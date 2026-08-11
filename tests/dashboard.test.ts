@@ -70,4 +70,27 @@ describe("dashboard deadline buckets (spec §6.3)", () => {
     expect(counts.dueSoon).toBe(2); // offset 0 and 2
     expect(counts.atRisk).toBe(3); // offset -2, 0, 2 (all available and within 5 days, past or future)
   });
+
+  it("does not count approved (done) work as overdue or due-soon", async () => {
+    const term = await makeTerm();
+    const subject = await makeSubject();
+    const editor = await makeUser("editor", "Editor One");
+    const admin = { id: (await makeUser("admin", "Admin")).id, role: "admin" } as never;
+
+    // A past-deadline item taken all the way to approved.
+    const overdueApproved = await makeWorkItem({ termId: term.id, subjectId: subject.id, weekNumber: 1, dueDate: isoDate(-3) });
+    await transitionWorkItem({ action: "claim", itemId: overdueApproved.id, actor: editor });
+    await transitionWorkItem({ action: "submit", itemId: overdueApproved.id, actor: editor, fileUrl: "https://x.test/f" });
+    await transitionWorkItem({ action: "approve", itemId: overdueApproved.id, actor: admin });
+
+    // A due-soon item, also approved.
+    const soonApproved = await makeWorkItem({ termId: term.id, subjectId: subject.id, weekNumber: 2, dueDate: isoDate(1) });
+    await transitionWorkItem({ action: "claim", itemId: soonApproved.id, actor: editor });
+    await transitionWorkItem({ action: "submit", itemId: soonApproved.id, actor: editor, fileUrl: "https://x.test/f" });
+    await transitionWorkItem({ action: "approve", itemId: soonApproved.id, actor: admin });
+
+    const counts = await getDashboardCounts(term.id);
+    expect(counts.overdue).toBe(0);
+    expect(counts.dueSoon).toBe(0);
+  });
 });

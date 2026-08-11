@@ -26,6 +26,7 @@ function isOverdue(item: BoardItem) {
   return (
     !!item.dueDate &&
     item.dueDate < new Date().toISOString().slice(0, 10) &&
+    item.status !== "approved" &&
     item.status !== "uploaded" &&
     item.status !== "cancelled"
   );

@@ -104,7 +104,7 @@ function buildConditions(filters: BoardFilters): SQL[] {
   }
   if (filters.availableOnly) conditions.push(eq(workItems.status, "available"));
   if (filters.overdueOnly) {
-    conditions.push(sql`${workItems.dueDate} < current_date and ${workItems.status} not in ('uploaded','cancelled')`);
+    conditions.push(sql`${workItems.dueDate} < current_date and ${workItems.status} not in ('approved','uploaded','cancelled')`);
   }
   return conditions;
 }
@@ -369,12 +369,13 @@ export async function getDashboardCounts(termId?: string) {
   return statusCounts;
 }
 
-// Deadline buckets (spec §6.3) — used by the dashboard.
+// Deadline buckets (spec §6.3) — used by the dashboard. Approved/uploaded/
+// cancelled count as done, so they never show as overdue or due-soon.
 export function overdueCondition() {
-  return sql`${workItems.dueDate} < current_date and ${workItems.status} not in ('uploaded','cancelled')`;
+  return sql`${workItems.dueDate} < current_date and ${workItems.status} not in ('approved','uploaded','cancelled')`;
 }
 export function dueSoonCondition() {
-  return sql`${workItems.dueDate} >= current_date and ${workItems.dueDate} <= current_date + interval '3 days' and ${workItems.status} not in ('uploaded','cancelled')`;
+  return sql`${workItems.dueDate} >= current_date and ${workItems.dueDate} <= current_date + interval '3 days' and ${workItems.status} not in ('approved','uploaded','cancelled')`;
 }
 export function atRiskCondition() {
   return sql`${workItems.status} = 'available' and ${workItems.dueDate} >= current_date and ${workItems.dueDate} <= current_date + interval '5 days'`;
