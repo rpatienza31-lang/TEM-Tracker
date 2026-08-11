@@ -261,11 +261,9 @@ function BreakdownPanel({ row, lines, isOwner }: { row: QuotaRow; lines: Breakdo
             </li>
           )}
           {lines.map((line, i) => (
-            <li
-              key={i}
-              className="flex items-center justify-between gap-3 rounded-md bg-background px-3 py-2 text-sm"
-            >
-              <div className="flex min-w-0 items-center gap-2">
+            <li key={i} className="flex flex-col gap-1 rounded-md bg-background px-3 py-2 text-sm">
+              {/* Controls on their own row so they stay visible no matter how long the title is. */}
+              <div className="flex items-center gap-2">
                 {isOwner && (
                   <Checkbox
                     checked={selected.has(i)}
@@ -274,10 +272,7 @@ function BreakdownPanel({ row, lines, isOwner }: { row: QuotaRow; lines: Breakdo
                   />
                 )}
                 <Badge variant={line.kind === "adjustment" ? "outline" : "secondary"}>{lineLabel(line)}</Badge>
-                <span className="truncate text-muted-foreground">{line.subtitle ?? "—"}</span>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <span className="text-xs text-muted-foreground">{dateFmt.format(new Date(line.dateIso))}</span>
+                <span className="ml-auto text-xs text-muted-foreground">{dateFmt.format(new Date(line.dateIso))}</span>
                 {isOwner && line.kind === "adjustment" ? (
                   <EditableLinePoints kind={line.kind} refId={line.refId} points={line.points} />
                 ) : (
@@ -293,6 +288,7 @@ function BreakdownPanel({ row, lines, isOwner }: { row: QuotaRow; lines: Breakdo
                   />
                 )}
               </div>
+              <span className="break-words pl-6 text-muted-foreground">{line.subtitle ?? "—"}</span>
             </li>
           ))}
         </ul>
@@ -329,7 +325,8 @@ export function QuotaStaffTable({
   const colSpan = isOwner ? 7 : 4;
 
   return (
-    <Table>
+    <div className="overflow-x-auto">
+      <Table>
       <TableHeader>
         <TableRow>
           <TableHead>Name</TableHead>
@@ -417,6 +414,7 @@ export function QuotaStaffTable({
           </TableRow>
         )}
       </TableBody>
-    </Table>
+      </Table>
+    </div>
   );
 }
