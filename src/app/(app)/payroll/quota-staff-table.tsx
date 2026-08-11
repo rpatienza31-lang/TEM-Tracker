@@ -1,16 +1,23 @@
 "use client";
 
-import { Fragment, useActionState, useState } from "react";
+import { Fragment, useActionState, useState, useTransition } from "react";
 
 import { DELIVERABLE_TYPE_LABELS, type DeliverableType } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { RateCell } from "./rate-cell";
 import { AdjustPointsForm } from "./adjust-points-form";
 import { ReconcileForm } from "./reconcile-form";
-import { editLinePointsAction, markQuotaPaidAction, removeLineAction, type SetRateState } from "./actions";
+import {
+  editLinePointsAction,
+  markQuotaPaidAction,
+  removeLineAction,
+  removeLinesAction,
+  type SetRateState,
+} from "./actions";
 
 export type BreakdownLine = {
   kind: "catalog" | "cot" | "adjustment";
@@ -175,6 +182,131 @@ function RemoveLineButton({ kind, refId, label }: { kind: BreakdownLine["kind"];
 }
 
 /**
+ * The expanded breakdown for one editor: the itemized unpaid projects, with
+ * owner tools to correct or remove them. Owners can tick lines and remove many
+ * at once — handy for COT already paid outside the app.
+ */
+function BreakdownPanel({ row, lines, isOwner }: { row: QuotaRow; lines: BreakdownLine[]; isOwner: boolean }) {
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const allSelected = lines.length > 0 && selected.size === lines.length;
+
+  function toggle(i: number, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(i);
+      else next.delete(i);
+      return next;
+    });
+  }
+
+  function removeSelected() {
+    const chosen = [...selected].map((i) => ({ kind: lines[i].kind, refId: lines[i].refId }));
+    if (chosen.length === 0) return;
+    if (!window.confirm(`Remove ${chosen.length} selected line(s)? This deletes the credits.`)) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await removeLinesAction(chosen);
+      setSelected(new Set());
+      if (!res.ok) setError(res.message ?? "Could not remove the lines.");
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Unpaid projects — {row.pointsUnpaid.toFixed(1)} of {row.pointsEarned.toFixed(1)} earned
+          {row.pointsPaid > 0 && (
+            <span className="font-normal normal-case">
+              {" · "}
+              {row.pointsPaid.toFixed(1)} already paid — see{" "}
+              <a href="/payroll/history" className="text-primary underline">
+                Payment history
+              </a>
+            </span>
+          )}
+        </div>
+        {isOwner && lines.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{selected.size} selected</span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending || selected.size === 0}
+              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+              onClick={removeSelected}
+            >
+              {pending ? "Removing…" : "Remove selected"}
+            </Button>
+          </div>
+        )}
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      {lines.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No point-earning items in this period.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {isOwner && (
+            <li className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={() => setSelected(allSelected ? new Set() : new Set(lines.map((_, i) => i)))}
+                aria-label="Select all"
+              />
+              Select all
+            </li>
+          )}
+          {lines.map((line, i) => (
+            <li
+              key={i}
+              className="flex items-center justify-between gap-3 rounded-md bg-background px-3 py-2 text-sm"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                {isOwner && (
+                  <Checkbox
+                    checked={selected.has(i)}
+                    onCheckedChange={(c) => toggle(i, c === true)}
+                    aria-label="Select line"
+                  />
+                )}
+                <Badge variant={line.kind === "adjustment" ? "outline" : "secondary"}>{lineLabel(line)}</Badge>
+                <span className="truncate text-muted-foreground">{line.subtitle ?? "—"}</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="text-xs text-muted-foreground">{dateFmt.format(new Date(line.dateIso))}</span>
+                {isOwner && line.kind === "adjustment" ? (
+                  <EditableLinePoints kind={line.kind} refId={line.refId} points={line.points} />
+                ) : (
+                  <span className={`w-12 text-right tabular-nums ${line.points < 0 ? "text-destructive" : ""}`}>
+                    {signed(line.points)}
+                  </span>
+                )}
+                {isOwner && (
+                  <RemoveLineButton
+                    kind={line.kind}
+                    refId={line.refId}
+                    label={line.subtitle ? `${lineLabel(line)} — ${line.subtitle}` : lineLabel(line)}
+                  />
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {isOwner && (
+        <ReconcileForm editorId={row.userId} cycleNumber={row.cycleNumber} currentPoints={row.pointsUnpaid} />
+      )}
+      {isOwner && <AdjustPointsForm editorId={row.userId} editorName={row.fullName} />}
+    </div>
+  );
+}
+
+/**
  * Quota-staff payroll table. Each "Points earned" cell expands to reveal the
  * itemized projects (catalog + COT approvals) and any manual adjustments that
  * make up the figure. The owner additionally gets an inline form to correct an
@@ -270,70 +402,7 @@ export function QuotaStaffTable({
               {isOpen && (
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
                   <TableCell colSpan={colSpan} className="py-3">
-                    <div className="flex flex-col gap-3">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Unpaid projects — {row.pointsUnpaid.toFixed(1)} of {row.pointsEarned.toFixed(1)} earned
-                        {row.pointsPaid > 0 && (
-                          <span className="font-normal normal-case">
-                            {" · "}
-                            {row.pointsPaid.toFixed(1)} already paid — see{" "}
-                            <a href="/payroll/history" className="text-primary underline">
-                              Payment history
-                            </a>
-                          </span>
-                        )}
-                      </div>
-                      {lines.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No point-earning items in this period.</p>
-                      ) : (
-                        <ul className="flex flex-col gap-1">
-                          {lines.map((line, i) => (
-                            <li
-                              key={i}
-                              className="flex items-center justify-between gap-3 rounded-md bg-background px-3 py-2 text-sm"
-                            >
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Badge variant={line.kind === "adjustment" ? "outline" : "secondary"}>
-                                  {lineLabel(line)}
-                                </Badge>
-                                <span className="truncate text-muted-foreground">{line.subtitle ?? "—"}</span>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-3">
-                                <span className="text-xs text-muted-foreground">
-                                  {dateFmt.format(new Date(line.dateIso))}
-                                </span>
-                                {isOwner && line.kind === "adjustment" ? (
-                                  <EditableLinePoints kind={line.kind} refId={line.refId} points={line.points} />
-                                ) : (
-                                  <span
-                                    className={`w-12 text-right tabular-nums ${
-                                      line.points < 0 ? "text-destructive" : ""
-                                    }`}
-                                  >
-                                    {signed(line.points)}
-                                  </span>
-                                )}
-                                {isOwner && (
-                                  <RemoveLineButton
-                                    kind={line.kind}
-                                    refId={line.refId}
-                                    label={line.subtitle ? `${lineLabel(line)} — ${line.subtitle}` : lineLabel(line)}
-                                  />
-                                )}
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {isOwner && (
-                        <ReconcileForm
-                          editorId={row.userId}
-                          cycleNumber={row.cycleNumber}
-                          currentPoints={row.pointsUnpaid}
-                        />
-                      )}
-                      {isOwner && <AdjustPointsForm editorId={row.userId} editorName={row.fullName} />}
-                    </div>
+                    <BreakdownPanel row={row} lines={lines} isOwner={isOwner} />
                   </TableCell>
                 </TableRow>
               )}

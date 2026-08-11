@@ -264,6 +264,26 @@ export async function removeLineAction(_prev: SetRateState, formData: FormData):
 }
 
 /**
+ * Owner bulk-removes several breakdown lines at once (e.g. COT already paid
+ * outside the app). Each is truly removed — points reversed and source row
+ * dropped. Reports how many were removed.
+ */
+export async function removeLinesAction(
+  lines: { kind: LineKind; refId: string }[],
+): Promise<{ ok: boolean; removed: number; message?: string }> {
+  await requireRole("owner");
+  let removed = 0;
+  for (const line of lines) {
+    if (!LINE_KINDS_FOR_REMOVE.includes(line.kind) || !line.refId) continue;
+    const res = await removeLine({ kind: line.kind, refId: line.refId });
+    if (res.ok) removed++;
+  }
+  revalidatePath("/payroll");
+  revalidatePath("/");
+  return { ok: true, removed };
+}
+
+/**
  * Owner reconciliation: set an editor to the cycle number and current points
  * they are really on, without touching past approvals. The cycle number is a
  * display baseline (cycle_offset); the current points are set with a one-off
