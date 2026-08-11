@@ -18,12 +18,33 @@ import { AvailabilityDialog } from "./availability-dialog";
 type ScheduleItem = ScheduleEntry;
 type Option = { id: string; name: string };
 
-// Staff non-working-day markers shown in a cell.
-const AVAILABILITY: Record<AvailabilityKind, { label: string; emoji: string; box: string }> = {
-  day_off: { label: "Day off", emoji: "😴", box: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" },
-  vacation: { label: "Vacation", emoji: "🌴", box: "border-teal-300 bg-teal-100 text-teal-800 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-200" },
-  school: { label: "School", emoji: "🎓", box: "border-indigo-300 bg-indigo-100 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-200" },
-  absent: { label: "Absent", emoji: "🚫", box: "border-red-300 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200" },
+// Staff non-working-day markers shown in a cell. `box` styles the banner; `cell`
+// tints the whole day cell so it's obvious at a glance.
+const AVAILABILITY: Record<AvailabilityKind, { label: string; emoji: string; box: string; cell: string }> = {
+  day_off: {
+    label: "Day off",
+    emoji: "😴",
+    box: "border-slate-300 bg-slate-200 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
+    cell: "bg-slate-100 dark:bg-slate-800/50",
+  },
+  vacation: {
+    label: "Vacation",
+    emoji: "🌴",
+    box: "border-teal-300 bg-teal-200 text-teal-800 dark:border-teal-800 dark:bg-teal-900 dark:text-teal-100",
+    cell: "bg-teal-100 dark:bg-teal-950/40",
+  },
+  school: {
+    label: "School",
+    emoji: "🎓",
+    box: "border-indigo-300 bg-indigo-200 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-900 dark:text-indigo-100",
+    cell: "bg-indigo-100 dark:bg-indigo-950/40",
+  },
+  absent: {
+    label: "Absent",
+    emoji: "🚫",
+    box: "border-red-300 bg-red-200 text-red-800 dark:border-red-800 dark:bg-red-900 dark:text-red-100",
+    cell: "bg-red-100 dark:bg-red-950/40",
+  },
 };
 const AVAILABILITY_KINDS = Object.keys(AVAILABILITY) as AvailabilityKind[];
 
@@ -645,6 +666,8 @@ export function ScheduleClient({
                             "group border-b border-l border-border p-2 align-top",
                             weekend && "bg-muted/20",
                             isMe && "bg-primary/[0.03]",
+                            // Whole-cell tint when the staffer is off this day — wins over the above.
+                            avail && AVAILABILITY[avail].cell,
                           )}
                           style={{ borderLeftColor: `${color}33` }}
                         >
