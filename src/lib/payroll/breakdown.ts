@@ -8,6 +8,7 @@ import {
   quotaCycles,
   quotaCycleItems,
   subjects,
+  terms,
   workItems,
 } from "@/db/schema";
 import type { DeliverableType } from "@/lib/constants";
@@ -47,6 +48,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
         type: workItems.type,
         grade: workItems.grade,
         subjectName: subjects.name,
+        termName: terms.name,
         weekNumber: workItems.weekNumber,
         points: quotaCycleItems.points,
         at: quotaCycleItems.awardedAt,
@@ -55,6 +57,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
       .innerJoin(quotaCycles, eq(quotaCycles.id, quotaCycleItems.cycleId))
       .innerJoin(workItems, eq(workItems.id, quotaCycleItems.workItemId))
       .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
+      .innerJoin(terms, eq(terms.id, workItems.termId))
       .where(between(quotaCycleItems.awardedAt, from, to)),
     db
       .select({
@@ -103,7 +106,7 @@ export async function getPointsBreakdown(from: string, to: string): Promise<Map<
       refId: r.refId,
       type: r.type,
       title: r.type,
-      subtitle: `Grade ${r.grade} · ${r.subjectName} · Week ${r.weekNumber}`,
+      subtitle: `${r.termName} · Grade ${r.grade} · ${r.subjectName} · Week ${r.weekNumber}`,
       points: Number(r.points),
       dateIso: (r.at as Date).toISOString(),
     });
