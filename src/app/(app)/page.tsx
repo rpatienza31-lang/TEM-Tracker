@@ -102,7 +102,11 @@ export default async function DashboardPage() {
     getMyWorkItems(user.id, ["revision"]),
     getMyCotItems(user.id, ["claimed", "in_review", "revision"]),
   ]);
-  const leaderboard = [...stats].sort((a, b) => b.pointsUnpaid - a.pointsUnpaid).slice(0, 8);
+  // Rank by cycle first (whoever is on the most cycles leads), then by unpaid
+  // points within the same cycle.
+  const leaderboard = [...stats]
+    .sort((a, b) => b.ledgerCycleNumber - a.ledgerCycleNumber || b.pointsUnpaid - a.pointsUnpaid)
+    .slice(0, 8);
   const myAssignedTotal = myClaimed.length + mySubmitted.length + myRevisions.length + myCot.length;
 
   return (
@@ -152,7 +156,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionTitle icon={Trophy}>Editor leaderboard · unpaid points this cycle</SectionTitle>
+        <SectionTitle icon={Trophy}>Editor leaderboard · by cycle, then unpaid points</SectionTitle>
         <Card>
           <CardContent className="flex flex-col divide-y divide-border p-0">
             {leaderboard.map((row, i) => (
