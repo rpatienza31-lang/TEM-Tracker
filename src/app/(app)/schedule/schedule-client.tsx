@@ -237,9 +237,23 @@ function ScheduleCard({
       <span className={cn("absolute inset-y-0 left-0 w-1.5", status.bar)} />
       <div className="flex flex-wrap items-center gap-1">
         {isCot ? (
-          <span className="rounded bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-            COT
-          </span>
+          <>
+            <span className="rounded bg-purple-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              COT
+            </span>
+            {item.cotWorkKind && (
+              <span
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                  item.cotWorkKind === "align"
+                    ? "bg-orange-500 text-white"
+                    : "bg-emerald-600 text-white",
+                )}
+              >
+                {item.cotWorkKind === "align" ? "Align" : "New"}
+              </span>
+            )}
+          </>
         ) : (
           <span className="rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-foreground/80">
             {item.termName}

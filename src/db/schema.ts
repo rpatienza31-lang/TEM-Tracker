@@ -31,6 +31,8 @@ export const itemStatus = pgEnum("item_status", [
 export const notificationType = pgEnum("notification_type", ["revision_requested", "approved", "unapproved"]);
 export const orderType = pgEnum("order_type", ["rush", "regular"]);
 export const availabilityKind = pgEnum("availability_kind", ["day_off", "vacation", "school", "absent"]);
+// Whether a COT order is brand-new work or an alignment of an existing lesson.
+export const cotWorkKind = pgEnum("cot_work_kind", ["new", "align"]);
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -335,6 +337,8 @@ export const customOrders = pgTable("custom_orders", {
   notes: text("notes"),
   payment: numeric("payment", { precision: 10, scale: 2 }),
   orderType: orderType("order_type").notNull().default("regular"),
+  // New work vs. aligning an existing lesson — shown colour-coded to editors.
+  workKind: cotWorkKind("work_kind").notNull().default("new"),
   orderDate: date("order_date").notNull(),
   deadline: date("deadline").notNull(),
   // Free-text note shown on the Project Schedule card for this order.

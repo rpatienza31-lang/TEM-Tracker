@@ -93,6 +93,7 @@ export type CotOrderView = {
   notes: string | null;
   payment: string | null;
   orderType: "rush" | "regular";
+  workKind: "new" | "align";
   orderDate: string;
   deadline: string;
   priority: PriorityLevel;
@@ -140,6 +141,7 @@ async function loadOrders(orderRows: (typeof customOrders.$inferSelect)[]): Prom
       notes: o.notes,
       payment: o.payment,
       orderType: o.orderType,
+      workKind: o.workKind,
       orderDate: o.orderDate,
       deadline: o.deadline,
       priority: level,

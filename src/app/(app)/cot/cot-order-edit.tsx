@@ -10,10 +10,12 @@ import { deleteCotOrderAction, setCotOrderTypeAction, updateCotOrderAction } fro
 type Order = {
   id: string;
   orderType: "rush" | "regular";
+  workKind: "new" | "align";
   grade: number | null;
   subjectName: string | null;
   topic: string | null;
   lessonFor: string | null;
+  deadline: string;
   customerName: string;
 };
 
@@ -25,6 +27,8 @@ export function CotOrderEdit({ order }: { order: Order }) {
   const [subject, setSubject] = useState(order.subjectName ?? "");
   const [topic, setTopic] = useState(order.topic ?? "");
   const [lessonFor, setLessonFor] = useState(order.lessonFor ?? "");
+  const [deadline, setDeadline] = useState(order.deadline);
+  const [workKind, setWorkKind] = useState<"new" | "align">(order.workKind);
 
   const other = order.orderType === "rush" ? "regular" : "rush";
 
@@ -118,6 +122,32 @@ export function CotOrderEdit({ order }: { order: Order }) {
               <option value="Demo">Demo</option>
             </select>
           </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs" htmlFor={`workkind-${order.id}`}>
+              Work
+            </Label>
+            <select
+              id={`workkind-${order.id}`}
+              value={workKind}
+              onChange={(e) => setWorkKind(e.target.value as "new" | "align")}
+              className="h-8 w-28 rounded-md border border-input bg-background px-2 text-sm"
+            >
+              <option value="new">New</option>
+              <option value="align">Align only</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs" htmlFor={`deadline-${order.id}`}>
+              Deadline (schedule)
+            </Label>
+            <Input
+              id={`deadline-${order.id}`}
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className="h-8 w-40"
+            />
+          </div>
           <Button
             size="sm"
             disabled={pending}
@@ -129,6 +159,8 @@ export function CotOrderEdit({ order }: { order: Order }) {
                   subject.trim() || null,
                   topic.trim() || null,
                   lessonFor.trim() || null,
+                  deadline || null,
+                  workKind,
                 ),
               )
             }

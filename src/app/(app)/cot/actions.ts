@@ -53,12 +53,20 @@ export async function updateCotOrderAction(
   subjectName: string | null,
   topic: string | null,
   lessonFor: string | null,
+  deadline?: string | null,
+  workKind?: "new" | "align",
 ): Promise<CotResult> {
   const user = await requireUser();
-  const result = await updateCotOrderDetails(orderId, { grade, subjectName, topic, lessonFor }, actorOf(user));
+  const result = await updateCotOrderDetails(
+    orderId,
+    { grade, subjectName, topic, lessonFor, deadline, workKind },
+    actorOf(user),
+  );
   if (result.ok) {
     revalidatePath("/cot");
     revalidatePath("/cot/library");
+    // The deadline drives the Project Schedule.
+    revalidatePath("/schedule");
   }
   return result;
 }

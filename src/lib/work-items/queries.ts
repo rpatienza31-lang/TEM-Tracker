@@ -164,6 +164,7 @@ export type ScheduleEntry = {
   title: string; // catalog: subject; cot: customer name
   subtitle: string; // catalog: "Grade X · Week Y"; cot: subject · topic
   scheduleNote: string | null;
+  cotWorkKind: "new" | "align" | null; // COT only: brand-new work vs. alignment
 };
 
 /**
@@ -224,6 +225,7 @@ export async function getScheduleItems(
     title: r.subjectCode || r.subjectName,
     subtitle: `Grade ${r.grade} · Week ${r.weekNumber}`,
     scheduleNote: r.scheduleNote,
+    cotWorkKind: null,
   }));
 
   // COT orders aren't tied to a term, so only include them in the combined view.
@@ -250,6 +252,7 @@ export async function getScheduleItems(
       subjectName: customOrders.subjectName,
       topic: customOrders.topic,
       scheduleNote: customOrders.scheduleNote,
+      workKind: customOrders.workKind,
     })
     .from(customOrderItems)
     .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
@@ -273,6 +276,7 @@ export async function getScheduleItems(
       title: r.customerName,
       subtitle: parts.length ? parts.join(" · ") : "Custom order",
       scheduleNote: r.scheduleNote,
+      cotWorkKind: r.workKind,
     };
   });
 

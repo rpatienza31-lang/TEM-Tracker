@@ -135,14 +135,32 @@ export async function setCotOrderType(orderId: string, type: OrderType, actor: C
 /** Owner/admin edits an order's grade, subject, topic, and lesson-for (customers sometimes revise). */
 export async function updateCotOrderDetails(
   orderId: string,
-  patch: { grade: number | null; subjectName: string | null; topic: string | null; lessonFor: string | null },
+  patch: {
+    grade: number | null;
+    subjectName: string | null;
+    topic: string | null;
+    lessonFor: string | null;
+    deadline?: string | null;
+    workKind?: "new" | "align";
+  },
   actor: CotActor,
 ): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can edit an order." };
+  if (patch.deadline && !/^\d{4}-\d{2}-\d{2}$/.test(patch.deadline)) {
+    return { ok: false, message: "Invalid deadline." };
+  }
 
   await db
     .update(customOrders)
-    .set({ grade: patch.grade, subjectName: patch.subjectName, topic: patch.topic, lessonFor: patch.lessonFor })
+    .set({
+      grade: patch.grade,
+      subjectName: patch.subjectName,
+      topic: patch.topic,
+      lessonFor: patch.lessonFor,
+      // Only overwrite the deadline / work kind when provided.
+      ...(patch.deadline ? { deadline: patch.deadline } : {}),
+      ...(patch.workKind ? { workKind: patch.workKind } : {}),
+    })
     .where(eq(customOrders.id, orderId));
   return { ok: true };
 }

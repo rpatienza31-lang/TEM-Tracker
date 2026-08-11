@@ -180,6 +180,15 @@ export function CotOrderList({
                 <Badge variant="outline" className="uppercase">
                   {o.orderType}
                 </Badge>
+                <Badge
+                  className={
+                    o.workKind === "align"
+                      ? "bg-orange-500 text-white"
+                      : "bg-emerald-600 text-white"
+                  }
+                >
+                  {o.workKind === "align" ? "Align only" : "New"}
+                </Badge>
                 {o.lessonFor && (
                   <Badge
                     className={
@@ -251,10 +260,12 @@ export function CotOrderList({
                 order={{
                   id: o.id,
                   orderType: o.orderType,
+                  workKind: o.workKind,
                   grade: o.grade,
                   subjectName: o.subjectName,
                   topic: o.topic,
                   lessonFor: o.lessonFor,
+                  deadline: o.deadline,
                   customerName: o.customerName,
                 }}
               />
