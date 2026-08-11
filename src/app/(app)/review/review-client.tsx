@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { RequestRevisionDialog } from "@/components/work-items/request-revision-dialog";
@@ -33,7 +32,7 @@ export function ReviewClient({
   const [selectedReview, setSelectedReview] = useState<Set<string>>(new Set());
   const [selectedCot, setSelectedCot] = useState<Set<string>>(new Set());
   const [cotPending, startCotTransition] = useTransition();
-  const [q, setQ] = useState("");
+  const [editor, setEditor] = useState("");
   const [grade, setGrade] = useState("");
   const [subject, setSubject] = useState("");
   const [week, setWeek] = useState("");
@@ -42,25 +41,35 @@ export function ReviewClient({
 
   const options = useMemo(
     () => ({
+      // Editor list spans both tables so the filter works across the whole queue.
+      editors: uniqueSorted(
+        [...inReview.map((i) => i.assigneeName), ...cotInReview.map((i) => i.assigneeName)].filter(
+          (n): n is string => !!n,
+        ),
+      ),
       grades: uniqueSorted(inReview.map((i) => String(i.grade))),
       subjects: uniqueSorted(inReview.map((i) => i.subjectName)),
       weeks: uniqueSorted(inReview.map((i) => String(i.weekNumber))),
       types: uniqueSorted(inReview.map((i) => i.type)),
     }),
-    [inReview],
+    [inReview, cotInReview],
   );
 
   const filteredInReview = useMemo(() => {
-    const query = q.trim().toLowerCase();
     return inReview.filter(
       (i) =>
-        (!query || (i.assigneeName ?? "").toLowerCase().includes(query)) &&
+        (!editor || i.assigneeName === editor) &&
         (!grade || String(i.grade) === grade) &&
         (!subject || i.subjectName === subject) &&
         (!week || String(i.weekNumber) === week) &&
         (!type || i.type === type),
     );
-  }, [inReview, q, grade, subject, week, type]);
+  }, [inReview, editor, grade, subject, week, type]);
+
+  const filteredCot = useMemo(
+    () => cotInReview.filter((i) => (!editor || i.assigneeName === editor) && (!type || i.type === type)),
+    [cotInReview, editor, type],
+  );
 
   function toggleUpload(id: string, checked: boolean) {
     setSelectedUploads((prev) => {
@@ -82,7 +91,7 @@ export function ReviewClient({
 
   const reviewIds = filteredInReview.map((i) => i.id);
   const allReviewSelected = reviewIds.length > 0 && reviewIds.every((id) => selectedReview.has(id));
-  const cotIds = cotInReview.map((i) => i.id);
+  const cotIds = filteredCot.map((i) => i.id);
   const allCotSelected = cotIds.length > 0 && cotIds.every((id) => selectedCot.has(id));
 
   // COT approvals return a different result shape, so bulk-approve them directly.
@@ -124,12 +133,7 @@ export function ReviewClient({
         </h2>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Input
-            placeholder="Search staff name…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="h-9 w-48"
-          />
+          <FilterSelect label="Editor" allLabel="All editors" value={editor} onChange={setEditor} options={options.editors} />
           <FilterSelect label="Grade" value={grade} onChange={setGrade} options={options.grades} render={(g) => `Grade ${g}`} />
           <FilterSelect label="Subject" value={subject} onChange={setSubject} options={options.subjects} />
           <FilterSelect label="Week" value={week} onChange={setWeek} options={options.weeks} render={(w) => `Wk ${w}`} />
@@ -140,11 +144,11 @@ export function ReviewClient({
             options={options.types}
             render={(t) => DELIVERABLE_TYPE_LABELS[t as keyof typeof DELIVERABLE_TYPE_LABELS] ?? t}
           />
-          {(q || grade || subject || week || type) && (
+          {(editor || grade || subject || week || type) && (
             <button
               className="text-sm text-muted-foreground underline"
               onClick={() => {
-                setQ("");
+                setEditor("");
                 setGrade("");
                 setSubject("");
                 setWeek("");
@@ -234,8 +238,11 @@ export function ReviewClient({
       </section>
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold">COT deliverables in review ({cotInReview.length})</h2>
-        {cotInReview.length > 0 && (
+        <h2 className="text-lg font-semibold">
+          COT deliverables in review ({filteredCot.length}
+          {filteredCot.length !== cotInReview.length ? ` of ${cotInReview.length}` : ""})
+        </h2>
+        {filteredCot.length > 0 && (
           <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
             <span className="text-sm text-muted-foreground">{selectedCot.size} selected</span>
             <Button size="sm" disabled={cotPending || selectedCot.size === 0} onClick={approveSelectedCot}>
@@ -264,7 +271,7 @@ export function ReviewClient({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {cotInReview.map((item) => (
+            {filteredCot.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>
                   <Checkbox checked={selectedCot.has(item.id)} onCheckedChange={(c) => toggleInSet(setSelectedCot, item.id, c === true)} />
@@ -286,10 +293,10 @@ export function ReviewClient({
                 </TableCell>
               </TableRow>
             ))}
-            {cotInReview.length === 0 && (
+            {filteredCot.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-muted-foreground">
-                  No COT deliverables awaiting review.
+                  {cotInReview.length === 0 ? "No COT deliverables awaiting review." : "No COT items match these filters."}
                 </TableCell>
               </TableRow>
             )}
@@ -388,12 +395,14 @@ function CotReviewActions({ itemId, onDone }: { itemId: string; onDone: (m: stri
 
 function FilterSelect({
   label,
+  allLabel,
   value,
   onChange,
   options,
   render,
 }: {
   label: string;
+  allLabel?: string;
   value: string;
   onChange: (v: string) => void;
   options: string[];
@@ -406,7 +415,7 @@ function FilterSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
     >
-      <option value="">All {label.toLowerCase()}</option>
+      <option value="">{allLabel ?? `All ${label.toLowerCase()}`}</option>
       {options.map((o) => (
         <option key={o} value={o}>
           {render ? render(o) : o}
