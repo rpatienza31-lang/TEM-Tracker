@@ -90,6 +90,15 @@ export function CotOrderList({
   const [filter, setFilter] = useState<Filter>("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "rush" | "regular">("all");
   const [dateFilter, setDateFilter] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const counts = useMemo(() => {
     const c = { total: orders.length, overdue: 0, due2: 0, alert: 0, unclaimed: 0, rush: 0, regular: 0 };
@@ -222,121 +231,149 @@ export function CotOrderList({
         </p>
       )}
 
-      {filtered.map((o) => (
-        <Card key={o.id} className={`border-l-4 ${PRIORITY_CLASS[o.priority]}`}>
-          <CardHeader className="pb-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold">{o.customerName}</span>
-                <Badge variant="outline" className="uppercase">
-                  {o.orderType}
-                </Badge>
-                <Badge
-                  className={
-                    o.workKind === "align"
-                      ? "bg-orange-500 text-white"
-                      : "bg-emerald-600 text-white"
-                  }
-                >
-                  {o.workKind === "align" ? "Align only" : "New"}
-                </Badge>
-                {o.lessonFor && (
-                  <Badge
-                    className={
-                      o.lessonFor.toLowerCase() === "demo"
-                        ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-                        : "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
-                    }
-                  >
-                    {o.lessonFor}
+      {filtered.map((o) => {
+        const isOpen = expanded.has(o.id);
+        return (
+          <Card key={o.id} className={`border-l-4 ${PRIORITY_CLASS[o.priority]}`}>
+            {/* Collapsed summary row — click to expand full details */}
+            <CardHeader
+              role="button"
+              tabIndex={0}
+              aria-expanded={isOpen}
+              onClick={() => toggleExpanded(o.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  toggleExpanded(o.id);
+                }
+              }}
+              className="cursor-pointer select-none pb-2"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground transition-transform" aria-hidden>
+                    {isOpen ? "▾" : "▸"}
+                  </span>
+                  <span className={`font-semibold ${isOpen ? "text-xl" : "text-base"}`}>{o.customerName}</span>
+                  <Badge variant="outline" className="uppercase">
+                    {o.orderType}
                   </Badge>
+                  <Badge className={o.workKind === "align" ? "bg-orange-500 text-white" : "bg-emerald-600 text-white"}>
+                    {o.workKind === "align" ? "Align only" : "New"}
+                  </Badge>
+                  {o.lessonFor && (
+                    <Badge
+                      className={
+                        o.lessonFor.toLowerCase() === "demo"
+                          ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                          : "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+                      }
+                    >
+                      {o.lessonFor}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge className={PRIORITY_BADGE[o.priority]}>{daysLabel(o.priority, o.daysLeft)}</Badge>
+                  <span className="text-xs text-muted-foreground">Deadline {o.deadline}</span>
+                </div>
+              </div>
+              <p className={`text-muted-foreground ${isOpen ? "text-base" : "text-sm"}`}>
+                {[o.grade ? `Grade ${o.grade}` : null, o.subjectName, o.topic].filter(Boolean).join(" · ") || "—"}
+              </p>
+              {/* Who's on it — at a glance, without expanding. */}
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {o.items.map((it) => (
+                  <Badge
+                    key={it.id}
+                    variant={it.assigneeName ? "secondary" : "outline"}
+                    className={it.assigneeName ? "font-normal" : "border-dashed font-normal text-muted-foreground"}
+                  >
+                    {shortType(it.type)}: {it.assigneeName ?? "Unassigned"}
+                  </Badge>
+                ))}
+              </div>
+            </CardHeader>
+
+            {isOpen && (
+              <CardContent className="flex flex-col gap-4">
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-base sm:grid-cols-2">
+                  {o.competency && (
+                    <div>
+                      <dt className="text-sm text-muted-foreground">Competency</dt>
+                      <dd className="font-medium">{o.competency}</dd>
+                    </div>
+                  )}
+                  {o.indicator && (
+                    <div>
+                      <dt className="text-sm text-muted-foreground">Indicator</dt>
+                      <dd className="font-medium">{o.indicator}</dd>
+                    </div>
+                  )}
+                  {o.lessonFor && (
+                    <div>
+                      <dt className="text-sm text-muted-foreground">Lesson For</dt>
+                      <dd className="font-medium">{o.lessonFor}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Ordered</dt>
+                    <dd className="font-medium">{o.orderDate}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Deadline</dt>
+                    <dd className="font-medium">{o.deadline}</dd>
+                  </div>
+                  {isOwner && o.payment && (
+                    <div>
+                      <dt className="text-sm text-muted-foreground">Payment</dt>
+                      <dd className="font-medium">{peso.format(Number(o.payment))}</dd>
+                    </div>
+                  )}
+                </dl>
+                {o.notes && (
+                  <div>
+                    <dt className="text-sm text-muted-foreground">Note</dt>
+                    <dd className="whitespace-pre-line text-base">{o.notes}</dd>
+                  </div>
                 )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge className={PRIORITY_BADGE[o.priority]}>{daysLabel(o.priority, o.daysLeft)}</Badge>
-                <span className="text-xs text-muted-foreground">Deadline {o.deadline}</span>
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {[o.grade ? `Grade ${o.grade}` : null, o.subjectName, o.topic].filter(Boolean).join(" · ") || "—"}
-            </p>
-            {/* Who's on it — at a glance, without scrolling to the item controls. */}
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-              {o.items.map((it) => (
-                <Badge
-                  key={it.id}
-                  variant={it.assigneeName ? "secondary" : "outline"}
-                  className={it.assigneeName ? "font-normal" : "border-dashed font-normal text-muted-foreground"}
-                >
-                  {shortType(it.type)}: {it.assigneeName ?? "Unassigned"}
-                </Badge>
-              ))}
-            </div>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
-              {o.competency && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Competency</dt>
-                  <dd>{o.competency}</dd>
-                </div>
-              )}
-              {o.indicator && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Indicator</dt>
-                  <dd>{o.indicator}</dd>
-                </div>
-              )}
-              {o.lessonFor && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Lesson For</dt>
-                  <dd>{o.lessonFor}</dd>
-                </div>
-              )}
-              <div>
-                <dt className="text-xs text-muted-foreground">Ordered</dt>
-                <dd>{o.orderDate}</dd>
-              </div>
-              {isOwner && o.payment && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Payment</dt>
-                  <dd>{peso.format(Number(o.payment))}</dd>
-                </div>
-              )}
-            </dl>
-            {o.notes && <p className="text-sm text-muted-foreground">Note: {o.notes}</p>}
 
-            {isAdmin && (
-              <CotOrderEdit
-                order={{
-                  id: o.id,
-                  orderType: o.orderType,
-                  workKind: o.workKind,
-                  grade: o.grade,
-                  subjectName: o.subjectName,
-                  topic: o.topic,
-                  lessonFor: o.lessonFor,
-                  deadline: o.deadline,
-                  customerName: o.customerName,
-                }}
-              />
+                {isAdmin && (
+                  <CotOrderEdit
+                    order={{
+                      id: o.id,
+                      orderType: o.orderType,
+                      workKind: o.workKind,
+                      grade: o.grade,
+                      subjectName: o.subjectName,
+                      topic: o.topic,
+                      lessonFor: o.lessonFor,
+                      deadline: o.deadline,
+                      customerName: o.customerName,
+                    }}
+                  />
+                )}
+
+                <div>
+                  <p className="mb-2 text-sm font-medium text-muted-foreground">Editors &amp; deadlines</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {o.items.map((item) => (
+                      <CotItemControls
+                        key={item.id}
+                        item={item}
+                        isAdmin={isAdmin}
+                        canClaim={canClaim}
+                        editors={editors}
+                        orderDeadline={o.deadline}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
             )}
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              {o.items.map((item) => (
-                <CotItemControls
-                  key={item.id}
-                  item={item}
-                  isAdmin={isAdmin}
-                  canClaim={canClaim}
-                  editors={editors}
-                  orderDeadline={o.deadline}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+          </Card>
+        );
+      })}
     </div>
   );
 }
