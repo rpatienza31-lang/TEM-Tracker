@@ -393,6 +393,19 @@ export function ScheduleClient({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showAllStaff, setShowAllStaff] = useState(false);
+  const [q, setQ] = useState("");
+
+  // Text search across every card — handy for finding one COT in a long
+  // Unassigned column. Matches customer/subject, grade/week, term and type.
+  const filteredItems = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return items;
+    return items.filter((it) =>
+      [it.title, it.subtitle, it.termName, DELIVERABLE_TYPE_LABELS[it.type], it.kind === "cot" ? "cot" : ""]
+        .filter(Boolean)
+        .some((s) => String(s).toLowerCase().includes(query)),
+    );
+  }, [items, q]);
 
   // key `${editorId}|${date}` -> kind
   const availByKey = useMemo(() => {
@@ -457,7 +470,7 @@ export function ScheduleClient({
 
     let hasUnassigned = false;
     const present = new Set<string>();
-    for (const it of items) {
+    for (const it of filteredItems) {
       if (it.assigneeId) present.add(it.assigneeId);
       else hasUnassigned = true;
     }
@@ -473,12 +486,12 @@ export function ScheduleClient({
       });
     if (hasUnassigned) cols.push({ id: UNASSIGNED, name: "Unassigned" });
     return cols;
-  }, [items, availability, allStaff, showAllStaff, currentUserId]);
+  }, [items, filteredItems, availability, allStaff, showAllStaff, currentUserId]);
 
   // date -> column -> items
   const grid = useMemo(() => {
     const m = new Map<string, Map<string, ScheduleItem[]>>();
-    for (const it of items) {
+    for (const it of filteredItems) {
       const col = it.assigneeId ?? UNASSIGNED;
       const byCol = m.get(it.dueDate) ?? new Map<string, ScheduleItem[]>();
       const list = byCol.get(col) ?? [];
@@ -487,16 +500,16 @@ export function ScheduleClient({
       m.set(it.dueDate, byCol);
     }
     return m;
-  }, [items]);
+  }, [filteredItems]);
 
   const perColumnCount = useMemo(() => {
     const m = new Map<string, number>();
-    for (const it of items) {
+    for (const it of filteredItems) {
       const col = it.assigneeId ?? UNASSIGNED;
       m.set(col, (m.get(col) ?? 0) + 1);
     }
     return m;
-  }, [items]);
+  }, [filteredItems]);
 
   const rangeLabel = `${rangeFmt.format(new Date(`${from}T00:00:00`))} – ${rangeFmt.format(new Date(`${dates[dates.length - 1]}T00:00:00`))}`;
 
@@ -577,10 +590,33 @@ export function ScheduleClient({
             </label>
           )}
           {isAdmin && <AvailabilityDialog allStaff={allStaff} defaultFrom={from} />}
+          <div className="relative">
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search customer, subject…"
+              className="h-9 w-56 rounded-md border border-input bg-background pl-2 pr-6 text-sm"
+              aria-label="Search schedule"
+            />
+            {q && (
+              <button
+                type="button"
+                onClick={() => setQ("")}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="text-sm font-medium text-muted-foreground">{rangeLabel}</div>
+      <div className="text-sm font-medium text-muted-foreground">
+        {rangeLabel}
+        {q && <span className="ml-2 text-primary">· filtered by “{q}”</span>}
+      </div>
 
       {error && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
