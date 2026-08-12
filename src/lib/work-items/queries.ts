@@ -1,4 +1,5 @@
-import { and, asc, eq, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, ne, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db/client";
 import { customOrderItems, customOrders, staffAvailability, workItems, subjects, users, terms, termOfferings } from "@/db/schema";
@@ -165,6 +166,10 @@ export type ScheduleEntry = {
   subtitle: string; // catalog: "Grade X · Week Y"; cot: subject · topic
   scheduleNote: string | null;
   cotWorkKind: "new" | "align" | null; // COT only: brand-new work vs. alignment
+  // The paired deliverable (DLP↔PPT) so, e.g., a PPT editor sees who has the
+  // DLP file. Null when there is no counterpart.
+  counterpartType: DeliverableType | null;
+  counterpartAssigneeName: string | null;
 };
 
 /**
@@ -189,6 +194,11 @@ export async function getScheduleItems(
   if (filters.termId) catalogConditions.push(eq(workItems.termId, filters.termId));
   if (filters.assigneeId) catalogConditions.push(eq(workItems.assigneeId, filters.assigneeId));
 
+  // The paired deliverable for the same lesson (same term/grade/subject/week,
+  // opposite type) — so a PPT card can show who has the DLP, and vice versa.
+  const sibling = alias(workItems, "sibling");
+  const siblingUser = alias(users, "sibling_user");
+
   const catalogRows = await db
     .select({
       id: workItems.id,
@@ -203,11 +213,24 @@ export async function getScheduleItems(
       subjectName: subjects.name,
       subjectCode: subjects.shortCode,
       scheduleNote: workItems.scheduleNote,
+      counterpartType: sibling.type,
+      counterpartAssigneeName: siblingUser.fullName,
     })
     .from(workItems)
     .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
     .innerJoin(terms, eq(terms.id, workItems.termId))
     .leftJoin(users, eq(users.id, workItems.assigneeId))
+    .leftJoin(
+      sibling,
+      and(
+        eq(sibling.termId, workItems.termId),
+        eq(sibling.grade, workItems.grade),
+        eq(sibling.subjectId, workItems.subjectId),
+        eq(sibling.weekNumber, workItems.weekNumber),
+        ne(sibling.type, workItems.type),
+      ),
+    )
+    .leftJoin(siblingUser, eq(siblingUser.id, sibling.assigneeId))
     .where(and(...catalogConditions))
     .orderBy(asc(workItems.dueDate), asc(workItems.grade), asc(subjects.name), asc(workItems.weekNumber))
     .limit(2000);
@@ -226,6 +249,8 @@ export async function getScheduleItems(
     subtitle: `Grade ${r.grade} · Week ${r.weekNumber}`,
     scheduleNote: r.scheduleNote,
     cotWorkKind: null,
+    counterpartType: r.counterpartType ?? null,
+    counterpartAssigneeName: r.counterpartAssigneeName ?? null,
   }));
 
   // COT orders aren't tied to a term, so only include them in the combined view.
@@ -239,6 +264,10 @@ export async function getScheduleItems(
     sql`${customOrderItems.status} <> 'cancelled'`,
   ];
   if (filters.assigneeId) cotConditions.push(eq(customOrderItems.assigneeId, filters.assigneeId));
+
+  // The other deliverable in the same COT order (DLP↔PPT) and its editor.
+  const cotSibling = alias(customOrderItems, "cot_sibling");
+  const cotSiblingUser = alias(users, "cot_sibling_user");
 
   const cotRows = await db
     .select({
@@ -255,10 +284,17 @@ export async function getScheduleItems(
       topic: customOrders.topic,
       scheduleNote: customOrders.scheduleNote,
       workKind: customOrders.workKind,
+      counterpartType: cotSibling.type,
+      counterpartAssigneeName: cotSiblingUser.fullName,
     })
     .from(customOrderItems)
     .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
     .leftJoin(users, eq(users.id, customOrderItems.assigneeId))
+    .leftJoin(
+      cotSibling,
+      and(eq(cotSibling.orderId, customOrderItems.orderId), ne(cotSibling.type, customOrderItems.type)),
+    )
+    .leftJoin(cotSiblingUser, eq(cotSiblingUser.id, cotSibling.assigneeId))
     .where(and(...cotConditions))
     .orderBy(asc(sql`${cotPlanned}`))
     .limit(2000);
@@ -279,6 +315,8 @@ export async function getScheduleItems(
       subtitle: parts.length ? parts.join(" · ") : "Custom order",
       scheduleNote: r.scheduleNote,
       cotWorkKind: r.workKind,
+      counterpartType: r.counterpartType ?? null,
+      counterpartAssigneeName: r.counterpartAssigneeName ?? null,
     };
   });
 

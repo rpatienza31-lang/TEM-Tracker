@@ -299,6 +299,18 @@ function ScheduleCard({
         )}
       </div>
 
+      {/* Paired deliverable's editor — e.g. a PPT card shows who has the DLP file. */}
+      {item.counterpartType && (
+        <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+          <span className={cn("rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide", TYPE_BADGE[item.counterpartType])}>
+            {DELIVERABLE_TYPE_LABELS[item.counterpartType]}
+          </span>
+          <span className={item.counterpartAssigneeName ? "font-medium text-foreground" : "italic"}>
+            {item.counterpartAssigneeName ?? "Unassigned"}
+          </span>
+        </div>
+      )}
+
       {item.scheduleNote && !noteOpen && (
         <div className="mt-1.5 flex items-start gap-1 rounded bg-background/70 px-1.5 py-1 text-[11px] leading-snug text-foreground">
           <span aria-hidden>📝</span>
