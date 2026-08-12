@@ -5,6 +5,7 @@ import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getActiveCotOrders } from "@/lib/cot/queries";
 import { CotOrderList } from "./cot-order-list";
+import { NewCotOrderForm } from "./new-cot-order-form";
 
 export default async function CotOrdersPage() {
   const user = await requireUser();
@@ -32,6 +33,8 @@ export default async function CotOrdersPage() {
           separately — each is worth 0.5 points on approval.
         </p>
       </div>
+
+      {isAdmin && <NewCotOrderForm />}
 
       <CotOrderList orders={orders} editors={editors} isAdmin={isAdmin} isOwner={isOwner} canClaim={canClaim} />
     </div>
