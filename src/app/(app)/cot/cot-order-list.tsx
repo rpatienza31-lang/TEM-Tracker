@@ -88,14 +88,18 @@ export function CotOrderList({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "rush" | "regular">("all");
+  const [dateFilter, setDateFilter] = useState("");
 
   const counts = useMemo(() => {
-    const c = { total: orders.length, overdue: 0, due2: 0, alert: 0, unclaimed: 0 };
+    const c = { total: orders.length, overdue: 0, due2: 0, alert: 0, unclaimed: 0, rush: 0, regular: 0 };
     for (const o of orders) {
       if (o.priority === "overdue") c.overdue += 1;
       if (isDueWithin2(o)) c.due2 += 1;
       if (o.priority === "alert") c.alert += 1;
       if (isUnclaimed(o)) c.unclaimed += 1;
+      if (o.orderType === "rush") c.rush += 1;
+      else c.regular += 1;
     }
     return c;
   }, [orders]);
@@ -104,13 +108,15 @@ export function CotOrderList({
     const q = query.trim().toLowerCase();
     return orders
       .filter((o) => matchesFilter(o, filter))
+      .filter((o) => typeFilter === "all" || o.orderType === typeFilter)
+      .filter((o) => !dateFilter || o.orderDate === dateFilter)
       .filter((o) => {
         if (!q) return true;
         return [o.customerName, o.subjectName, o.topic, o.competency, o.indicator, o.grade ? `grade ${o.grade}` : ""]
           .filter(Boolean)
           .some((field) => String(field).toLowerCase().includes(q));
       });
-  }, [orders, query, filter]);
+  }, [orders, query, filter, typeFilter, dateFilter]);
 
   const tiles: { key: Filter; label: string; value: number; className: string }[] = [
     { key: "overdue", label: "Overdue", value: counts.overdue, className: "text-red-600" },
@@ -154,6 +160,49 @@ export function CotOrderList({
         ))}
       </div>
 
+      {/* Order type (Rush / Regular) + ordered-on date filter */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2">
+          {(
+            [
+              { key: "all", label: `All types (${counts.total})` },
+              { key: "rush", label: `Rush (${counts.rush})` },
+              { key: "regular", label: `Regular (${counts.regular})` },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTypeFilter(t.key)}
+              className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+                typeFilter === t.key ? "border-foreground bg-foreground text-background" : "hover:bg-accent"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Ordered on</span>
+          <Input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="h-9 w-auto"
+          />
+          {dateFilter && (
+            <button
+              type="button"
+              onClick={() => setDateFilter("")}
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              Clear
+            </button>
+          )}
+        </label>
+      </div>
+
       <Input
         placeholder="Search customer, subject, topic, grade…"
         value={query}
@@ -163,6 +212,8 @@ export function CotOrderList({
 
       <p className="text-xs text-muted-foreground">
         Showing {filtered.length} of {counts.total} open order{counts.total === 1 ? "" : "s"}
+        {typeFilter !== "all" && ` · ${typeFilter}`}
+        {dateFilter && ` · ordered ${dateFilter}`}
       </p>
 
       {filtered.length === 0 && (
