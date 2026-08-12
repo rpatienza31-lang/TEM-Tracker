@@ -27,31 +27,58 @@ export async function submitPublicCotOrder(_prev: PublicOrderState, formData: Fo
     return { status: "error", message: "Incorrect access code." };
   }
 
+  const err = (message: string): PublicOrderState => ({ status: "error", message });
+
+  // Every field is required except the Note.
   const facebookName = s(formData, "customerName");
-  if (!facebookName) return { status: "error", message: "Please enter your Facebook name." };
+  if (!facebookName) return err("Please enter your Facebook name.");
 
-  const email = s(formData, "email");
-  if (!email) return { status: "error", message: "Please enter your DepEd or Gmail email." };
+  const term = s(formData, "term");
+  if (!term) return err("Please select a Term.");
 
-  if (formData.get("refundAgree") !== "on") {
-    return { status: "error", message: "Please agree to the Refund Policy to continue." };
-  }
+  const gradeRaw = s(formData, "grade");
+  if (!gradeRaw) return err("Please select a Grade.");
+
+  const subject = s(formData, "subjectName");
+  if (!subject) return err("Please enter a Subject.");
+
+  const week = s(formData, "week");
+  if (!week) return err("Please select a Week.");
+
+  const topic = s(formData, "topic");
+  if (!topic) return err("Please enter the Topic.");
+
+  const competency = s(formData, "competency");
+  if (!competency) return err("Please enter the Learning Competency.");
+
+  const lessonFor = s(formData, "lessonFor");
+  if (!lessonFor) return err("Please select Lesson For.");
 
   // Multi-select "Type of learners" + free-text "Others".
   const learners = formData.getAll("learners").map((v) => String(v).trim()).filter(Boolean);
   const othersLearner = s(formData, "learnersOther");
   if (othersLearner) learners.push(othersLearner);
+  if (learners.length === 0) return err("Please select at least one Type of learners.");
 
-  const gradeRaw = s(formData, "grade");
+  const indicator = s(formData, "indicator");
+  if (!indicator) return err("Please select an Indicator.");
+
+  const email = s(formData, "email");
+  if (!email) return err("Please enter your DepEd or Gmail email.");
+
+  if (formData.get("refundAgree") !== "on") {
+    return err("Please agree to the Refund Policy to continue.");
+  }
+
   const clientNote = s(formData, "notes");
 
   // Fold the fields that have no dedicated column into Notes, clearly labelled.
   const notes =
     [
       `Email: ${email}`,
-      s(formData, "term") && `Term: ${s(formData, "term")}`,
-      s(formData, "week") && `Week: ${s(formData, "week")}`,
-      learners.length && `Type of learners: ${learners.join(", ")}`,
+      `Term: ${term}`,
+      `Week: ${week}`,
+      `Type of learners: ${learners.join(", ")}`,
       clientNote && `Note: ${clientNote}`,
     ]
       .filter(Boolean)
@@ -59,12 +86,12 @@ export async function submitPublicCotOrder(_prev: PublicOrderState, formData: Fo
 
   const result = await createCotOrder({
     customerName: facebookName,
-    grade: gradeRaw ? Number(gradeRaw) || null : null,
-    subjectName: s(formData, "subjectName") || null,
-    topic: s(formData, "topic") || null,
-    competency: s(formData, "competency") || null,
-    indicator: s(formData, "indicator") || null,
-    lessonFor: s(formData, "lessonFor") || null,
+    grade: Number(gradeRaw) || null,
+    subjectName: subject,
+    topic,
+    competency,
+    indicator,
+    lessonFor,
     notes,
     orderType: s(formData, "orderType") === "rush" ? "rush" : "regular",
     // The order date is when the client submits.

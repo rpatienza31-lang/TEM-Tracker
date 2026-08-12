@@ -9,6 +9,7 @@ import { submitPublicCotOrder, type PublicOrderState } from "./actions";
 
 const initial: PublicOrderState = { status: "idle" };
 
+const TERMS = ["Term 1", "Term 2", "Term 3"];
 const GRADES = Array.from({ length: 12 }, (_, i) => i + 1);
 const WEEKS = Array.from({ length: 13 }, (_, i) => i + 1);
 const LESSON_FOR = ["Demo", "Reclass", "RQA"];
@@ -72,7 +73,16 @@ export function OrderForm({ requireCode }: { requireCode: boolean }) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Term" required>
-          <Input name="term" required placeholder="e.g. SY 2025–2026, 1st" />
+          <select name="term" required defaultValue="" className={selectClass}>
+            <option value="" disabled>
+              Select term
+            </option>
+            {TERMS.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Grade" required>
           <select name="grade" required defaultValue="" className={selectClass}>
@@ -104,8 +114,8 @@ export function OrderForm({ requireCode }: { requireCode: boolean }) {
         <Field label="Topic" required className="sm:col-span-2">
           <Input name="topic" required placeholder="Lesson topic" />
         </Field>
-        <Field label="Learning Competency" className="sm:col-span-2">
-          <Input name="competency" placeholder="From the curriculum guide" />
+        <Field label="Learning Competency" required className="sm:col-span-2">
+          <Input name="competency" required placeholder="From the curriculum guide" />
         </Field>
         <Field label="Lesson For" required>
           <select name="lessonFor" required defaultValue="" className={selectClass}>
@@ -127,7 +137,7 @@ export function OrderForm({ requireCode }: { requireCode: boolean }) {
         </Field>
       </div>
 
-      <Field label="Type of learners" hint="Check all that apply.">
+      <Field label="Type of learners" required hint="Check all that apply (at least one).">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1">
           {LEARNERS.map((l) => (
             <label key={l} className="flex items-center gap-2 text-sm">
@@ -185,6 +195,23 @@ export function OrderForm({ requireCode }: { requireCode: boolean }) {
           {pending ? "Submitting…" : "Submit order"}
         </Button>
         {state.status === "error" && <span className="text-sm text-destructive">{state.message}</span>}
+      </div>
+
+      {/* Contact footer */}
+      <div className="mt-2 flex flex-col items-center gap-3 border-t border-border pt-5 text-center">
+        <p className="text-sm font-medium">
+          For inquiries or updates, please message us through our official Facebook account only.
+        </p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/order-connect.png"
+          alt="Connect with us — Teacher Eva &amp; Teacher Manuel on Facebook"
+          className="w-full max-w-xl rounded-lg"
+          // Hide gracefully until the image file is added to /public.
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
       </div>
     </form>
   );
