@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,52 @@ const selectClass = "h-10 rounded-md border border-input bg-background px-2 text
 
 export function OrderForm({ requireCode }: { requireCode: boolean }) {
   const [state, formAction, pending] = useActionState(submitPublicCotOrder, initial);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [clientError, setClientError] = useState<string | null>(null);
+
+  /**
+   * Validate every required field in visual order and return the first problem,
+   * so the customer gets a clear message about exactly which field is missing —
+   * instead of the browser silently blocking submit.
+   */
+  function findFirstError(fd: FormData): { name: string; message: string } | null {
+    const val = (n: string) => String(fd.get(n) ?? "").trim();
+    const checks: { name: string; ok: boolean; message: string }[] = [
+      ...(requireCode ? [{ name: "accessCode", ok: !!val("accessCode"), message: "Please enter the access code." }] : []),
+      { name: "customerName", ok: !!val("customerName"), message: "Please enter your Facebook name." },
+      { name: "term", ok: !!val("term"), message: "Please select a Term." },
+      { name: "grade", ok: !!val("grade"), message: "Please select a Grade." },
+      { name: "subjectName", ok: !!val("subjectName"), message: "Please enter a Subject." },
+      { name: "week", ok: !!val("week"), message: "Please select a Week." },
+      { name: "topic", ok: !!val("topic"), message: "Please enter the Topic." },
+      { name: "competency", ok: !!val("competency"), message: "Please enter the Learning Competency." },
+      { name: "lessonFor", ok: !!val("lessonFor"), message: "Please select what the lesson is for." },
+      {
+        name: "learners",
+        ok: fd.getAll("learners").length > 0 || !!val("learnersOther"),
+        message: "Please choose at least one Type of learners.",
+      },
+      { name: "indicator", ok: !!val("indicator"), message: "Please select an Indicator." },
+      { name: "email", ok: !!val("email"), message: "Please enter your DepEd or Gmail email." },
+      { name: "refundAgree", ok: fd.get("refundAgree") === "on", message: "Please agree to the Refund Policy to continue." },
+    ];
+    const first = checks.find((c) => !c.ok);
+    return first ? { name: first.name, message: first.message } : null;
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    const form = e.currentTarget;
+    const problem = findFirstError(new FormData(form));
+    if (problem) {
+      e.preventDefault(); // Stop the server action from running.
+      setClientError(problem.message);
+      const field = form.querySelector<HTMLElement>(`[name="${problem.name}"]`);
+      field?.scrollIntoView({ behavior: "smooth", block: "center" });
+      field?.focus({ preventScroll: true });
+      return;
+    }
+    setClientError(null);
+  }
 
   if (state.status === "ok") {
     return (
@@ -46,7 +92,13 @@ export function OrderForm({ requireCode }: { requireCode: boolean }) {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
+    <form
+      ref={formRef}
+      action={formAction}
+      onSubmit={handleSubmit}
+      noValidate
+      className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6"
+    >
       {/* Honeypot — hidden from people, catches bots. */}
       <input
         type="text"
@@ -190,11 +242,19 @@ export function OrderForm({ requireCode }: { requireCode: boolean }) {
         </label>
       </div>
 
+      {(clientError || state.status === "error") && (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+        >
+          {clientError ?? state.message}
+        </p>
+      )}
+
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={pending} size="lg">
           {pending ? "Submitting…" : "Submit order"}
         </Button>
-        {state.status === "error" && <span className="text-sm text-destructive">{state.message}</span>}
       </div>
 
       {/* Contact footer */}
