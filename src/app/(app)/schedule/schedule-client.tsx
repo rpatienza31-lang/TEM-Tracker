@@ -101,10 +101,11 @@ const STATUS_STYLES: Record<ItemStatus, { card: string; bar: string; pill: strin
     bar: "bg-amber-500",
     pill: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
   },
+  // Sent back for revision = a back job. Red so it stands out down the column.
   revision: {
-    card: "border-orange-200 bg-orange-50/80 dark:border-orange-900 dark:bg-orange-950/40",
-    bar: "bg-orange-500",
-    pill: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300",
+    card: "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/50",
+    bar: "bg-red-600",
+    pill: "bg-red-600 text-white dark:bg-red-600",
   },
   approved: {
     card: "border-green-200 bg-green-50/80 dark:border-green-900 dark:bg-green-950/40",
@@ -286,7 +287,7 @@ function ScheduleCard({
           {DELIVERABLE_TYPE_LABELS[item.type]}
         </span>
         <span className={cn("ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold", status.pill)}>
-          {STATUS_LABELS[item.status]}
+          {item.status === "revision" ? "Back job" : STATUS_LABELS[item.status]}
         </span>
       </div>
       <div className="mt-1.5 text-sm font-semibold leading-tight text-foreground">{item.title}</div>
