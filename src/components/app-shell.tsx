@@ -27,7 +27,7 @@ const NAV = [
   { href: "/schedule", label: "Project Schedule", roles: ["owner", "admin", "editor"] },
   { href: "/board", label: "Work Board", roles: ["owner", "admin", "editor"] },
   { href: "/my-work", label: "My Work", roles: ["owner", "admin", "sales", "editor"] },
-  { href: "/daily", label: "Daily Report", roles: ["owner", "admin"] },
+  { href: "/daily", label: "Daily Report", roles: ["owner", "admin", "sales", "editor"] },
   { href: "/cot", label: "COT Orders", roles: ["owner", "admin", "editor"] },
   { href: "/matrix", label: "Matrix View", roles: ["owner", "admin", "editor"] },
   { href: "/cot/library", label: "Available Library", roles: ["owner", "admin", "sales", "editor"] },

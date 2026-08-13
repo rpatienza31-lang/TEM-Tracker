@@ -24,7 +24,7 @@ const REPORT_STATUS: Record<ItemStatus, { label: string; className: string }> = 
 };
 
 export default async function DailyReportPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requireRole("owner", "admin");
+  await requireRole("owner", "admin", "sales", "editor");
   const sp = await searchParams;
   const today = formatInTimeZone(new Date(), PH_TZ, "yyyy-MM-dd");
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today;
