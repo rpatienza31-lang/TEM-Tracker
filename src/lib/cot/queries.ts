@@ -51,6 +51,28 @@ export async function getCotItemsInReview(): Promise<CotReviewItem[]> {
     .orderBy(asc(customOrders.deadline));
 }
 
+/** COT deliverables sent back for revision (back jobs). */
+export async function getCotItemsInRevision(): Promise<CotReviewItem[]> {
+  const assignee = aliasedTable(users, "assignee");
+  return db
+    .select({
+      id: customOrderItems.id,
+      type: customOrderItems.type,
+      customerName: customOrders.customerName,
+      subjectName: customOrders.subjectName,
+      topic: customOrders.topic,
+      lessonFor: customOrders.lessonFor,
+      deadline: customOrders.deadline,
+      assigneeName: assignee.fullName,
+      fileUrl: customOrderItems.fileUrl,
+    })
+    .from(customOrderItems)
+    .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
+    .leftJoin(assignee, eq(assignee.id, customOrderItems.assigneeId))
+    .where(eq(customOrderItems.status, "revision"))
+    .orderBy(asc(customOrders.deadline));
+}
+
 /** COT deliverables assigned to a user, filtered by status, soonest deadline first. */
 export async function getMyCotItems(userId: string, statuses: ItemStatus[]): Promise<MyCotItem[]> {
   if (statuses.length === 0) return [];

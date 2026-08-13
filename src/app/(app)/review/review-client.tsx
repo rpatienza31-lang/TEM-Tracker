@@ -22,10 +22,14 @@ export function ReviewClient({
   inReview,
   readyToUpload,
   cotInReview,
+  inRevision,
+  cotInRevision,
 }: {
   inReview: BoardItem[];
   readyToUpload: BoardItem[];
   cotInReview: CotReviewItem[];
+  inRevision: BoardItem[];
+  cotInRevision: CotReviewItem[];
 }) {
   const [banner, setBanner] = useState<string | null>(null);
   const [selectedUploads, setSelectedUploads] = useState<Set<string>>(new Set());
@@ -41,18 +45,22 @@ export function ReviewClient({
 
   const options = useMemo(
     () => ({
-      // Editor list spans both tables so the filter works across the whole queue.
+      // Editor/grade/etc. lists span every table so the filters work across the
+      // whole queue, including the back-jobs (revision) section.
       editors: uniqueSorted(
-        [...inReview.map((i) => i.assigneeName), ...cotInReview.map((i) => i.assigneeName)].filter(
-          (n): n is string => !!n,
-        ),
+        [
+          ...inReview.map((i) => i.assigneeName),
+          ...cotInReview.map((i) => i.assigneeName),
+          ...inRevision.map((i) => i.assigneeName),
+          ...cotInRevision.map((i) => i.assigneeName),
+        ].filter((n): n is string => !!n),
       ),
-      grades: uniqueSorted(inReview.map((i) => String(i.grade))),
-      subjects: uniqueSorted(inReview.map((i) => i.subjectName)),
-      weeks: uniqueSorted(inReview.map((i) => String(i.weekNumber))),
-      types: uniqueSorted(inReview.map((i) => i.type)),
+      grades: uniqueSorted([...inReview, ...inRevision].map((i) => String(i.grade))),
+      subjects: uniqueSorted([...inReview, ...inRevision].map((i) => i.subjectName)),
+      weeks: uniqueSorted([...inReview, ...inRevision].map((i) => String(i.weekNumber))),
+      types: uniqueSorted([...inReview, ...inRevision].map((i) => i.type)),
     }),
-    [inReview, cotInReview],
+    [inReview, cotInReview, inRevision, cotInRevision],
   );
 
   const filteredInReview = useMemo(() => {
@@ -70,6 +78,25 @@ export function ReviewClient({
     () => cotInReview.filter((i) => (!editor || i.assigneeName === editor) && (!type || i.type === type)),
     [cotInReview, editor, type],
   );
+
+  const filteredRevision = useMemo(() => {
+    return inRevision.filter(
+      (i) =>
+        (!editor || i.assigneeName === editor) &&
+        (!grade || String(i.grade) === grade) &&
+        (!subject || i.subjectName === subject) &&
+        (!week || String(i.weekNumber) === week) &&
+        (!type || i.type === type),
+    );
+  }, [inRevision, editor, grade, subject, week, type]);
+
+  const filteredCotRevision = useMemo(
+    () => cotInRevision.filter((i) => (!editor || i.assigneeName === editor) && (!type || i.type === type)),
+    [cotInRevision, editor, type],
+  );
+
+  const revisionCount = filteredRevision.length + filteredCotRevision.length;
+  const revisionTotal = inRevision.length + cotInRevision.length;
 
   function toggleUpload(id: string, checked: boolean) {
     setSelectedUploads((prev) => {
@@ -297,6 +324,72 @@ export function ReviewClient({
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-muted-foreground">
                   {cotInReview.length === 0 ? "No COT deliverables awaiting review." : "No COT items match these filters."}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-lg font-semibold text-red-600">
+          Back jobs — sent for revision ({revisionCount}
+          {revisionCount !== revisionTotal ? ` of ${revisionTotal}` : ""})
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          These are with the editor to fix. They&apos;ll return here once resubmitted. Uses the same filters above.
+        </p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Grade / Customer</TableHead>
+              <TableHead>Subject</TableHead>
+              <TableHead>Week / Topic</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Editor</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>File</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredRevision.map((item) => (
+              <TableRow key={item.id} className="bg-red-50/40 dark:bg-red-950/10">
+                <TableCell>{item.grade}</TableCell>
+                <TableCell>{item.subjectName}</TableCell>
+                <TableCell>Wk {item.weekNumber}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
+                <TableCell>{item.assigneeName}</TableCell>
+                <TableCell className="text-muted-foreground">Catalog</TableCell>
+                <TableCell>
+                  {item.fileUrl && (
+                    <a className="text-primary underline" href={item.fileUrl} target="_blank" rel="noreferrer">
+                      File
+                    </a>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredCotRevision.map((item) => (
+              <TableRow key={item.id} className="bg-red-50/40 dark:bg-red-950/10">
+                <TableCell>{item.customerName}</TableCell>
+                <TableCell>{item.subjectName ?? "—"}</TableCell>
+                <TableCell>{item.topic ?? "—"}</TableCell>
+                <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
+                <TableCell>{item.assigneeName}</TableCell>
+                <TableCell className="text-muted-foreground">COT</TableCell>
+                <TableCell>
+                  {item.fileUrl && (
+                    <a className="text-primary underline" href={item.fileUrl} target="_blank" rel="noreferrer">
+                      File
+                    </a>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+            {revisionCount === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  {revisionTotal === 0 ? "No back jobs right now." : "No back jobs match these filters."}
                 </TableCell>
               </TableRow>
             )}

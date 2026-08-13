@@ -394,6 +394,18 @@ export async function getReviewQueueItems() {
     .orderBy(asc(workItems.submittedAt));
 }
 
+/** Catalog items sent back for revision (back jobs), newest first. */
+export async function getRevisionItems() {
+  return db
+    .select(boardColumns)
+    .from(workItems)
+    .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
+    .innerJoin(terms, eq(terms.id, workItems.termId))
+    .leftJoin(users, eq(users.id, workItems.assigneeId))
+    .where(eq(workItems.status, "revision"))
+    .orderBy(asc(workItems.updatedAt));
+}
+
 export async function getApprovedReadyToUpload() {
   return db
     .select(boardColumns)
