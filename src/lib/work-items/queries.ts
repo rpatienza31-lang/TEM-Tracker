@@ -188,9 +188,10 @@ export async function getScheduleItems(
   to: string,
   filters: { termId?: string; assigneeId?: string; today?: string } = {},
 ): Promise<ScheduleEntry[]> {
-  // When today is in view, carry overdue-but-active work (in review / back jobs)
-  // onto today's column so an item past its deadline doesn't silently vanish
-  // off the left edge of the calendar.
+  // When today is in view, carry overdue work that is still awaiting review onto
+  // today's column so a submitted item past its deadline doesn't silently vanish
+  // off the left edge. Back jobs (revision) are NOT rolled — they sit on the new
+  // deadline set when the revision was requested, so they don't pile up on today.
   const today = filters.today ?? from;
   const rollOverdue = today >= from && today <= to;
 
@@ -199,7 +200,7 @@ export async function getScheduleItems(
     sql`${workItems.dueDate} <= ${to}`,
     sql`${workItems.status} <> 'cancelled'`,
     rollOverdue
-      ? sql`(${workItems.dueDate} >= ${from} or ${workItems.status} in ('in_review','revision'))`
+      ? sql`(${workItems.dueDate} >= ${from} or ${workItems.status} = 'in_review')`
       : sql`${workItems.dueDate} >= ${from}`,
   ];
   if (filters.termId) catalogConditions.push(eq(workItems.termId, filters.termId));
@@ -276,7 +277,7 @@ export async function getScheduleItems(
     sql`${cotPlanned} <= ${to}`,
     sql`${customOrderItems.status} <> 'cancelled'`,
     rollOverdue
-      ? sql`(${cotPlanned} >= ${from} or ${customOrderItems.status} in ('in_review','revision'))`
+      ? sql`(${cotPlanned} >= ${from} or ${customOrderItems.status} = 'in_review')`
       : sql`${cotPlanned} >= ${from}`,
   ];
   if (filters.assigneeId) cotConditions.push(eq(customOrderItems.assigneeId, filters.assigneeId));
