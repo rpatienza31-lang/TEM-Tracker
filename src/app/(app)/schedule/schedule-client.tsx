@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DELIVERABLE_TYPE_LABELS, STATUS_LABELS, type DeliverableType, type ItemStatus } from "@/lib/constants";
 import {
+  requestRevisionAction,
   setAvailabilityAction,
   setCotItemScheduleAction,
   setCotScheduleNoteAction,
@@ -13,7 +14,6 @@ import {
 } from "@/lib/work-items/actions";
 import type { AvailabilityKind, ScheduleEntry, StaffAvailability } from "@/lib/work-items/queries";
 import { requestCotRevisionAction } from "@/app/(app)/cot/actions";
-import { RequestRevisionDialog } from "@/components/work-items/request-revision-dialog";
 import { cn } from "@/lib/utils";
 import { AvailabilityDialog } from "./availability-dialog";
 
@@ -238,22 +238,27 @@ function ScheduleCard({
   item,
   isAdmin,
   overdue,
+  today,
   onReschedule,
   onSaveNote,
-  onRequestCotRevision,
+  onRequestRevision,
   pending,
 }: {
   item: ScheduleItem;
   isAdmin: boolean;
   overdue: boolean;
+  today: string;
   onReschedule: (item: ScheduleItem, date: string | null) => void;
   onSaveNote: (item: ScheduleItem, note: string) => void;
-  onRequestCotRevision: (item: ScheduleItem) => void;
+  onRequestRevision: (item: ScheduleItem, note: string, date: string) => void;
   pending: boolean;
 }) {
   const status = STATUS_STYLES[item.status];
   const isCot = item.kind === "cot";
   const [noteOpen, setNoteOpen] = useState(false);
+  const [reviseOpen, setReviseOpen] = useState(false);
+  const [revNote, setRevNote] = useState("");
+  const [revDate, setRevDate] = useState(item.dueDate || today);
   return (
     <div
       className={cn(
@@ -355,19 +360,61 @@ function ScheduleCard({
           </div>
 
           {/* Send a submitted item back to the editor as a red back job, right
-              from the schedule — no need to open the Review Queue. */}
+              from the schedule — with a new deadline so it lands on a visible
+              day. No need to open the Review Queue. */}
           {item.status === "in_review" &&
-            (isCot ? (
+            (reviseOpen ? (
+              <div className="flex flex-col gap-1 rounded border border-red-300 bg-red-50/60 p-1.5 dark:border-red-800 dark:bg-red-950/30">
+                {!isCot && (
+                  <textarea
+                    value={revNote}
+                    onChange={(e) => setRevNote(e.target.value)}
+                    disabled={pending}
+                    rows={2}
+                    placeholder="What needs to change? (required)"
+                    className="w-full rounded border border-input bg-background px-1.5 py-1 text-[11px] leading-snug"
+                  />
+                )}
+                <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  New deadline
+                  <input
+                    type="date"
+                    value={revDate}
+                    disabled={pending}
+                    onChange={(e) => setRevDate(e.target.value)}
+                    className="h-6 w-[7.5rem] rounded border border-input bg-background px-1 text-[11px]"
+                  />
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={pending || (!isCot && !revNote.trim()) || !revDate}
+                    onClick={() => {
+                      onRequestRevision(item, revNote, revDate);
+                      setReviseOpen(false);
+                    }}
+                    className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Send back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReviseOpen(false)}
+                    className="text-[11px] text-muted-foreground underline"
+                  >
+                    cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
               <button
                 type="button"
                 disabled={pending}
-                onClick={() => onRequestCotRevision(item)}
+                onClick={() => setReviseOpen(true)}
                 className="self-start rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-950/40"
               >
                 Request revision
               </button>
-            ) : (
-              <RequestRevisionDialog itemId={item.actionRefId} onDone={() => {}} />
             ))}
           {noteOpen && (
             <div className="flex flex-col gap-1">
@@ -492,18 +539,45 @@ export function ScheduleClient({
     });
   }
 
-  // COT deliverables have no note field on revision (matches the Review Queue).
-  // The action revalidates /cot + /review, so refresh the schedule ourselves.
-  function requestCotRevision(item: ScheduleItem) {
+  // Send an in-review item back for revision AND set a new deadline, so the red
+  // "Back job" card lands on a day you can see. COT has no revision note (matches
+  // the Review Queue); catalog requires one.
+  function requestRevision(item: ScheduleItem, note: string, date: string) {
     setBusyId(item.id);
     setError(null);
     startTransition(async () => {
-      const res = await requestCotRevisionAction(item.id);
-      setBusyId(null);
-      if (!res.ok) {
-        setError(res.message ?? "Could not request a revision.");
-        return;
+      if (item.kind === "cot") {
+        const r1 = await requestCotRevisionAction(item.id);
+        if (!r1.ok) {
+          setBusyId(null);
+          setError(r1.message ?? "Could not request a revision.");
+          return;
+        }
+        if (date) {
+          const r2 = await setCotItemScheduleAction(item.id, date);
+          if (!r2.ok) {
+            setBusyId(null);
+            setError(r2.message ?? "Sent back, but could not set the new deadline.");
+            return;
+          }
+        }
+      } else {
+        const r1 = await requestRevisionAction(item.actionRefId, note);
+        if (!r1.ok) {
+          setBusyId(null);
+          setError(r1.error.message ?? "Could not request a revision.");
+          return;
+        }
+        if (date) {
+          const r2 = await setDueDateAction(item.actionRefId, date);
+          if (!r2.ok) {
+            setBusyId(null);
+            setError(r2.message ?? "Sent back, but could not set the new deadline.");
+            return;
+          }
+        }
       }
+      setBusyId(null);
       router.refresh();
     });
   }
@@ -787,9 +861,10 @@ export function ScheduleClient({
                                   item={it}
                                   isAdmin={isAdmin}
                                   overdue={past && it.status !== "approved" && it.status !== "uploaded"}
+                                  today={today}
                                   onReschedule={reschedule}
                                   onSaveNote={saveNote}
-                                  onRequestCotRevision={requestCotRevision}
+                                  onRequestRevision={requestRevision}
                                   pending={pending && busyId === it.id}
                                 />
                               ))}
