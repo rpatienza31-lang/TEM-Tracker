@@ -38,7 +38,23 @@ function createClient() {
 
 // Reuse a single client across warm invocations (and dev HMR) so instances
 // don't accumulate connections.
-const client = global.__temTrackerSql ?? createClient();
-global.__temTrackerSql = client;
+function createDb() {
+  const client = global.__temTrackerSql ?? createClient();
+  global.__temTrackerSql = client;
+  return drizzle(client, { schema });
+}
 
-export const db = drizzle(client, { schema });
+type DbInstance = ReturnType<typeof createDb>;
+
+// Lazily instantiate on first use rather than at import. `next build` imports
+// route modules to collect page data, and that must not require DATABASE_URL —
+// the connection is only ever needed at runtime, when the env is present.
+let instance: DbInstance | undefined;
+
+export const db = new Proxy({} as DbInstance, {
+  get(_target, prop) {
+    instance ??= createDb();
+    const value = Reflect.get(instance, prop, instance);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+});
