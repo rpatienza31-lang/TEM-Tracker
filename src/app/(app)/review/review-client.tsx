@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { RequestRevisionDialog } from "@/components/work-items/request-revision-dialog";
 import { approveItemAction, unapproveItemAction, uploadItemAction } from "@/lib/work-items/actions";
-import { approveCotAction, requestCotRevisionAction } from "@/app/(app)/cot/actions";
+import { approveCotAction } from "@/app/(app)/cot/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import type { BoardItem } from "@/lib/work-items/queries";
 import type { CotReviewItem } from "@/lib/cot/queries";
@@ -36,6 +36,8 @@ export function ReviewClient({
   const [selectedReview, setSelectedReview] = useState<Set<string>>(new Set());
   const [selectedCot, setSelectedCot] = useState<Set<string>>(new Set());
   const [cotPending, startCotTransition] = useTransition();
+  // Default deadline offered when sending an item back (editors can change it).
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
   const [editor, setEditor] = useState("");
   const [grade, setGrade] = useState("");
   const [subject, setSubject] = useState("");
@@ -249,7 +251,7 @@ export function ReviewClient({
                     action={approveItemAction}
                     onDone={setBanner}
                   />
-                  <RequestRevisionDialog itemId={item.id} onDone={setBanner} />
+                  <RequestRevisionDialog itemId={item.id} onDone={setBanner} defaultDate={item.dueDate ?? today} />
                 </TableCell>
               </TableRow>
             ))}
@@ -316,7 +318,7 @@ export function ReviewClient({
                   )}
                 </TableCell>
                 <TableCell>
-                  <CotReviewActions itemId={item.id} onDone={setBanner} />
+                  <CotReviewActions itemId={item.id} onDone={setBanner} defaultDate={item.deadline} />
                 </TableCell>
               </TableRow>
             ))}
@@ -459,7 +461,15 @@ export function ReviewClient({
   );
 }
 
-function CotReviewActions({ itemId, onDone }: { itemId: string; onDone: (m: string) => void }) {
+function CotReviewActions({
+  itemId,
+  onDone,
+  defaultDate,
+}: {
+  itemId: string;
+  onDone: (m: string) => void;
+  defaultDate?: string;
+}) {
   const [pending, startTransition] = useTransition();
 
   function run(action: () => Promise<{ ok: boolean; message?: string }>, okMessage: string) {
@@ -474,14 +484,7 @@ function CotReviewActions({ itemId, onDone }: { itemId: string; onDone: (m: stri
       <Button size="sm" disabled={pending} onClick={() => run(() => approveCotAction(itemId), "COT deliverable approved.")}>
         Approve
       </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={pending}
-        onClick={() => run(() => requestCotRevisionAction(itemId), "Sent back for revision.")}
-      >
-        Request revision
-      </Button>
+      <RequestRevisionDialog itemId={itemId} kind="cot" onDone={onDone} defaultDate={defaultDate} />
     </div>
   );
 }
