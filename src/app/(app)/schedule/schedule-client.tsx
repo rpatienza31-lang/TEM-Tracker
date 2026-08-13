@@ -860,7 +860,7 @@ export function ScheduleClient({
                                   key={it.id}
                                   item={it}
                                   isAdmin={isAdmin}
-                                  overdue={past && it.status !== "approved" && it.status !== "uploaded"}
+                                  overdue={(past || it.overdue) && it.status !== "approved" && it.status !== "uploaded"}
                                   today={today}
                                   onReschedule={reschedule}
                                   onSaveNote={saveNote}

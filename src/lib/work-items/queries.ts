@@ -170,6 +170,9 @@ export type ScheduleEntry = {
   // DLP file. Null when there is no counterpart.
   counterpartType: DeliverableType | null;
   counterpartAssigneeName: string | null;
+  // Real deadline is before today — kept even when the card is rolled onto
+  // today's column so the "overdue" flag still shows.
+  overdue: boolean;
 };
 
 /**
@@ -183,13 +186,21 @@ export type ScheduleEntry = {
 export async function getScheduleItems(
   from: string,
   to: string,
-  filters: { termId?: string; assigneeId?: string } = {},
+  filters: { termId?: string; assigneeId?: string; today?: string } = {},
 ): Promise<ScheduleEntry[]> {
+  // When today is in view, carry overdue-but-active work (in review / back jobs)
+  // onto today's column so an item past its deadline doesn't silently vanish
+  // off the left edge of the calendar.
+  const today = filters.today ?? from;
+  const rollOverdue = today >= from && today <= to;
+
   const catalogConditions: SQL[] = [
     sql`${workItems.dueDate} is not null`,
-    sql`${workItems.dueDate} >= ${from}`,
     sql`${workItems.dueDate} <= ${to}`,
     sql`${workItems.status} <> 'cancelled'`,
+    rollOverdue
+      ? sql`(${workItems.dueDate} >= ${from} or ${workItems.status} in ('in_review','revision'))`
+      : sql`${workItems.dueDate} >= ${from}`,
   ];
   if (filters.termId) catalogConditions.push(eq(workItems.termId, filters.termId));
   if (filters.assigneeId) catalogConditions.push(eq(workItems.assigneeId, filters.assigneeId));
@@ -241,7 +252,9 @@ export async function getScheduleItems(
     actionRefId: r.id,
     type: r.type,
     status: r.status,
-    dueDate: r.dueDate as string,
+    // Overdue active work is shown on today; the "overdue" flag still comes from
+    // the real deadline elsewhere.
+    dueDate: (r.dueDate as string) < from ? today : (r.dueDate as string),
     assigneeId: r.assigneeId,
     assigneeName: r.assigneeName,
     termName: r.termName,
@@ -251,6 +264,7 @@ export async function getScheduleItems(
     cotWorkKind: null,
     counterpartType: r.counterpartType ?? null,
     counterpartAssigneeName: r.counterpartAssigneeName ?? null,
+    overdue: (r.dueDate as string) < today,
   }));
 
   // COT orders aren't tied to a term, so only include them in the combined view.
@@ -259,9 +273,11 @@ export async function getScheduleItems(
   // A COT item lands on its own scheduled_for when set, otherwise the order deadline.
   const cotPlanned = sql`coalesce(${customOrderItems.scheduledFor}, ${customOrders.deadline})`;
   const cotConditions: SQL[] = [
-    sql`${cotPlanned} >= ${from}`,
     sql`${cotPlanned} <= ${to}`,
     sql`${customOrderItems.status} <> 'cancelled'`,
+    rollOverdue
+      ? sql`(${cotPlanned} >= ${from} or ${customOrderItems.status} in ('in_review','revision'))`
+      : sql`${cotPlanned} >= ${from}`,
   ];
   if (filters.assigneeId) cotConditions.push(eq(customOrderItems.assigneeId, filters.assigneeId));
 
@@ -307,7 +323,8 @@ export async function getScheduleItems(
       actionRefId: r.orderId,
       type: r.type,
       status: r.status,
-      dueDate: r.plannedFor,
+      // Overdue active COT work rolls onto today so it doesn't vanish.
+      dueDate: r.plannedFor < from ? today : r.plannedFor,
       assigneeId: r.assigneeId,
       assigneeName: r.assigneeName,
       termName: null,
@@ -317,6 +334,7 @@ export async function getScheduleItems(
       cotWorkKind: r.workKind,
       counterpartType: r.counterpartType ?? null,
       counterpartAssigneeName: r.counterpartAssigneeName ?? null,
+      overdue: r.plannedFor < today,
     };
   });
 

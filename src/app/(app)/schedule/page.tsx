@@ -33,7 +33,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const to = addDays(from, days - 1);
 
   const [items, availability, staffRows] = await Promise.all([
-    getScheduleItems(from, to, { termId }),
+    getScheduleItems(from, to, { termId, today }),
     getStaffAvailability(from, to),
     db
       .select({ id: users.id, name: users.fullName })
