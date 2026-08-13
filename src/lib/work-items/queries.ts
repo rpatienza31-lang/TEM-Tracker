@@ -188,20 +188,16 @@ export async function getScheduleItems(
   to: string,
   filters: { termId?: string; assigneeId?: string; today?: string } = {},
 ): Promise<ScheduleEntry[]> {
-  // When today is in view, carry overdue work that is still awaiting review onto
-  // today's column so a submitted item past its deadline doesn't silently vanish
-  // off the left edge. Back jobs (revision) are NOT rolled — they sit on the new
-  // deadline set when the revision was requested, so they don't pile up on today.
+  // Items show on their own scheduled day only — nothing is auto-rolled onto
+  // today, so an overdue item is (re)scheduled manually by moving its date.
+  // `today` still drives the "overdue" flag (real deadline earlier than today).
   const today = filters.today ?? from;
-  const rollOverdue = today >= from && today <= to;
 
   const catalogConditions: SQL[] = [
     sql`${workItems.dueDate} is not null`,
+    sql`${workItems.dueDate} >= ${from}`,
     sql`${workItems.dueDate} <= ${to}`,
     sql`${workItems.status} <> 'cancelled'`,
-    rollOverdue
-      ? sql`(${workItems.dueDate} >= ${from} or ${workItems.status} = 'in_review')`
-      : sql`${workItems.dueDate} >= ${from}`,
   ];
   if (filters.termId) catalogConditions.push(eq(workItems.termId, filters.termId));
   if (filters.assigneeId) catalogConditions.push(eq(workItems.assigneeId, filters.assigneeId));
@@ -253,9 +249,7 @@ export async function getScheduleItems(
     actionRefId: r.id,
     type: r.type,
     status: r.status,
-    // Overdue active work is shown on today; the "overdue" flag still comes from
-    // the real deadline elsewhere.
-    dueDate: (r.dueDate as string) < from ? today : (r.dueDate as string),
+    dueDate: r.dueDate as string,
     assigneeId: r.assigneeId,
     assigneeName: r.assigneeName,
     termName: r.termName,
@@ -274,11 +268,9 @@ export async function getScheduleItems(
   // A COT item lands on its own scheduled_for when set, otherwise the order deadline.
   const cotPlanned = sql`coalesce(${customOrderItems.scheduledFor}, ${customOrders.deadline})`;
   const cotConditions: SQL[] = [
+    sql`${cotPlanned} >= ${from}`,
     sql`${cotPlanned} <= ${to}`,
     sql`${customOrderItems.status} <> 'cancelled'`,
-    rollOverdue
-      ? sql`(${cotPlanned} >= ${from} or ${customOrderItems.status} = 'in_review')`
-      : sql`${cotPlanned} >= ${from}`,
   ];
   if (filters.assigneeId) cotConditions.push(eq(customOrderItems.assigneeId, filters.assigneeId));
 
@@ -324,8 +316,7 @@ export async function getScheduleItems(
       actionRefId: r.orderId,
       type: r.type,
       status: r.status,
-      // Overdue active COT work rolls onto today so it doesn't vanish.
-      dueDate: r.plannedFor < from ? today : r.plannedFor,
+      dueDate: r.plannedFor,
       assigneeId: r.assigneeId,
       assigneeName: r.assigneeName,
       termName: null,
