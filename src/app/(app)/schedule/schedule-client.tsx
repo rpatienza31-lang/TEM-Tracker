@@ -12,6 +12,8 @@ import {
   setScheduleNoteAction,
 } from "@/lib/work-items/actions";
 import type { AvailabilityKind, ScheduleEntry, StaffAvailability } from "@/lib/work-items/queries";
+import { requestCotRevisionAction } from "@/app/(app)/cot/actions";
+import { RequestRevisionDialog } from "@/components/work-items/request-revision-dialog";
 import { cn } from "@/lib/utils";
 import { AvailabilityDialog } from "./availability-dialog";
 
@@ -238,6 +240,7 @@ function ScheduleCard({
   overdue,
   onReschedule,
   onSaveNote,
+  onRequestCotRevision,
   pending,
 }: {
   item: ScheduleItem;
@@ -245,6 +248,7 @@ function ScheduleCard({
   overdue: boolean;
   onReschedule: (item: ScheduleItem, date: string | null) => void;
   onSaveNote: (item: ScheduleItem, note: string) => void;
+  onRequestCotRevision: (item: ScheduleItem) => void;
   pending: boolean;
 }) {
   const status = STATUS_STYLES[item.status];
@@ -349,6 +353,22 @@ function ScheduleCard({
               </button>
             )}
           </div>
+
+          {/* Send a submitted item back to the editor as a red back job, right
+              from the schedule — no need to open the Review Queue. */}
+          {item.status === "in_review" &&
+            (isCot ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onRequestCotRevision(item)}
+                className="self-start rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-950/40"
+              >
+                Request revision
+              </button>
+            ) : (
+              <RequestRevisionDialog itemId={item.actionRefId} onDone={() => {}} />
+            ))}
           {noteOpen && (
             <div className="flex flex-col gap-1">
               <textarea
@@ -469,6 +489,22 @@ export function ScheduleClient({
           : await setScheduleNoteAction(item.actionRefId, note);
       setBusyId(null);
       if (!res.ok) setError(res.message ?? "Could not save the note.");
+    });
+  }
+
+  // COT deliverables have no note field on revision (matches the Review Queue).
+  // The action revalidates /cot + /review, so refresh the schedule ourselves.
+  function requestCotRevision(item: ScheduleItem) {
+    setBusyId(item.id);
+    setError(null);
+    startTransition(async () => {
+      const res = await requestCotRevisionAction(item.id);
+      setBusyId(null);
+      if (!res.ok) {
+        setError(res.message ?? "Could not request a revision.");
+        return;
+      }
+      router.refresh();
     });
   }
 
@@ -753,6 +789,7 @@ export function ScheduleClient({
                                   overdue={past && it.status !== "approved" && it.status !== "uploaded"}
                                   onReschedule={reschedule}
                                   onSaveNote={saveNote}
+                                  onRequestCotRevision={requestCotRevision}
                                   pending={pending && busyId === it.id}
                                 />
                               ))}
