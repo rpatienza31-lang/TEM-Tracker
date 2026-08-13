@@ -411,7 +411,7 @@ function ScheduleCard({
                 type="button"
                 disabled={pending}
                 onClick={() => setReviseOpen(true)}
-                className="self-start rounded border border-red-300 px-1.5 py-0.5 text-[11px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-950/40"
+                className="self-start text-[11px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-red-600 disabled:opacity-50"
               >
                 Request revision
               </button>
