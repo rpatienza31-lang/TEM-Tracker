@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, ne, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db/client";
@@ -329,6 +329,108 @@ export async function getScheduleItems(
       overdue: r.plannedFor < today,
     };
   });
+
+  return [...catalog, ...cot];
+}
+
+export type DailyEntry = {
+  id: string;
+  editorId: string | null;
+  editorName: string | null;
+  type: DeliverableType;
+  status: ItemStatus;
+  bucket: "submitted" | "pending";
+  task: string;
+  termName: string | null;
+};
+
+/**
+ * A day's work log by actual activity: what each editor SUBMITTED on `date`
+ * (by submitted_at, in PH time), plus their still-pending work due on or before
+ * that day (claimed/back-job items not yet submitted that day). Powers the Daily
+ * Report so managers see real submissions and outstanding items.
+ */
+export async function getDailyLog(date: string): Promise<DailyEntry[]> {
+  const submittedOn = (col: SQLWrapper) => sql`(${col} at time zone 'Asia/Manila')::date = ${date}`;
+
+  const catalogRows = await db
+    .select({
+      id: workItems.id,
+      editorId: workItems.assigneeId,
+      editorName: users.fullName,
+      type: workItems.type,
+      status: workItems.status,
+      termName: terms.name,
+      grade: workItems.grade,
+      weekNumber: workItems.weekNumber,
+      subjectName: subjects.name,
+      subjectCode: subjects.shortCode,
+      submittedToday: sql<boolean>`(${workItems.submittedAt} is not null and ${submittedOn(workItems.submittedAt)})`,
+    })
+    .from(workItems)
+    .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
+    .innerJoin(terms, eq(terms.id, workItems.termId))
+    .leftJoin(users, eq(users.id, workItems.assigneeId))
+    .where(
+      and(
+        sql`${workItems.status} <> 'cancelled'`,
+        sql`(
+          (${workItems.submittedAt} is not null and ${submittedOn(workItems.submittedAt)})
+          or (${workItems.status} in ('claimed','revision') and ${workItems.dueDate} is not null and ${workItems.dueDate} <= ${date})
+        )`,
+      ),
+    )
+    .limit(2000);
+
+  const catalog: DailyEntry[] = catalogRows.map((r) => ({
+    id: r.id,
+    editorId: r.editorId,
+    editorName: r.editorName,
+    type: r.type,
+    status: r.status,
+    bucket: r.submittedToday ? "submitted" : "pending",
+    task: `${r.subjectCode || r.subjectName} · Grade ${r.grade} · Week ${r.weekNumber}`,
+    termName: r.termName,
+  }));
+
+  const cotRows = await db
+    .select({
+      id: customOrderItems.id,
+      editorId: customOrderItems.assigneeId,
+      editorName: users.fullName,
+      type: customOrderItems.type,
+      status: customOrderItems.status,
+      customerName: customOrders.customerName,
+      grade: customOrders.grade,
+      subjectName: customOrders.subjectName,
+      topic: customOrders.topic,
+      planned: sql<string>`coalesce(${customOrderItems.scheduledFor}, ${customOrders.deadline})`,
+      submittedToday: sql<boolean>`(${customOrderItems.submittedAt} is not null and ${submittedOn(customOrderItems.submittedAt)})`,
+    })
+    .from(customOrderItems)
+    .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
+    .leftJoin(users, eq(users.id, customOrderItems.assigneeId))
+    .where(
+      and(
+        sql`${customOrderItems.status} <> 'cancelled'`,
+        sql`(
+          (${customOrderItems.submittedAt} is not null and ${submittedOn(customOrderItems.submittedAt)})
+          or (${customOrderItems.status} in ('claimed','revision') and coalesce(${customOrderItems.scheduledFor}, ${customOrders.deadline}) <= ${date})
+        )`,
+      ),
+    )
+    .limit(2000);
+
+  const cot: DailyEntry[] = cotRows.map((r) => ({
+    id: r.id,
+    editorId: r.editorId,
+    editorName: r.editorName,
+    type: r.type,
+    status: r.status,
+    bucket: r.submittedToday ? "submitted" : "pending",
+    task: `${r.customerName} — ${[r.grade ? `Grade ${r.grade}` : null, r.subjectName, r.topic].filter(Boolean).join(" · ") || "Custom order"}`,
+    termName: null,
+  }));
 
   return [...catalog, ...cot];
 }
