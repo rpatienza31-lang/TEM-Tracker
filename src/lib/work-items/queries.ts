@@ -435,6 +435,36 @@ export async function getDailyLog(date: string): Promise<DailyEntry[]> {
   return [...catalog, ...cot];
 }
 
+export type UploadRow = {
+  week: number;
+  subjectId: string;
+  subjectName: string;
+  type: DeliverableType;
+  status: ItemStatus;
+  assigneeName: string | null;
+  scheduleNote: string | null;
+};
+
+/** DLP + PPT items for a term/grade, for the upload-completion tracker. */
+export async function getUploadMatrix(termId: string, grade: number): Promise<UploadRow[]> {
+  return db
+    .select({
+      week: workItems.weekNumber,
+      subjectId: workItems.subjectId,
+      subjectName: subjects.name,
+      type: workItems.type,
+      status: workItems.status,
+      assigneeName: users.fullName,
+      scheduleNote: workItems.scheduleNote,
+    })
+    .from(workItems)
+    .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
+    .leftJoin(users, eq(users.id, workItems.assigneeId))
+    .where(and(eq(workItems.termId, termId), eq(workItems.grade, grade), sql`${workItems.type} in ('DLP','PPT')`))
+    .orderBy(asc(workItems.weekNumber), asc(subjects.name))
+    .limit(3000);
+}
+
 export async function getTermGrades(termId: string) {
   const rows = await db
     .selectDistinct({ grade: termOfferings.grade })
