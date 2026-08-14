@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lte, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { customOrderItems, quotaCycles, quotaCycleItems, users, workItems } from "@/db/schema";
@@ -45,10 +45,13 @@ function dateCondition(column: Parameters<typeof gte>[0], range?: DateRange) {
 export async function getProductivityStats(range?: DateRange): Promise<EditorProductivity[]> {
   const quotaSize = await getQuotaSize();
 
+  // Quota staff = anyone paid via quota (payType quota or both), regardless of
+  // role — so an admin who also does quota work (e.g. payType "both") still
+  // shows on the Productivity and Payroll quota tables.
   const editors = await db
     .select({ id: users.id, fullName: users.fullName, cycleOffset: users.cycleOffset })
     .from(users)
-    .where(eq(users.role, "editor"))
+    .where(inArray(users.payType, ["quota", "both"]))
     .orderBy(asc(users.fullName));
 
   const [openCycles, completedCounts, breakdown, cotBreakdown, turnaround, revision, adjustmentTotals, paymentTotals] = await Promise.all([
