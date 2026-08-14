@@ -199,7 +199,7 @@ export function ReviewClient({
           )}
         </div>
 
-        <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
           <span className="text-sm text-muted-foreground">{selectedReview.size} selected</span>
           <BulkActionButton
             itemIds={[...selectedReview]}
@@ -212,11 +212,20 @@ export function ReviewClient({
               setSelectedReview(new Set());
             }}
           />
-          {selectedReview.size > 0 && (
-            <button className="text-sm text-muted-foreground underline" onClick={() => setSelectedReview(new Set())}>
-              Clear
-            </button>
-          )}
+          <button
+            className="text-sm text-primary underline disabled:opacity-40"
+            disabled={reviewIds.length === 0 || allReviewSelected}
+            onClick={() => setSelectedReview(new Set(reviewIds))}
+          >
+            Select all ({reviewIds.length})
+          </button>
+          <button
+            className="text-sm text-muted-foreground underline disabled:opacity-40"
+            disabled={selectedReview.size === 0}
+            onClick={() => setSelectedReview(new Set())}
+          >
+            Uncheck all
+          </button>
         </div>
 
         <Table>
@@ -318,16 +327,25 @@ export function ReviewClient({
           {filteredCot.length !== cotInReview.length ? ` of ${cotInReview.length}` : ""})
         </h2>
         {filteredCot.length > 0 && (
-          <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2">
             <span className="text-sm text-muted-foreground">{selectedCot.size} selected</span>
             <Button size="sm" disabled={cotPending || selectedCot.size === 0} onClick={approveSelectedCot}>
               {cotPending ? "Approving…" : "Approve selected"}
             </Button>
-            {selectedCot.size > 0 && (
-              <button className="text-sm text-muted-foreground underline" onClick={() => setSelectedCot(new Set())}>
-                Clear
-              </button>
-            )}
+            <button
+              className="text-sm text-primary underline disabled:opacity-40"
+              disabled={cotIds.length === 0 || allCotSelected}
+              onClick={() => setSelectedCot(new Set(cotIds))}
+            >
+              Select all ({cotIds.length})
+            </button>
+            <button
+              className="text-sm text-muted-foreground underline disabled:opacity-40"
+              disabled={selectedCot.size === 0}
+              onClick={() => setSelectedCot(new Set())}
+            >
+              Uncheck all
+            </button>
           </div>
         )}
         <Table>
