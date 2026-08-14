@@ -132,6 +132,8 @@ export function ReviewClient({
   const allReviewSelected = reviewIds.length > 0 && reviewIds.every((id) => selectedReview.has(id));
   const cotIds = filteredCot.map((i) => i.id);
   const allCotSelected = cotIds.length > 0 && cotIds.every((id) => selectedCot.has(id));
+  const uploadIds = readyToUpload.map((i) => i.id);
+  const allUploadsSelected = uploadIds.length > 0 && uploadIds.every((id) => selectedUploads.has(id));
 
   // COT approvals return a different result shape, so bulk-approve them directly.
   function approveSelectedCot() {
@@ -464,7 +466,7 @@ export function ReviewClient({
       </section>
 
       <section className="flex flex-col gap-2">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-lg font-semibold">Ready to upload ({readyToUpload.length})</h2>
           <BulkActionButton
             itemIds={[...selectedUploads]}
@@ -472,13 +474,36 @@ export function ReviewClient({
             pendingLabel="Uploading…"
             variant="default"
             action={uploadItemAction}
-            onDone={setBanner}
+            onDone={(m) => {
+              setBanner(m);
+              setSelectedUploads(new Set());
+            }}
           />
+          <button
+            className="text-sm text-primary underline disabled:opacity-40"
+            disabled={uploadIds.length === 0 || allUploadsSelected}
+            onClick={() => setSelectedUploads(new Set(uploadIds))}
+          >
+            Select all ({uploadIds.length})
+          </button>
+          <button
+            className="text-sm text-muted-foreground underline disabled:opacity-40"
+            disabled={selectedUploads.size === 0}
+            onClick={() => setSelectedUploads(new Set())}
+          >
+            Uncheck all
+          </button>
         </div>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-8" />
+              <TableHead className="w-8">
+                <Checkbox
+                  checked={allUploadsSelected}
+                  onCheckedChange={() => setSelectedUploads(allUploadsSelected ? new Set() : new Set(uploadIds))}
+                  aria-label="Select all"
+                />
+              </TableHead>
               <TableHead>Grade</TableHead>
               <TableHead>Subject</TableHead>
               <TableHead>Week</TableHead>
