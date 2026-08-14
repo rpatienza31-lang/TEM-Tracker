@@ -38,6 +38,16 @@ export function ReviewClient({
   const [cotPending, startCotTransition] = useTransition();
   // Default deadline offered when sending an item back (editors can change it).
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+  // Rows just approved in this table — kept in place with a "Mark as uploaded"
+  // button so you don't have to scroll to the section below.
+  const [approvedInline, setApprovedInline] = useState<Map<string, BoardItem>>(new Map());
+  const addApproved = (item: BoardItem) => setApprovedInline((m) => new Map(m).set(item.id, item));
+  const removeApproved = (id: string) =>
+    setApprovedInline((m) => {
+      const n = new Map(m);
+      n.delete(id);
+      return n;
+    });
   const [editor, setEditor] = useState("");
   const [grade, setGrade] = useState("");
   const [subject, setSubject] = useState("");
@@ -225,11 +235,10 @@ export function ReviewClient({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredInReview.map((item) => (
-              <TableRow key={item.id}>
-                <TableCell>
-                  <Checkbox checked={selectedReview.has(item.id)} onCheckedChange={(c) => toggleInSet(setSelectedReview, item.id, c === true)} />
-                </TableCell>
+            {/* Just-approved rows, kept here with a Mark-as-uploaded button. */}
+            {[...approvedInline.values()].map((item) => (
+              <TableRow key={`approved-${item.id}`} className="bg-emerald-50/70 dark:bg-emerald-950/20">
+                <TableCell />
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
@@ -242,20 +251,57 @@ export function ReviewClient({
                     </a>
                   )}
                 </TableCell>
-                <TableCell className="flex flex-wrap gap-1">
-                  <BulkActionButton
-                    itemIds={[item.id]}
-                    label="Approve"
-                    pendingLabel="…"
-                    variant="default"
-                    action={approveItemAction}
-                    onDone={setBanner}
+                <TableCell className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    ✓ Approved
+                  </span>
+                  <RowUpload
+                    id={item.id}
+                    onUploaded={(id) => {
+                      removeApproved(id);
+                      setBanner("Marked as uploaded.");
+                    }}
+                    onError={setBanner}
                   />
-                  <RequestRevisionDialog itemId={item.id} onDone={setBanner} defaultDate={item.dueDate ?? today} />
+                  <button className="text-xs text-muted-foreground underline" onClick={() => removeApproved(item.id)}>
+                    dismiss
+                  </button>
                 </TableCell>
               </TableRow>
             ))}
-            {filteredInReview.length === 0 && (
+            {filteredInReview
+              .filter((item) => !approvedInline.has(item.id))
+              .map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    <Checkbox checked={selectedReview.has(item.id)} onCheckedChange={(c) => toggleInSet(setSelectedReview, item.id, c === true)} />
+                  </TableCell>
+                  <TableCell>{item.grade}</TableCell>
+                  <TableCell>{item.subjectName}</TableCell>
+                  <TableCell>Wk {item.weekNumber}</TableCell>
+                  <TableCell>{DELIVERABLE_TYPE_LABELS[item.type]}</TableCell>
+                  <TableCell>{item.assigneeName}</TableCell>
+                  <TableCell>
+                    {item.fileUrl && (
+                      <a className="text-primary underline" href={item.fileUrl} target="_blank" rel="noreferrer">
+                        File
+                      </a>
+                    )}
+                  </TableCell>
+                  <TableCell className="flex flex-wrap gap-1">
+                    <RowApprove
+                      item={item}
+                      onApproved={(it) => {
+                        addApproved(it);
+                        setBanner("Approved — now mark it uploaded.");
+                      }}
+                      onError={setBanner}
+                    />
+                    <RequestRevisionDialog itemId={item.id} onDone={setBanner} defaultDate={item.dueDate ?? today} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            {filteredInReview.length === 0 && approvedInline.size === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-muted-foreground">
                   {inReview.length === 0 ? "Nothing waiting on review." : "No items match these filters."}
@@ -458,6 +504,61 @@ export function ReviewClient({
         </Table>
       </section>
     </div>
+  );
+}
+
+function RowApprove({
+  item,
+  onApproved,
+  onError,
+}: {
+  item: BoardItem;
+  onApproved: (item: BoardItem) => void;
+  onError: (msg: string) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  return (
+    <Button
+      size="sm"
+      disabled={pending}
+      onClick={() =>
+        startTransition(async () => {
+          const r = await approveItemAction(item.id);
+          if (r.ok) onApproved(item);
+          else onError(r.error.message);
+        })
+      }
+    >
+      {pending ? "…" : "Approve"}
+    </Button>
+  );
+}
+
+function RowUpload({
+  id,
+  onUploaded,
+  onError,
+}: {
+  id: string;
+  onUploaded: (id: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  return (
+    <Button
+      size="sm"
+      variant="default"
+      disabled={pending}
+      onClick={() =>
+        startTransition(async () => {
+          const r = await uploadItemAction(id);
+          if (r.ok) onUploaded(id);
+          else onError(r.error.message);
+        })
+      }
+    >
+      {pending ? "…" : "Mark as uploaded"}
+    </Button>
   );
 }
 
