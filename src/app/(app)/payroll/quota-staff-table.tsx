@@ -273,7 +273,9 @@ function BreakdownPanel({ row, lines, isOwner }: { row: QuotaRow; lines: Breakdo
                 )}
                 <Badge variant={line.kind === "adjustment" ? "outline" : "secondary"}>{lineLabel(line)}</Badge>
                 <span className="ml-auto text-xs text-muted-foreground">{dateFmt.format(new Date(line.dateIso))}</span>
-                {isOwner && line.kind === "adjustment" ? (
+                {isOwner && line.refId ? (
+                  // Owner can edit any line's points in place — e.g. drop a COT
+                  // to 0.2 when it's an alignment only.
                   <EditableLinePoints kind={line.kind} refId={line.refId} points={line.points} />
                 ) : (
                   <span className={`w-12 text-right tabular-nums ${line.points < 0 ? "text-destructive" : ""}`}>
