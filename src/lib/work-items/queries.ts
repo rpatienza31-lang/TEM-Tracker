@@ -442,6 +442,8 @@ export type UploadRow = {
   type: DeliverableType;
   status: ItemStatus;
   assigneeName: string | null;
+  approvedByName: string | null;
+  uploadedByName: string | null;
   scheduleNote: string | null;
 };
 
@@ -455,6 +457,19 @@ export async function getUploadMatrix(termId: string, grade: number): Promise<Up
       type: workItems.type,
       status: workItems.status,
       assigneeName: users.fullName,
+      // Who moved the item to approved / uploaded (owner or admin), from the log.
+      approvedByName: sql<string | null>`(
+        select u_appr.full_name from work_item_events ev_appr
+        join users u_appr on u_appr.id = ev_appr.actor_id
+        where ev_appr.work_item_id = ${workItems.id} and ev_appr.to_status = 'approved'
+        order by ev_appr.created_at desc limit 1
+      )`,
+      uploadedByName: sql<string | null>`(
+        select u_up.full_name from work_item_events ev_up
+        join users u_up on u_up.id = ev_up.actor_id
+        where ev_up.work_item_id = ${workItems.id} and ev_up.to_status = 'uploaded'
+        order by ev_up.created_at desc limit 1
+      )`,
       scheduleNote: workItems.scheduleNote,
     })
     .from(workItems)

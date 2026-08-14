@@ -41,6 +41,12 @@ function DeliverableCell({ row }: { row?: UploadRow }) {
       <span className="flex flex-col leading-tight">
         <span className={uploaded ? "" : "text-muted-foreground"}>{row.assigneeName ?? "Unassigned"}</span>
         {!uploaded && <span className="text-[11px] text-amber-700 dark:text-amber-400">{STATUS_LABEL[row.status]}</span>}
+        {uploaded && row.uploadedByName && (
+          <span className="text-[11px] text-muted-foreground">Uploaded by {row.uploadedByName}</span>
+        )}
+        {!uploaded && row.status === "approved" && row.approvedByName && (
+          <span className="text-[11px] text-muted-foreground">Approved by {row.approvedByName}</span>
+        )}
       </span>
     </div>
   );
