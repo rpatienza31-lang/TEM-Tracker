@@ -134,7 +134,7 @@ function EditableLinePoints({
       <Input
         name="newPoints"
         type="number"
-        step="0.1"
+        step="0.01"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         className="h-7 w-16 text-right tabular-nums"

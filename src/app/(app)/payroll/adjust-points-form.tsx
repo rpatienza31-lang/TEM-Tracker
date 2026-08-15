@@ -38,9 +38,9 @@ export function AdjustPointsForm({ editorId, editorName }: { editorId: string; e
             id={`adj-points-${editorId}`}
             name="points"
             type="number"
-            step="0.5"
+            step="0.01"
             inputMode="decimal"
-            placeholder="e.g. 1 or -1.5"
+            placeholder="e.g. 0.2 or -1.5"
             className="w-32"
             aria-label={`Point adjustment for ${editorName}`}
           />
