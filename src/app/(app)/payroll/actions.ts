@@ -26,6 +26,7 @@ export async function emailPayslipAction(
   userId: string,
   from: string,
   to: string,
+  include: "both" | "quota" | "hourly" = "both",
 ): Promise<{ ok: boolean; message?: string }> {
   await requireRole("owner");
 
@@ -39,21 +40,30 @@ export async function emailPayslipAction(
   const report = await getPayrollReport(from, to);
   const slip = report.payslips.find((p) => p.userId === userId);
   if (!slip) return { ok: false, message: "No payslip for this staff member in this period." };
-  const quota = report.quotaRows.find((r) => r.userId === userId);
-  const hourly = report.hourlyRows.find((r) => r.userId === userId);
+
+  // Match the emailed payslip to what's actually being paid — quota only,
+  // hourly only, or both — so the email never shows a component that wasn't
+  // part of this payout.
+  const includeQuota = include !== "hourly";
+  const includeHourly = include !== "quota";
+  const quota = includeQuota ? report.quotaRows.find((r) => r.userId === userId) : undefined;
+  const hourly = includeHourly ? report.hourlyRows.find((r) => r.userId === userId) : undefined;
   const { hourlySessions, quotaItems } = await buildPayslipDetail({ userId, from, to, quota, hourly, slip });
+
+  const quotaAmount = includeQuota ? slip.quotaSalary : 0;
+  const hourlyAmount = includeHourly ? slip.hourlySalary : 0;
+  const gross = quotaAmount + hourlyAmount;
+  const net = gross - slip.cashAdvance;
 
   const html = renderPayslipHtml({
     fullName: slip.fullName,
     from,
     to,
-    quota: quota
-      ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: slip.quotaSalary }
-      : undefined,
-    hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: slip.hourlySalary } : undefined,
-    gross: slip.gross,
+    quota: quota ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: quotaAmount } : undefined,
+    hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: hourlyAmount } : undefined,
+    gross,
     cashAdvance: slip.cashAdvance,
-    net: slip.net,
+    net,
     hourlySessions,
     quotaItems,
   });

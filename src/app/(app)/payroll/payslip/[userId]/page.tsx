@@ -83,7 +83,7 @@ export default async function PayslipPage({
           ← Back to Payroll
         </Link>
         <div className="flex items-center gap-2">
-          <EmailPayslipButton userId={userId} from={from} to={to} />
+          <EmailPayslipButton userId={userId} from={from} to={to} include={include} />
           <PrintButton />
         </div>
       </div>

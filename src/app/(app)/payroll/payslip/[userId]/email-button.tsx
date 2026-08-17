@@ -5,14 +5,24 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { emailPayslipAction } from "../../actions";
 
-export function EmailPayslipButton({ userId, from, to }: { userId: string; from: string; to: string }) {
+export function EmailPayslipButton({
+  userId,
+  from,
+  to,
+  include = "both",
+}: {
+  userId: string;
+  from: string;
+  to: string;
+  include?: "both" | "quota" | "hourly";
+}) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   function send() {
     setMsg(null);
     startTransition(async () => {
-      const result = await emailPayslipAction(userId, from, to);
+      const result = await emailPayslipAction(userId, from, to, include);
       setMsg({ ok: result.ok, text: result.ok ? "Payslip emailed to the employee." : (result.message ?? "Failed to send.") });
     });
   }
