@@ -48,6 +48,7 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
             <TableHead className="text-right">CA</TableHead>
             <TableHead className="text-right">Net</TableHead>
             <TableHead>Paid by</TableHead>
+            <TableHead>Received</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -86,10 +87,21 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
                   </TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">{peso.format(p.net)}</TableCell>
                   <TableCell className="text-muted-foreground">{p.paidByName ?? "—"}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {p.receivedAtIso ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                        ✓ {dateFmt.format(new Date(p.receivedAtIso))}
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                        Pending
+                      </span>
+                    )}
+                  </TableCell>
                 </TableRow>
                 {isOpen && (
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableCell colSpan={9} className="py-3">
+                    <TableCell colSpan={10} className="py-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Projects covered by this payout
                         {p.itemsReconstructed && (
@@ -133,7 +145,7 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
           })}
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={9} className="text-center text-muted-foreground">
+              <TableCell colSpan={10} className="text-center text-muted-foreground">
                 {payments.length === 0 ? "No payouts recorded yet." : "No payments match that name."}
               </TableCell>
             </TableRow>

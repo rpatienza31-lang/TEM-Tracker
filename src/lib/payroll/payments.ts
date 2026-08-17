@@ -109,10 +109,56 @@ export type PaymentHistoryRow = {
   periodTo: string | null;
   paidByName: string | null;
   paidAtIso: string;
+  // Set when the employee confirmed receipt.
+  receivedAtIso: string | null;
   items: PaymentItem[];
   // True when the covered projects were reconstructed (payout predates snapshots).
   itemsReconstructed: boolean;
 };
+
+export type MyPayment = {
+  id: string;
+  kind: string;
+  points: string;
+  rate: string;
+  amount: string;
+  cashAdvance: string;
+  periodFrom: string | null;
+  periodTo: string | null;
+  paidAt: Date;
+  receivedAt: Date | null;
+};
+
+/** One staff member's own payouts, newest first — for the My Pay page. */
+export async function getMyPayments(userId: string): Promise<MyPayment[]> {
+  return db
+    .select({
+      id: payrollPayments.id,
+      kind: payrollPayments.kind,
+      points: payrollPayments.points,
+      rate: payrollPayments.rate,
+      amount: payrollPayments.amount,
+      cashAdvance: payrollPayments.cashAdvance,
+      periodFrom: payrollPayments.periodFrom,
+      periodTo: payrollPayments.periodTo,
+      paidAt: payrollPayments.paidAt,
+      receivedAt: payrollPayments.receivedAt,
+    })
+    .from(payrollPayments)
+    .where(eq(payrollPayments.editorId, userId))
+    .orderBy(desc(payrollPayments.paidAt));
+}
+
+/** The employee confirms they received a payout. Only their own, and once. */
+export async function confirmPaymentReceived(paymentId: string, userId: string): Promise<{ ok: boolean; message?: string }> {
+  const [row] = await db
+    .update(payrollPayments)
+    .set({ receivedAt: new Date() })
+    .where(and(eq(payrollPayments.id, paymentId), eq(payrollPayments.editorId, userId), sql`${payrollPayments.receivedAt} is null`))
+    .returning({ id: payrollPayments.id });
+  if (!row) return { ok: false, message: "Payout not found, not yours, or already confirmed." };
+  return { ok: true };
+}
 
 /** All recorded payouts, newest first, with the payee and who recorded it. */
 export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
@@ -131,6 +177,7 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
       periodTo: payrollPayments.periodTo,
       paidBy: payrollPayments.paidBy,
       paidAt: payrollPayments.paidAt,
+      receivedAt: payrollPayments.receivedAt,
       items: payrollPayments.items,
     })
     .from(payrollPayments)
@@ -192,6 +239,7 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
       periodTo: r.periodTo,
       paidByName: r.paidBy ? actorNames.get(r.paidBy) ?? null : null,
       paidAtIso: new Date(r.paidAt).toISOString(),
+      receivedAtIso: r.receivedAt ? new Date(r.receivedAt).toISOString() : null,
       items: stored ?? reconstructed.get(r.id) ?? [],
       itemsReconstructed: kind === "quota" && !stored,
     };

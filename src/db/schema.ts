@@ -271,6 +271,8 @@ export const payrollPayments = pgTable(
     periodTo: date("period_to"),
     paidBy: uuid("paid_by").references(() => users.id),
     paidAt: timestamp("paid_at", { withTimezone: true }).notNull().defaultNow(),
+    // Set when the employee confirms they received this payout.
+    receivedAt: timestamp("received_at", { withTimezone: true }),
   },
   (t) => [index("payroll_payments_editor_idx").on(t.editorId, t.paidAt)],
 );
