@@ -48,6 +48,7 @@ export function ReviewClient({
       n.delete(id);
       return n;
     });
+  const [term, setTerm] = useState("");
   const [editor, setEditor] = useState("");
   const [grade, setGrade] = useState("");
   const [subject, setSubject] = useState("");
@@ -59,6 +60,7 @@ export function ReviewClient({
     () => ({
       // Editor/grade/etc. lists span every table so the filters work across the
       // whole queue, including the back-jobs (revision) section.
+      terms: uniqueSorted([...inReview, ...inRevision].map((i) => i.termName).filter((n): n is string => !!n)),
       editors: uniqueSorted(
         [
           ...inReview.map((i) => i.assigneeName),
@@ -78,13 +80,14 @@ export function ReviewClient({
   const filteredInReview = useMemo(() => {
     return inReview.filter(
       (i) =>
+        (!term || i.termName === term) &&
         (!editor || i.assigneeName === editor) &&
         (!grade || String(i.grade) === grade) &&
         (!subject || i.subjectName === subject) &&
         (!week || String(i.weekNumber) === week) &&
         (!type || i.type === type),
     );
-  }, [inReview, editor, grade, subject, week, type]);
+  }, [inReview, term, editor, grade, subject, week, type]);
 
   const filteredCot = useMemo(
     () => cotInReview.filter((i) => (!editor || i.assigneeName === editor) && (!type || i.type === type)),
@@ -94,13 +97,14 @@ export function ReviewClient({
   const filteredRevision = useMemo(() => {
     return inRevision.filter(
       (i) =>
+        (!term || i.termName === term) &&
         (!editor || i.assigneeName === editor) &&
         (!grade || String(i.grade) === grade) &&
         (!subject || i.subjectName === subject) &&
         (!week || String(i.weekNumber) === week) &&
         (!type || i.type === type),
     );
-  }, [inRevision, editor, grade, subject, week, type]);
+  }, [inRevision, term, editor, grade, subject, week, type]);
 
   const filteredCotRevision = useMemo(
     () => cotInRevision.filter((i) => (!editor || i.assigneeName === editor) && (!type || i.type === type)),
@@ -174,6 +178,7 @@ export function ReviewClient({
         </h2>
 
         <div className="flex flex-wrap items-center gap-2">
+          <FilterSelect label="Term" allLabel="All terms" value={term} onChange={setTerm} options={options.terms} />
           <FilterSelect label="Editor" allLabel="All editors" value={editor} onChange={setEditor} options={options.editors} />
           <FilterSelect label="Grade" value={grade} onChange={setGrade} options={options.grades} render={(g) => `Grade ${g}`} />
           <FilterSelect label="Subject" value={subject} onChange={setSubject} options={options.subjects} />
@@ -185,10 +190,11 @@ export function ReviewClient({
             options={options.types}
             render={(t) => DELIVERABLE_TYPE_LABELS[t as keyof typeof DELIVERABLE_TYPE_LABELS] ?? t}
           />
-          {(editor || grade || subject || week || type) && (
+          {(term || editor || grade || subject || week || type) && (
             <button
               className="text-sm text-muted-foreground underline"
               onClick={() => {
+                setTerm("");
                 setEditor("");
                 setGrade("");
                 setSubject("");
@@ -236,6 +242,7 @@ export function ReviewClient({
               <TableHead className="w-8">
                 <Checkbox checked={allReviewSelected} onCheckedChange={() => setSelectedReview(allReviewSelected ? new Set() : new Set(reviewIds))} aria-label="Select all" />
               </TableHead>
+              <TableHead>Term</TableHead>
               <TableHead>Grade</TableHead>
               <TableHead>Subject</TableHead>
               <TableHead>Week</TableHead>
@@ -250,6 +257,7 @@ export function ReviewClient({
             {[...approvedInline.values()].map((item) => (
               <TableRow key={`approved-${item.id}`} className="bg-emerald-50/70 dark:bg-emerald-950/20">
                 <TableCell />
+                <TableCell className="text-muted-foreground">{item.termName}</TableCell>
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
@@ -287,6 +295,7 @@ export function ReviewClient({
                   <TableCell>
                     <Checkbox checked={selectedReview.has(item.id)} onCheckedChange={(c) => toggleInSet(setSelectedReview, item.id, c === true)} />
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{item.termName}</TableCell>
                   <TableCell>{item.grade}</TableCell>
                   <TableCell>{item.subjectName}</TableCell>
                   <TableCell>Wk {item.weekNumber}</TableCell>
@@ -314,7 +323,7 @@ export function ReviewClient({
               ))}
             {filteredInReview.length === 0 && approvedInline.size === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   {inReview.length === 0 ? "Nothing waiting on review." : "No items match these filters."}
                 </TableCell>
               </TableRow>
@@ -410,6 +419,7 @@ export function ReviewClient({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Term</TableHead>
               <TableHead>Grade / Customer</TableHead>
               <TableHead>Subject</TableHead>
               <TableHead>Week / Topic</TableHead>
@@ -422,6 +432,7 @@ export function ReviewClient({
           <TableBody>
             {filteredRevision.map((item) => (
               <TableRow key={item.id} className="bg-red-50/40 dark:bg-red-950/10">
+                <TableCell className="text-muted-foreground">{item.termName}</TableCell>
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
@@ -439,6 +450,7 @@ export function ReviewClient({
             ))}
             {filteredCotRevision.map((item) => (
               <TableRow key={item.id} className="bg-red-50/40 dark:bg-red-950/10">
+                <TableCell className="text-muted-foreground">—</TableCell>
                 <TableCell>{item.customerName}</TableCell>
                 <TableCell>{item.subjectName ?? "—"}</TableCell>
                 <TableCell>{item.topic ?? "—"}</TableCell>
@@ -456,7 +468,7 @@ export function ReviewClient({
             ))}
             {revisionCount === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   {revisionTotal === 0 ? "No back jobs right now." : "No back jobs match these filters."}
                 </TableCell>
               </TableRow>
@@ -504,6 +516,7 @@ export function ReviewClient({
                   aria-label="Select all"
                 />
               </TableHead>
+              <TableHead>Term</TableHead>
               <TableHead>Grade</TableHead>
               <TableHead>Subject</TableHead>
               <TableHead>Week</TableHead>
@@ -519,6 +532,7 @@ export function ReviewClient({
                 <TableCell>
                   <Checkbox checked={selectedUploads.has(item.id)} onCheckedChange={(c) => toggleUpload(item.id, c === true)} />
                 </TableCell>
+                <TableCell className="text-muted-foreground">{item.termName}</TableCell>
                 <TableCell>{item.grade}</TableCell>
                 <TableCell>{item.subjectName}</TableCell>
                 <TableCell>Wk {item.weekNumber}</TableCell>
@@ -538,7 +552,7 @@ export function ReviewClient({
             ))}
             {readyToUpload.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   Nothing approved and waiting to publish.
                 </TableCell>
               </TableRow>

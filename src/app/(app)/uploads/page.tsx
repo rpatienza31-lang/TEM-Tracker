@@ -64,11 +64,25 @@ function DeliverableCell({ row }: { row?: UploadRow }) {
   const editor = row.assigneeName;
 
   return (
-    <div className="flex items-center gap-2.5">
-      {editor ? <Avatar name={editor} /> : <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500 dark:bg-slate-700">–</span>}
+    <div
+      className={`flex items-center gap-2.5 ${
+        uploaded ? "rounded-lg border border-emerald-200 bg-emerald-50/70 px-2 py-1 dark:border-emerald-900 dark:bg-emerald-950/30" : ""
+      }`}
+    >
+      {uploaded ? (
+        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-sm font-bold text-white shadow-sm">
+          ✓
+        </span>
+      ) : editor ? (
+        <Avatar name={editor} />
+      ) : (
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500 dark:bg-slate-700">
+          –
+        </span>
+      )}
       <div className="flex min-w-0 flex-col leading-tight">
         <span className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.pill}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+          {uploaded ? <span className="text-[10px]">✓</span> : <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />}
           {meta.label}
         </span>
         <span className="mt-0.5 truncate text-sm">{editor ?? <span className="text-muted-foreground">Unassigned</span>}</span>
