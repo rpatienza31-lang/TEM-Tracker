@@ -303,6 +303,24 @@ export const settings = pgTable("settings", {
   value: jsonb("value").notNull(),
 });
 
+// A personal checklist item an admin/owner pins to a day of the Project
+// Schedule (shown in their own column), togglable done/pending.
+export const scheduleTasks = pgTable(
+  "schedule_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+    title: text("title").notNull(),
+    done: boolean("done").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("schedule_tasks_user_date_idx").on(t.userId, t.date)],
+);
+
 export const notifications = pgTable(
   "notifications",
   {

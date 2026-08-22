@@ -2,7 +2,7 @@ import { and, asc, eq, ne, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/db/client";
-import { customOrderItems, customOrders, staffAvailability, workItems, subjects, users, terms, termOfferings } from "@/db/schema";
+import { customOrderItems, customOrders, scheduleTasks, staffAvailability, workItems, subjects, users, terms, termOfferings } from "@/db/schema";
 import type { DeliverableType, ItemStatus } from "@/lib/constants";
 
 export type AvailabilityKind = "day_off" | "vacation" | "school" | "absent";
@@ -478,6 +478,23 @@ export async function getUploadMatrix(termId: string, grade: number): Promise<Up
     .where(and(eq(workItems.termId, termId), eq(workItems.grade, grade), sql`${workItems.type} in ('DLP','PPT')`))
     .orderBy(asc(workItems.weekNumber), asc(subjects.name))
     .limit(3000);
+}
+
+export type ScheduleTask = { id: string; userId: string; date: string; title: string; done: boolean };
+
+/** Personal admin checklist items in [from, to], for the Project Schedule. */
+export async function getScheduleTasks(from: string, to: string): Promise<ScheduleTask[]> {
+  return db
+    .select({
+      id: scheduleTasks.id,
+      userId: scheduleTasks.userId,
+      date: scheduleTasks.date,
+      title: scheduleTasks.title,
+      done: scheduleTasks.done,
+    })
+    .from(scheduleTasks)
+    .where(and(sql`${scheduleTasks.date} >= ${from}`, sql`${scheduleTasks.date} <= ${to}`))
+    .orderBy(asc(scheduleTasks.createdAt));
 }
 
 export async function getTermGrades(termId: string) {

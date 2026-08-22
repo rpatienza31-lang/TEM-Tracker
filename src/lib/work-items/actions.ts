@@ -5,9 +5,52 @@ import { and, eq } from "drizzle-orm";
 
 import { requireRole, requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
-import { customOrderItems, customOrders, staffAvailability, workItems } from "@/db/schema";
+import { customOrderItems, customOrders, scheduleTasks, staffAvailability, workItems } from "@/db/schema";
 import type { AvailabilityKind } from "@/lib/work-items/queries";
 import { deleteWorkItem, transitionWorkItem, type DeleteResult, type TransitionResult } from "@/lib/work-items/transitions";
+
+type OkResult = { ok: boolean; message?: string };
+
+/** Adds a personal checklist task to a Project Schedule day (admins/owners). */
+export async function addScheduleTaskAction(date: string, title: string): Promise<OkResult> {
+  const user = await requireRole("owner", "admin");
+  if (!ISO_DATE.test(date)) return { ok: false, message: "Invalid date." };
+  const clean = title.trim();
+  if (!clean) return { ok: false, message: "Enter a task." };
+  await db.insert(scheduleTasks).values({ userId: user.id, date, title: clean.slice(0, 200) });
+  revalidatePath("/schedule");
+  return { ok: true };
+}
+
+/** Toggles a task done/pending. Only the owner of the task (or an owner). */
+export async function toggleScheduleTaskAction(id: string, done: boolean): Promise<OkResult> {
+  const user = await requireRole("owner", "admin");
+  const where =
+    user.role === "owner"
+      ? eq(scheduleTasks.id, id)
+      : and(eq(scheduleTasks.id, id), eq(scheduleTasks.userId, user.id));
+  const [row] = await db
+    .update(scheduleTasks)
+    .set({ done, updatedAt: new Date() })
+    .where(where)
+    .returning({ id: scheduleTasks.id });
+  if (!row) return { ok: false, message: "Task not found or not yours." };
+  revalidatePath("/schedule");
+  return { ok: true };
+}
+
+/** Deletes a personal task. Only the owner of the task (or an owner). */
+export async function deleteScheduleTaskAction(id: string): Promise<OkResult> {
+  const user = await requireRole("owner", "admin");
+  const where =
+    user.role === "owner"
+      ? eq(scheduleTasks.id, id)
+      : and(eq(scheduleTasks.id, id), eq(scheduleTasks.userId, user.id));
+  const [row] = await db.delete(scheduleTasks).where(where).returning({ id: scheduleTasks.id });
+  if (!row) return { ok: false, message: "Task not found or not yours." };
+  revalidatePath("/schedule");
+  return { ok: true };
+}
 
 function refresh() {
   revalidatePath("/board");

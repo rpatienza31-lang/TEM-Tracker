@@ -5,14 +5,17 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { DELIVERABLE_TYPE_LABELS, STATUS_LABELS, type DeliverableType, type ItemStatus } from "@/lib/constants";
 import {
+  addScheduleTaskAction,
+  deleteScheduleTaskAction,
   requestRevisionAction,
   setAvailabilityAction,
   setCotItemScheduleAction,
   setCotScheduleNoteAction,
   setDueDateAction,
   setScheduleNoteAction,
+  toggleScheduleTaskAction,
 } from "@/lib/work-items/actions";
-import type { AvailabilityKind, ScheduleEntry, StaffAvailability } from "@/lib/work-items/queries";
+import type { AvailabilityKind, ScheduleEntry, ScheduleTask, StaffAvailability } from "@/lib/work-items/queries";
 import { requestCotRevisionAction } from "@/app/(app)/cot/actions";
 import { cn } from "@/lib/utils";
 import { AvailabilityDialog } from "./availability-dialog";
@@ -441,6 +444,107 @@ function ScheduleCard({
   );
 }
 
+/** A personal checklist task card with a done/pending checkbox. */
+function TaskChip({
+  task,
+  canManage,
+  onToggle,
+  onDelete,
+  pending,
+}: {
+  task: ScheduleTask;
+  canManage: boolean;
+  onToggle: (id: string, done: boolean) => void;
+  onDelete: (id: string) => void;
+  pending: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-1.5 rounded-lg border pl-2 pr-1.5 py-1.5 text-xs shadow-sm",
+        task.done
+          ? "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/30"
+          : "border-violet-200 bg-violet-50/70 dark:border-violet-900 dark:bg-violet-950/30",
+      )}
+    >
+      <input
+        type="checkbox"
+        checked={task.done}
+        disabled={!canManage || pending}
+        onChange={(e) => onToggle(task.id, e.target.checked)}
+        className="mt-0.5 h-3.5 w-3.5 shrink-0"
+        aria-label={task.done ? "Mark pending" : "Mark done"}
+      />
+      <div className="flex min-w-0 flex-col leading-tight">
+        <span className="text-[9px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">Task</span>
+        <span className={cn("break-words", task.done && "text-muted-foreground line-through")}>{task.title}</span>
+      </div>
+      {canManage && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onDelete(task.id)}
+          className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
+          aria-label="Delete task"
+          title="Delete"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Inline "+ Task" adder shown in the current admin's own column. */
+function AddTaskInline({ date, onAdd, pending }: { date: string; onAdd: (date: string, title: string) => void; pending: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start text-[11px] text-muted-foreground opacity-0 transition-opacity hover:text-violet-600 group-hover:opacity-100"
+      >
+        + Task
+      </button>
+    );
+  }
+  const submit = () => {
+    const v = value.trim();
+    if (v) onAdd(date, v);
+    setValue("");
+    setOpen(false);
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      <input
+        autoFocus
+        value={value}
+        disabled={pending}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+          if (e.key === "Escape") {
+            setValue("");
+            setOpen(false);
+          }
+        }}
+        placeholder="Special task…"
+        className="w-full rounded border border-input bg-background px-1.5 py-1 text-[11px]"
+      />
+      <div className="flex items-center gap-2">
+        <button type="button" disabled={pending || !value.trim()} onClick={submit} className="rounded bg-violet-600 px-1.5 py-0.5 text-[11px] font-medium text-white hover:bg-violet-700 disabled:opacity-50">
+          Add
+        </button>
+        <button type="button" onClick={() => { setValue(""); setOpen(false); }} className="text-[11px] text-muted-foreground underline">
+          cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ScheduleClient({
   items,
   availability,
@@ -453,6 +557,8 @@ export function ScheduleClient({
   termId,
   isAdmin,
   currentUserId,
+  currentUserRole,
+  tasks,
 }: {
   items: ScheduleItem[];
   availability: StaffAvailability[];
@@ -465,6 +571,8 @@ export function ScheduleClient({
   termId: string;
   isAdmin: boolean;
   currentUserId: string;
+  currentUserRole: string;
+  tasks: ScheduleTask[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -582,6 +690,33 @@ export function ScheduleClient({
     });
   }
 
+  // ── Personal admin checklist tasks ──────────────────────────────────────────
+  function runTask(fn: () => Promise<{ ok: boolean; message?: string }>) {
+    setError(null);
+    startTransition(async () => {
+      const res = await fn();
+      if (!res.ok) setError(res.message ?? "Could not update the task.");
+      else router.refresh();
+    });
+  }
+  const addTask = (date: string, title: string) => runTask(() => addScheduleTaskAction(date, title));
+  const toggleTask = (id: string, done: boolean) => runTask(() => toggleScheduleTaskAction(id, done));
+  const deleteTask = (id: string) => runTask(() => deleteScheduleTaskAction(id));
+
+  // date -> userId -> tasks
+  const taskGrid = useMemo(() => {
+    const m = new Map<string, Map<string, ScheduleTask[]>>();
+    for (const t of tasks) {
+      const byUser = m.get(t.date) ?? new Map<string, ScheduleTask[]>();
+      const list = byUser.get(t.userId) ?? [];
+      list.push(t);
+      byUser.set(t.userId, list);
+      m.set(t.date, byUser);
+    }
+    return m;
+  }, [tasks]);
+  const canManageTask = (ownerId: string) => currentUserRole === "owner" || ownerId === currentUserId;
+
   // Columns: staff with work or a day-off marker in the window (or every active
   // staffer when "Show all staff" is on, so anyone can be marked off), plus an
   // Unassigned bucket when needed. The current user's own column sorts first.
@@ -598,6 +733,10 @@ export function ScheduleClient({
       else hasUnassigned = true;
     }
     for (const a of availability) present.add(a.editorId);
+    // Show a column for anyone with a checklist task, and always show the
+    // current admin's own column so they can add tasks even without work.
+    for (const t of tasks) present.add(t.userId);
+    if (isAdmin) present.add(currentUserId);
 
     const ids = showAllStaff ? allStaff.map((s) => s.id) : [...present];
     const cols = [...new Set(ids)]
@@ -609,7 +748,7 @@ export function ScheduleClient({
       });
     if (hasUnassigned) cols.push({ id: UNASSIGNED, name: "Unassigned" });
     return cols;
-  }, [items, filteredItems, availability, allStaff, showAllStaff, currentUserId]);
+  }, [items, filteredItems, availability, allStaff, showAllStaff, currentUserId, tasks, isAdmin]);
 
   // date -> column -> items
   const grid = useMemo(() => {
@@ -829,6 +968,8 @@ export function ScheduleClient({
                       const isMe = c.id === currentUserId;
                       const availKey = `${c.id}|${date}`;
                       const avail = c.id === UNASSIGNED ? null : availByKey.get(availKey) ?? null;
+                      const cellTasks = c.id === UNASSIGNED ? [] : taskGrid.get(date)?.get(c.id) ?? [];
+                      const canAddTask = isMe && isAdmin;
                       return (
                         <td
                           key={c.id}
@@ -851,7 +992,7 @@ export function ScheduleClient({
                               pending={pending && busyId === availKey}
                             />
                           )}
-                          {cell.length === 0 ? (
+                          {cell.length === 0 && cellTasks.length === 0 && !canAddTask ? (
                             <div className="min-h-[1.5rem]" />
                           ) : (
                             <div className="flex flex-col gap-2">
@@ -868,6 +1009,17 @@ export function ScheduleClient({
                                   pending={pending && busyId === it.id}
                                 />
                               ))}
+                              {cellTasks.map((t) => (
+                                <TaskChip
+                                  key={t.id}
+                                  task={t}
+                                  canManage={canManageTask(t.userId)}
+                                  onToggle={toggleTask}
+                                  onDelete={deleteTask}
+                                  pending={pending}
+                                />
+                              ))}
+                              {canAddTask && <AddTaskInline date={date} onAdd={addTask} pending={pending} />}
                             </div>
                           )}
                         </td>
