@@ -480,21 +480,31 @@ export async function getUploadMatrix(termId: string, grade: number): Promise<Up
     .limit(3000);
 }
 
-export type ScheduleTask = { id: string; userId: string; date: string; title: string; done: boolean };
+export type TaskPriority = "high" | "medium" | "low";
+export type ScheduleTask = {
+  id: string;
+  userId: string;
+  date: string;
+  title: string;
+  done: boolean;
+  priority: TaskPriority;
+};
 
 /** Personal admin checklist items in [from, to], for the Project Schedule. */
 export async function getScheduleTasks(from: string, to: string): Promise<ScheduleTask[]> {
-  return db
+  const rows = await db
     .select({
       id: scheduleTasks.id,
       userId: scheduleTasks.userId,
       date: scheduleTasks.date,
       title: scheduleTasks.title,
       done: scheduleTasks.done,
+      priority: scheduleTasks.priority,
     })
     .from(scheduleTasks)
     .where(and(sql`${scheduleTasks.date} >= ${from}`, sql`${scheduleTasks.date} <= ${to}`))
     .orderBy(asc(scheduleTasks.createdAt));
+  return rows.map((r) => ({ ...r, priority: (r.priority as TaskPriority) ?? "medium" }));
 }
 
 export async function getTermGrades(termId: string) {

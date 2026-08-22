@@ -315,6 +315,8 @@ export const scheduleTasks = pgTable(
     date: date("date").notNull(),
     title: text("title").notNull(),
     done: boolean("done").notNull().default(false),
+    // "high" | "medium" | "low" — so the admin knows what to do first.
+    priority: text("priority").notNull().default("medium"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

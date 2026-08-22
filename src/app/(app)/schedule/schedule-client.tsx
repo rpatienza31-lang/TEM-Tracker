@@ -7,6 +7,7 @@ import { DELIVERABLE_TYPE_LABELS, STATUS_LABELS, type DeliverableType, type Item
 import {
   addScheduleTaskAction,
   deleteScheduleTaskAction,
+  setScheduleTaskPriorityAction,
   requestRevisionAction,
   setAvailabilityAction,
   setCotItemScheduleAction,
@@ -15,7 +16,7 @@ import {
   setScheduleNoteAction,
   toggleScheduleTaskAction,
 } from "@/lib/work-items/actions";
-import type { AvailabilityKind, ScheduleEntry, ScheduleTask, StaffAvailability } from "@/lib/work-items/queries";
+import type { AvailabilityKind, ScheduleEntry, ScheduleTask, TaskPriority, StaffAvailability } from "@/lib/work-items/queries";
 import { requestCotRevisionAction } from "@/app/(app)/cot/actions";
 import { cn } from "@/lib/utils";
 import { AvailabilityDialog } from "./availability-dialog";
@@ -444,29 +445,44 @@ function ScheduleCard({
   );
 }
 
-/** A personal checklist task card with a done/pending checkbox. */
+const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
+const PRIORITY_ORDER: TaskPriority[] = ["high", "medium", "low"];
+const PRIORITY_META: Record<TaskPriority, { label: string; badge: string; bar: string }> = {
+  high: { label: "High", badge: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300", bar: "bg-red-500" },
+  medium: { label: "Med", badge: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300", bar: "bg-amber-500" },
+  low: { label: "Low", badge: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300", bar: "bg-slate-400" },
+};
+
+/** A personal checklist task card with a done/pending checkbox and priority. */
 function TaskChip({
   task,
   canManage,
   onToggle,
   onDelete,
+  onSetPriority,
   pending,
 }: {
   task: ScheduleTask;
   canManage: boolean;
   onToggle: (id: string, done: boolean) => void;
   onDelete: (id: string) => void;
+  onSetPriority: (id: string, priority: TaskPriority) => void;
   pending: boolean;
 }) {
+  const meta = PRIORITY_META[task.priority];
+  // Clicking the priority badge cycles High → Med → Low.
+  const nextPriority = PRIORITY_ORDER[(PRIORITY_ORDER.indexOf(task.priority) + 1) % PRIORITY_ORDER.length];
   return (
     <div
       className={cn(
-        "flex items-start gap-1.5 rounded-lg border pl-2 pr-1.5 py-1.5 text-xs shadow-sm",
+        "relative flex items-start gap-1.5 overflow-hidden rounded-lg border pl-2.5 pr-1.5 py-1.5 text-xs shadow-sm",
         task.done
           ? "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/30"
           : "border-violet-200 bg-violet-50/70 dark:border-violet-900 dark:bg-violet-950/30",
       )}
     >
+      {/* Left accent shows the priority colour at a glance. */}
+      {!task.done && <span className={cn("absolute inset-y-0 left-0 w-1", meta.bar)} />}
       <input
         type="checkbox"
         checked={task.done}
@@ -475,8 +491,24 @@ function TaskChip({
         className="mt-0.5 h-3.5 w-3.5 shrink-0"
         aria-label={task.done ? "Mark pending" : "Mark done"}
       />
-      <div className="flex min-w-0 flex-col leading-tight">
-        <span className="text-[9px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">Task</span>
+      <div className="flex min-w-0 flex-col gap-0.5 leading-tight">
+        <span className="flex items-center gap-1">
+          <span className="text-[9px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-300">Task</span>
+          {!task.done &&
+            (canManage ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onSetPriority(task.id, nextPriority)}
+                className={cn("rounded px-1 py-px text-[9px] font-bold uppercase", meta.badge)}
+                title="Click to change priority"
+              >
+                {meta.label}
+              </button>
+            ) : (
+              <span className={cn("rounded px-1 py-px text-[9px] font-bold uppercase", meta.badge)}>{meta.label}</span>
+            ))}
+        </span>
         <span className={cn("break-words", task.done && "text-muted-foreground line-through")}>{task.title}</span>
       </div>
       {canManage && (
@@ -504,11 +536,12 @@ function AddTaskInline({
 }: {
   date: string;
   targetUserId: string;
-  onAdd: (date: string, title: string, targetUserId: string) => void;
+  onAdd: (date: string, title: string, targetUserId: string, priority: TaskPriority) => void;
   pending: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>("medium");
   if (!open) {
     return (
       <button
@@ -522,8 +555,9 @@ function AddTaskInline({
   }
   const submit = () => {
     const v = value.trim();
-    if (v) onAdd(date, v, targetUserId);
+    if (v) onAdd(date, v, targetUserId, priority);
     setValue("");
+    setPriority("medium");
     setOpen(false);
   };
   return (
@@ -543,6 +577,21 @@ function AddTaskInline({
         placeholder="Special task…"
         className="w-full rounded border border-input bg-background px-1.5 py-1 text-[11px]"
       />
+      <div className="flex items-center gap-1">
+        {PRIORITY_ORDER.map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => setPriority(p)}
+            className={cn(
+              "rounded px-1 py-px text-[9px] font-bold uppercase",
+              priority === p ? PRIORITY_META[p].badge : "bg-muted text-muted-foreground",
+            )}
+          >
+            {PRIORITY_META[p].label}
+          </button>
+        ))}
+      </div>
       <div className="flex items-center gap-2">
         <button type="button" disabled={pending || !value.trim()} onClick={submit} className="rounded bg-violet-600 px-1.5 py-0.5 text-[11px] font-medium text-white hover:bg-violet-700 disabled:opacity-50">
           Add
@@ -709,10 +758,12 @@ export function ScheduleClient({
       else router.refresh();
     });
   }
-  const addTask = (date: string, title: string, targetUserId: string) =>
-    runTask(() => addScheduleTaskAction(date, title, targetUserId));
+  const addTask = (date: string, title: string, targetUserId: string, priority: TaskPriority) =>
+    runTask(() => addScheduleTaskAction(date, title, targetUserId, priority));
   const toggleTask = (id: string, done: boolean) => runTask(() => toggleScheduleTaskAction(id, done));
   const deleteTask = (id: string) => runTask(() => deleteScheduleTaskAction(id));
+  const setTaskPriority = (id: string, priority: TaskPriority) =>
+    runTask(() => setScheduleTaskPriorityAction(id, priority));
 
   // date -> userId -> tasks
   const taskGrid = useMemo(() => {
@@ -979,7 +1030,13 @@ export function ScheduleClient({
                       const isMe = c.id === currentUserId;
                       const availKey = `${c.id}|${date}`;
                       const avail = c.id === UNASSIGNED ? null : availByKey.get(availKey) ?? null;
-                      const cellTasks = c.id === UNASSIGNED ? [] : taskGrid.get(date)?.get(c.id) ?? [];
+                      const cellTasks = (c.id === UNASSIGNED ? [] : taskGrid.get(date)?.get(c.id) ?? [])
+                        .slice()
+                        // Undone first, then by priority (high → low).
+                        .sort(
+                          (a, b) =>
+                            Number(a.done) - Number(b.done) || PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority],
+                        );
                       // Admins add to their own column; the owner can add to any
                       // staffer's column (assign a task to that person).
                       const canAddTask =
@@ -1030,6 +1087,7 @@ export function ScheduleClient({
                                   canManage={canManageTask(t.userId)}
                                   onToggle={toggleTask}
                                   onDelete={deleteTask}
+                                  onSetPriority={setTaskPriority}
                                   pending={pending}
                                 />
                               ))}

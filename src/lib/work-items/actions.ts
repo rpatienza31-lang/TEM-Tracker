@@ -15,13 +15,40 @@ type OkResult = { ok: boolean; message?: string };
  * Adds a checklist task to a Project Schedule day. Admins add to their own
  * column; the owner may assign to any staff member's column (targetUserId).
  */
-export async function addScheduleTaskAction(date: string, title: string, targetUserId?: string): Promise<OkResult> {
+const PRIORITIES = ["high", "medium", "low"] as const;
+type TaskPriority = (typeof PRIORITIES)[number];
+
+export async function addScheduleTaskAction(
+  date: string,
+  title: string,
+  targetUserId?: string,
+  priority: string = "medium",
+): Promise<OkResult> {
   const user = await requireRole("owner", "admin");
   if (!ISO_DATE.test(date)) return { ok: false, message: "Invalid date." };
   const clean = title.trim();
   if (!clean) return { ok: false, message: "Enter a task." };
   const target = user.role === "owner" && targetUserId ? targetUserId : user.id;
-  await db.insert(scheduleTasks).values({ userId: target, date, title: clean.slice(0, 200) });
+  const prio: TaskPriority = PRIORITIES.includes(priority as TaskPriority) ? (priority as TaskPriority) : "medium";
+  await db.insert(scheduleTasks).values({ userId: target, date, title: clean.slice(0, 200), priority: prio });
+  revalidatePath("/schedule");
+  return { ok: true };
+}
+
+/** Changes a task's priority. Owner may set any; admins only their own. */
+export async function setScheduleTaskPriorityAction(id: string, priority: string): Promise<OkResult> {
+  const user = await requireRole("owner", "admin");
+  if (!PRIORITIES.includes(priority as TaskPriority)) return { ok: false, message: "Invalid priority." };
+  const where =
+    user.role === "owner"
+      ? eq(scheduleTasks.id, id)
+      : and(eq(scheduleTasks.id, id), eq(scheduleTasks.userId, user.id));
+  const [row] = await db
+    .update(scheduleTasks)
+    .set({ priority, updatedAt: new Date() })
+    .where(where)
+    .returning({ id: scheduleTasks.id });
+  if (!row) return { ok: false, message: "Task not found or not yours." };
   revalidatePath("/schedule");
   return { ok: true };
 }
