@@ -11,13 +11,17 @@ import { deleteWorkItem, transitionWorkItem, type DeleteResult, type TransitionR
 
 type OkResult = { ok: boolean; message?: string };
 
-/** Adds a personal checklist task to a Project Schedule day (admins/owners). */
-export async function addScheduleTaskAction(date: string, title: string): Promise<OkResult> {
+/**
+ * Adds a checklist task to a Project Schedule day. Admins add to their own
+ * column; the owner may assign to any staff member's column (targetUserId).
+ */
+export async function addScheduleTaskAction(date: string, title: string, targetUserId?: string): Promise<OkResult> {
   const user = await requireRole("owner", "admin");
   if (!ISO_DATE.test(date)) return { ok: false, message: "Invalid date." };
   const clean = title.trim();
   if (!clean) return { ok: false, message: "Enter a task." };
-  await db.insert(scheduleTasks).values({ userId: user.id, date, title: clean.slice(0, 200) });
+  const target = user.role === "owner" && targetUserId ? targetUserId : user.id;
+  await db.insert(scheduleTasks).values({ userId: target, date, title: clean.slice(0, 200) });
   revalidatePath("/schedule");
   return { ok: true };
 }

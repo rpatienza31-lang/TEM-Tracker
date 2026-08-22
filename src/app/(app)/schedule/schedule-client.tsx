@@ -495,8 +495,18 @@ function TaskChip({
   );
 }
 
-/** Inline "+ Task" adder shown in the current admin's own column. */
-function AddTaskInline({ date, onAdd, pending }: { date: string; onAdd: (date: string, title: string) => void; pending: boolean }) {
+/** Inline "+ Task" adder shown in a staffer's column (own for admins, any for owner). */
+function AddTaskInline({
+  date,
+  targetUserId,
+  onAdd,
+  pending,
+}: {
+  date: string;
+  targetUserId: string;
+  onAdd: (date: string, title: string, targetUserId: string) => void;
+  pending: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   if (!open) {
@@ -512,7 +522,7 @@ function AddTaskInline({ date, onAdd, pending }: { date: string; onAdd: (date: s
   }
   const submit = () => {
     const v = value.trim();
-    if (v) onAdd(date, v);
+    if (v) onAdd(date, v, targetUserId);
     setValue("");
     setOpen(false);
   };
@@ -699,7 +709,8 @@ export function ScheduleClient({
       else router.refresh();
     });
   }
-  const addTask = (date: string, title: string) => runTask(() => addScheduleTaskAction(date, title));
+  const addTask = (date: string, title: string, targetUserId: string) =>
+    runTask(() => addScheduleTaskAction(date, title, targetUserId));
   const toggleTask = (id: string, done: boolean) => runTask(() => toggleScheduleTaskAction(id, done));
   const deleteTask = (id: string) => runTask(() => deleteScheduleTaskAction(id));
 
@@ -969,7 +980,10 @@ export function ScheduleClient({
                       const availKey = `${c.id}|${date}`;
                       const avail = c.id === UNASSIGNED ? null : availByKey.get(availKey) ?? null;
                       const cellTasks = c.id === UNASSIGNED ? [] : taskGrid.get(date)?.get(c.id) ?? [];
-                      const canAddTask = isMe && isAdmin;
+                      // Admins add to their own column; the owner can add to any
+                      // staffer's column (assign a task to that person).
+                      const canAddTask =
+                        c.id !== UNASSIGNED && (currentUserRole === "owner" || (isMe && isAdmin));
                       return (
                         <td
                           key={c.id}
@@ -1019,7 +1033,9 @@ export function ScheduleClient({
                                   pending={pending}
                                 />
                               ))}
-                              {canAddTask && <AddTaskInline date={date} onAdd={addTask} pending={pending} />}
+                              {canAddTask && (
+                                <AddTaskInline date={date} targetUserId={c.id} onAdd={addTask} pending={pending} />
+                              )}
                             </div>
                           )}
                         </td>
