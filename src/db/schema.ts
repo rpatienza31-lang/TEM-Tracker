@@ -16,7 +16,7 @@ import {
   check,
 } from "drizzle-orm/pg-core";
 
-export const userRole = pgEnum("user_role", ["owner", "admin", "sales", "editor"]);
+export const userRole = pgEnum("user_role", ["owner", "admin", "sales", "editor", "staff"]);
 export const payType = pgEnum("pay_type", ["hourly", "quota", "both"]);
 export const deliverableType = pgEnum("deliverable_type", ["DLP", "PPT", "COT_DLP", "COT_PPT"]);
 export const itemStatus = pgEnum("item_status", [

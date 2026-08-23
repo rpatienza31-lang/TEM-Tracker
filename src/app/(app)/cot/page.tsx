@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
@@ -19,7 +19,7 @@ export default async function CotOrdersPage() {
       ? db
           .select({ id: users.id, fullName: users.fullName })
           .from(users)
-          .where(eq(users.isActive, true))
+          .where(and(eq(users.isActive, true), ne(users.role, "staff")))
           .orderBy(asc(users.fullName))
       : Promise.resolve([]),
   ]);

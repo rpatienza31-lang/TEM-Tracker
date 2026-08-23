@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
@@ -32,7 +32,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     getBoardItems(filters),
     db.select().from(terms).orderBy(asc(terms.name)),
     db.select().from(subjects).where(eq(subjects.isActive, true)).orderBy(asc(subjects.name)),
-    db.select().from(users).where(eq(users.isActive, true)).orderBy(asc(users.fullName)),
+    db.select().from(users).where(and(eq(users.isActive, true), ne(users.role, "staff"))).orderBy(asc(users.fullName)),
   ]);
 
   return (

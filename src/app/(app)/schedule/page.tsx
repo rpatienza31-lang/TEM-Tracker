@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import { formatInTimeZone } from "date-fns-tz";
 
 import { requireUser } from "@/lib/auth";
@@ -38,7 +38,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     db
       .select({ id: users.id, name: users.fullName })
       .from(users)
-      .where(eq(users.isActive, true))
+      .where(and(eq(users.isActive, true), ne(users.role, "staff")))
       .orderBy(asc(users.fullName)),
     getScheduleTasks(from, to),
   ]);

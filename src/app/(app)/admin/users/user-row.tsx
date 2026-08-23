@@ -12,7 +12,7 @@ type Row = {
   id: string;
   fullName: string;
   email: string;
-  role: "owner" | "admin" | "sales" | "editor";
+  role: "owner" | "admin" | "sales" | "editor" | "staff";
   payType: "hourly" | "quota" | "both";
   isActive: boolean;
 };
@@ -56,6 +56,7 @@ export function UserRow({ user, canDelete = false, isSelf = false }: { user: Row
             <SelectItem value="admin">Admin</SelectItem>
             <SelectItem value="sales">Sales</SelectItem>
             <SelectItem value="editor">Editor</SelectItem>
+            <SelectItem value="staff">Staff (time only)</SelectItem>
           </SelectContent>
         </Select>
       </TableCell>

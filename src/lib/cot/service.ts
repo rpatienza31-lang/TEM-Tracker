@@ -9,7 +9,7 @@ import { cotPointsFor, getPointsTable } from "@/lib/settings";
 // COT item statuses that haven't been credited yet, so re-pricing them is safe.
 const UNFINISHED_COT = ["available", "claimed", "in_review", "revision"] as const;
 
-export type CotActor = { id: string; role: "owner" | "admin" | "sales" | "editor" };
+export type CotActor = { id: string; role: "owner" | "admin" | "sales" | "editor" | "staff" };
 
 function isAdmin(role: string) {
   return role === "owner" || role === "admin";

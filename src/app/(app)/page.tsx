@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { asc } from "drizzle-orm";
 import { formatInTimeZone } from "date-fns-tz";
 import {
@@ -31,6 +32,9 @@ const PH_TZ = "Asia/Manila";
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  // Office/time-only staff have no production dashboard — send them straight to
+  // their time clock.
+  if (user.role === "staff") redirect("/time-logs");
   const termRows = await db.select().from(terms).orderBy(asc(terms.name));
   const activeTerm = termRows.find((t) => t.isActive);
   const today = formatInTimeZone(new Date(), PH_TZ, "EEEE, MMMM d, yyyy");

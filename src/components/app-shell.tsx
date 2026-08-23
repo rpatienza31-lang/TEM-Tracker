@@ -16,7 +16,7 @@ import type { LiveAlert } from "@/lib/notifications/queries";
 type NavUser = {
   id: string;
   fullName: string;
-  role: "owner" | "admin" | "sales" | "editor";
+  role: "owner" | "admin" | "sales" | "editor" | "staff";
   payType: "hourly" | "quota" | "both";
 };
 
@@ -34,8 +34,8 @@ const NAV = [
   { href: "/cot/library", label: "Available Library", roles: ["owner", "admin", "sales", "editor"] },
   { href: "/review", label: "Review Queue", roles: ["owner", "admin"] },
   { href: "/productivity", label: "Productivity & Quota", roles: ["owner", "admin", "editor"] },
-  { href: "/my-pay", label: "My Pay", roles: ["owner", "admin", "sales", "editor"] },
-  { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales", "editor"], payTypes: ["hourly", "both"] },
+  { href: "/my-pay", label: "My Pay", roles: ["owner", "admin", "sales", "editor", "staff"] },
+  { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales", "editor", "staff"], payTypes: ["hourly", "both"] },
   { href: "/payroll", label: "Payroll Period", roles: ["owner", "admin"] },
   { href: "/admin/backfill", label: "Bulk Backfill", roles: ["owner", "admin"] },
   { href: "/admin", label: "Admin / Setup", roles: ["owner", "admin"] },

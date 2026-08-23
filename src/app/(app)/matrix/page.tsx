@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 
 import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
@@ -24,7 +24,7 @@ export default async function MatrixPage({ searchParams }: { searchParams: Promi
   const [subjects, items, editors] = await Promise.all([
     termId && grade ? getGradeSubjects(termId, grade) : Promise.resolve([]),
     termId && grade ? getMatrixItems(termId, grade, type) : Promise.resolve([]),
-    db.select().from(users).where(eq(users.isActive, true)).orderBy(asc(users.fullName)),
+    db.select().from(users).where(and(eq(users.isActive, true), ne(users.role, "staff"))).orderBy(asc(users.fullName)),
   ]);
 
   return (

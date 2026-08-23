@@ -40,6 +40,7 @@ export function InviteForm() {
             <SelectItem value="admin">Admin</SelectItem>
             <SelectItem value="sales">Sales</SelectItem>
             <SelectItem value="editor">Editor</SelectItem>
+            <SelectItem value="staff">Staff (time only)</SelectItem>
           </SelectContent>
         </Select>
         <input type="hidden" name="role" value={role} />
