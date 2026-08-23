@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { requireUser } from "@/lib/auth";
+import { requireEditorialUser } from "@/lib/auth";
 import { getMyWorkItems } from "@/lib/work-items/queries";
 import { getMyCotItems } from "@/lib/cot/queries";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,7 +20,7 @@ function isOverdue(dueDate: string | null, status: string) {
 }
 
 export default async function MyWorkPage() {
-  const user = await requireUser();
+  const user = await requireEditorialUser();
 
   const [active, submitted, history, cotItems] = await Promise.all([
     getMyWorkItems(user.id, ["claimed", "revision"]),

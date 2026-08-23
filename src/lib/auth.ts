@@ -54,3 +54,14 @@ export async function requireRole(...roles: AppUser["role"][]): Promise<AppUser>
   if (!roles.includes(user.role)) redirect("/");
   return user;
 }
+
+/**
+ * A logged-in user who is part of the editorial workflow. Time-only "staff"
+ * accounts have no business on production screens, so they're bounced to their
+ * time clock — even via a direct URL.
+ */
+export async function requireEditorialUser(): Promise<AppUser> {
+  const user = await requireUser();
+  if (user.role === "staff") redirect("/time-logs");
+  return user;
+}

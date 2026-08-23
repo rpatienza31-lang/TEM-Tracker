@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 
-import { requireUser } from "@/lib/auth";
+import { requireEditorialUser } from "@/lib/auth";
 import { getProductivityStats, sortProductivity, type ProductivitySort } from "@/lib/quota/productivity";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,7 @@ function formatRate(rate: number | null) {
 }
 
 export default async function ProductivityPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const user = await requireUser();
+  const user = await requireEditorialUser();
   const sp = await searchParams;
   const range = { from: sp.from, to: sp.to };
   const sort = (sp.sort as ProductivitySort) || "name";

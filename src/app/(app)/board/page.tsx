@@ -1,6 +1,6 @@
 import { and, asc, eq, ne } from "drizzle-orm";
 
-import { requireUser } from "@/lib/auth";
+import { requireEditorialUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms, subjects, users } from "@/db/schema";
 import { getBoardItems, type BoardFilters } from "@/lib/work-items/queries";
@@ -24,7 +24,7 @@ function parseFilters(sp: SearchParams): BoardFilters {
 }
 
 export default async function BoardPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const user = await requireUser();
+  const user = await requireEditorialUser();
   const sp = await searchParams;
   const filters = parseFilters(sp);
 

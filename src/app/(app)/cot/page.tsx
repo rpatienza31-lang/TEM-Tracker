@@ -1,6 +1,6 @@
 import { and, asc, eq, ne } from "drizzle-orm";
 
-import { requireUser } from "@/lib/auth";
+import { requireEditorialUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
 import { getActiveCotOrders } from "@/lib/cot/queries";
@@ -8,7 +8,7 @@ import { CotOrderList } from "./cot-order-list";
 import { NewCotOrderForm } from "./new-cot-order-form";
 
 export default async function CotOrdersPage() {
-  const user = await requireUser();
+  const user = await requireEditorialUser();
   const isAdmin = user.role === "owner" || user.role === "admin";
   const isOwner = user.role === "owner";
   const canClaim = user.role === "editor" || isAdmin;

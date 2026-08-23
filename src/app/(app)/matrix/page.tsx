@@ -1,6 +1,6 @@
 import { and, asc, eq, ne } from "drizzle-orm";
 
-import { requireUser } from "@/lib/auth";
+import { requireEditorialUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms, users } from "@/db/schema";
 import { getGradeSubjects, getMatrixItems, getTermGrades } from "@/lib/work-items/queries";
@@ -10,7 +10,7 @@ import { MatrixClient } from "./matrix-client";
 type SearchParams = { term?: string; grade?: string; type?: string };
 
 export default async function MatrixPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const user = await requireUser();
+  const user = await requireEditorialUser();
   const sp = await searchParams;
 
   const termRows = await db.select().from(terms).orderBy(asc(terms.name));

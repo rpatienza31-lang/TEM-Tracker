@@ -1,7 +1,7 @@
 import { and, asc, eq, ne } from "drizzle-orm";
 import { formatInTimeZone } from "date-fns-tz";
 
-import { requireUser } from "@/lib/auth";
+import { requireEditorialUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms, users } from "@/db/schema";
 import { getScheduleItems, getScheduleTasks, getStaffAvailability } from "@/lib/work-items/queries";
@@ -18,7 +18,7 @@ function addDays(iso: string, days: number): string {
 }
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const user = await requireUser();
+  const user = await requireEditorialUser();
   const sp = await searchParams;
   const isAdmin = user.role === "owner" || user.role === "admin";
 
