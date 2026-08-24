@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, eq, inArray } from "drizzle-orm";
+import { aliasedTable, and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { customOrders, customOrderItems, terms, users } from "@/db/schema";
@@ -226,6 +226,16 @@ export async function getCotBackfillCandidates(): Promise<CotBackfillCandidate[]
     .where(inArray(customOrderItems.status, ["available", "claimed", "in_review", "revision"]))
     .orderBy(asc(customOrders.deadline), asc(customOrders.customerName));
   return rows as CotBackfillCandidate[];
+}
+
+/**
+ * Completed COT orders (both deliverables approved) — the customer/transaction
+ * archive, newest first, so finished orders stay viewable with full details.
+ */
+export async function getCompletedCotOrders(): Promise<CotOrderView[]> {
+  const rows = await db.select().from(customOrders).orderBy(desc(customOrders.orderDate));
+  const all = await loadOrders(rows);
+  return all.filter((o) => o.completed);
 }
 
 /** A completed COT order tagged with the term its order date falls within. */

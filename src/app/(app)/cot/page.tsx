@@ -1,21 +1,29 @@
+import Link from "next/link";
 import { and, asc, eq, ne } from "drizzle-orm";
 
 import { requireEditorialUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { users } from "@/db/schema";
-import { getActiveCotOrders } from "@/lib/cot/queries";
+import { getActiveCotOrders, getCompletedCotOrders } from "@/lib/cot/queries";
+import { cn } from "@/lib/utils";
 import { CotOrderList } from "./cot-order-list";
+import { CompletedCotList } from "./completed-cot-list";
 import { NewCotOrderForm } from "./new-cot-order-form";
 
-export default async function CotOrdersPage() {
+type SearchParams = { view?: string };
+
+export default async function CotOrdersPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const user = await requireEditorialUser();
   const isAdmin = user.role === "owner" || user.role === "admin";
   const isOwner = user.role === "owner";
   const canClaim = user.role === "editor" || isAdmin;
+  const sp = await searchParams;
+  const view = sp.view === "completed" ? "completed" : "open";
 
-  const [orders, editors] = await Promise.all([
-    getActiveCotOrders(),
-    isAdmin
+  const [orders, completed, editors] = await Promise.all([
+    view === "open" ? getActiveCotOrders() : Promise.resolve([]),
+    view === "completed" ? getCompletedCotOrders() : Promise.resolve([]),
+    isAdmin && view === "open"
       ? db
           .select({ id: users.id, fullName: users.fullName })
           .from(users)
@@ -34,9 +42,35 @@ export default async function CotOrdersPage() {
         </p>
       </div>
 
-      {isAdmin && <NewCotOrderForm />}
+      {/* Open vs Completed tabs */}
+      <div className="flex items-center gap-2">
+        {(
+          [
+            { key: "open", label: "Open orders", href: "/cot" },
+            { key: "completed", label: "Completed", href: "/cot?view=completed" },
+          ] as const
+        ).map((t) => (
+          <Link
+            key={t.key}
+            href={t.href}
+            className={cn(
+              "rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
+              view === t.key ? "border-foreground bg-foreground text-background" : "hover:bg-accent",
+            )}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </div>
 
-      <CotOrderList orders={orders} editors={editors} isAdmin={isAdmin} isOwner={isOwner} canClaim={canClaim} />
+      {view === "open" ? (
+        <>
+          {isAdmin && <NewCotOrderForm />}
+          <CotOrderList orders={orders} editors={editors} isAdmin={isAdmin} isOwner={isOwner} canClaim={canClaim} />
+        </>
+      ) : (
+        <CompletedCotList orders={completed} isOwner={isOwner} />
+      )}
     </div>
   );
 }
