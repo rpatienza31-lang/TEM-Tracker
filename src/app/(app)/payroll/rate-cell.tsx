@@ -12,7 +12,7 @@ const initial: SetRateState = { status: "idle" };
  * Inline editor for one staff member's pay rate. Rendered only for the owner.
  * The Save button appears once the value changes; a brief "Saved" confirms it.
  */
-export function RateCell({ userId, rate, field }: { userId: string; rate: number; field: "hourly" | "cycle" }) {
+export function RateCell({ userId, rate, field }: { userId: string; rate: number; field: "hourly" | "cycle" | "daily" }) {
   const [state, formAction, pending] = useActionState(setUserRateAction, initial);
   const [value, setValue] = useState(rate.toString());
   const dirty = value.trim() !== rate.toString();

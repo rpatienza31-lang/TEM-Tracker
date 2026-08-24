@@ -13,6 +13,8 @@ import { PendingApprovals } from "./pending-approvals";
 import { ActiveClockIns } from "./active-clock-ins";
 import { QuotaStaffTable } from "./quota-staff-table";
 import { HourlyStaffTable } from "./hourly-staff-table";
+import { DailyStaffTable } from "./daily-staff-table";
+import { getDailyStaffForPeriod } from "@/lib/payroll/daily";
 import { PayslipsTable } from "./payslips-table";
 
 type SearchParams = { from?: string; to?: string };
@@ -133,13 +135,14 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   const from = sp.from || defaults.from;
   const to = sp.to || defaults.to;
 
-  const [pending, report, activeClockIns, breakdownMap, approvedLogs] = await Promise.all([
+  const [pending, report, activeClockIns, breakdownMap, approvedLogs, dailyStaff] = await Promise.all([
     getPendingTimeLogs(),
     getPayrollReport(from, to),
     getActiveClockIns(),
     // All projects up to the period end, so the split against lifetime-paid points is correct.
     getPointsBreakdown("1970-01-01", to),
     getApprovedTimeLogsForPeriod(from, to),
+    getDailyStaffForPeriod(from, to),
   ]);
   // Show only the UNPAID projects in the live breakdown — already-paid ones live
   // in the Payment history, so the list isn't cluttered with settled work.
@@ -291,6 +294,17 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
       >
         <HourlyStaffTable rows={report.hourlyRows} sessions={sessionsByUser} isOwner={isOwner} from={from} to={to} />
       </SectionCard>
+
+      {dailyStaff.length > 0 && (
+        <SectionCard
+          icon={CalendarRange}
+          title="Daily staff"
+          tone="violet"
+          description="Fixed pay per day present — days come from the time clock (attendance), salary is days × daily rate."
+        >
+          <DailyStaffTable rows={dailyStaff} isOwner={isOwner} from={from} to={to} />
+        </SectionCard>
+      )}
 
       {isOwner && (
         <SectionCard

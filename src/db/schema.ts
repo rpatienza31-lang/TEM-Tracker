@@ -46,6 +46,8 @@ export const users = pgTable("users", {
   // (quota/both staff). A "both" staff member earns from both.
   hourlyRate: numeric("hourly_rate", { precision: 10, scale: 2 }).notNull().default("0"),
   cycleRate: numeric("cycle_rate", { precision: 10, scale: 2 }).notNull().default("0"),
+  // Fixed pay per day present, for time-only "staff" (daily rate × days worked).
+  dailyRate: numeric("daily_rate", { precision: 10, scale: 2 }).notNull().default("0"),
   // Cash advance to deduct from this payout, editable by the owner. Owner-only.
   cashAdvance: numeric("cash_advance", { precision: 10, scale: 2 }).notNull().default("0"),
   // Owner reconciliation baseline added to the derived cycle number, so an

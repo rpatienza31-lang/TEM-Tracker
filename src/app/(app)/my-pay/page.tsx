@@ -46,7 +46,7 @@ export default async function MyPayPage() {
                   <span className="flex items-center gap-2">
                     {peso.format(net)}
                     <Badge variant="outline" className="uppercase">
-                      {p.kind === "hourly" ? "Hourly" : "Quota"}
+                      {p.kind === "hourly" ? "Hourly" : p.kind === "daily" ? "Daily" : "Quota"}
                     </Badge>
                   </span>
                   {received ? (

@@ -15,7 +15,7 @@ export type PaymentItem = {
   kind: "catalog" | "cot" | "adjustment";
 };
 
-export type PaymentKind = "quota" | "hourly";
+export type PaymentKind = "quota" | "hourly" | "daily";
 export type PaymentSummary = { pointsPaid: number; lastPaidAt: Date | null };
 
 /**
@@ -224,7 +224,7 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
     const amount = Number(r.amount);
     const cashAdvance = Number(r.cashAdvance);
     const stored = Array.isArray(r.items) ? (r.items as PaymentItem[]) : null;
-    const kind: PaymentKind = r.kind === "hourly" ? "hourly" : "quota";
+    const kind: PaymentKind = r.kind === "hourly" ? "hourly" : r.kind === "daily" ? "daily" : "quota";
     return {
       id: r.id,
       editorId: r.editorId,

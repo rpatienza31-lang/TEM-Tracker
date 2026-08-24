@@ -61,7 +61,7 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
                   <TableCell className="font-medium">{p.editorName}</TableCell>
                   <TableCell>
                     <Badge variant={p.kind === "hourly" ? "outline" : "secondary"}>
-                      {p.kind === "hourly" ? "Hourly" : "Quota"}
+                      {p.kind === "hourly" ? "Hourly" : p.kind === "daily" ? "Daily" : "Quota"}
                     </Badge>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">

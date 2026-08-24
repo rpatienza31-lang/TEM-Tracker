@@ -13,6 +13,7 @@ import { getProductivityStats } from "@/lib/quota/productivity";
 import { getQuotaSize } from "@/lib/settings";
 import { editLinePoints, removeLine, type LineKind } from "@/lib/payroll/edit-line";
 import { recordPayrollPayment, type PaymentItem } from "@/lib/payroll/payments";
+import { getDailyStaffForPeriod } from "@/lib/payroll/daily";
 import { getPointsBreakdown } from "@/lib/payroll/breakdown";
 import { splitPaidUnpaid } from "@/lib/payroll/paid-split";
 import { buildPayslipDetail } from "@/lib/payroll/payslip-detail";
@@ -80,7 +81,8 @@ export async function setUserRateAction(_prev: SetRateState, formData: FormData)
   await requireRole("owner");
 
   const userId = String(formData.get("userId") ?? "");
-  const field = String(formData.get("field") ?? "cycle") === "hourly" ? "hourly" : "cycle";
+  const rawField = String(formData.get("field") ?? "cycle");
+  const field = rawField === "hourly" ? "hourly" : rawField === "daily" ? "daily" : "cycle";
   const raw = String(formData.get("rate") ?? "").trim();
   const rate = Number(raw);
 
@@ -92,12 +94,49 @@ export async function setUserRateAction(_prev: SetRateState, formData: FormData)
   }
 
   const value = rate.toFixed(2);
-  await db
-    .update(users)
-    .set(field === "hourly" ? { hourlyRate: value } : { cycleRate: value })
-    .where(eq(users.id, userId));
+  const set = field === "hourly" ? { hourlyRate: value } : field === "daily" ? { dailyRate: value } : { cycleRate: value };
+  await db.update(users).set(set).where(eq(users.id, userId));
   revalidatePath("/payroll");
   return { status: "ok", message: "Saved." };
+}
+
+/** Records a fixed-daily staff payout for the period (days present × daily rate). */
+export async function markDailyPaidAction(_prev: SetRateState, formData: FormData): Promise<SetRateState> {
+  const actor = await requireRole("owner");
+  const userId = String(formData.get("userId") ?? "");
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  if (!userId) return { status: "error", message: "Missing staff id." };
+  if (!from || !to) return { status: "error", message: "Missing period." };
+
+  const rows = await getDailyStaffForPeriod(from, to);
+  const row = rows.find((r) => r.userId === userId);
+  if (!row) return { status: "error", message: "No daily staff found." };
+  if (row.daysUnpaid <= 0) return { status: "error", message: "Nothing unpaid for this period." };
+
+  const outstandingCA = row.cashAdvance;
+  const appliedCA = Math.min(Math.max(0, outstandingCA), row.salary);
+
+  await recordPayrollPayment({
+    editorId: userId,
+    kind: "daily",
+    points: row.daysUnpaid,
+    cycles: 0,
+    amount: row.salary,
+    rate: row.dailyRate,
+    cashAdvance: appliedCA,
+    from,
+    to,
+    paidBy: actor.id,
+  });
+  if (appliedCA > 0) {
+    await db
+      .update(users)
+      .set({ cashAdvance: (outstandingCA - appliedCA).toFixed(2) })
+      .where(eq(users.id, userId));
+  }
+  revalidatePath("/payroll");
+  return { status: "ok", message: `Recorded ${row.daysUnpaid} day(s).` };
 }
 
 /** Sets a staff member's cash advance (deducted from their payout). Owner-only. */
