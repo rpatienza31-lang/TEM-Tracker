@@ -198,17 +198,20 @@ export function LibraryClient({ orders }: { orders: CotLibraryOrder[] }) {
         <div className="flex flex-col gap-8">
           {termGroups.map((term) => (
             <section key={term.termName} className="flex flex-col gap-3">
-              <div className="flex items-center gap-2 border-b border-border pb-2">
-                <h2 className="text-base font-semibold">{term.termName}</h2>
-                <Badge variant="secondary" className="font-normal">
-                  {term.count}
+              <div className="flex items-center gap-2 rounded-lg border-l-4 border-status-approved bg-muted/50 px-3 py-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-status-approved">Term</span>
+                <h2 className="text-lg font-bold tracking-tight">{term.termName}</h2>
+                <Badge variant="secondary" className="ml-auto font-normal">
+                  {term.count} order{term.count === 1 ? "" : "s"}
                 </Badge>
               </div>
               <div className="flex flex-col gap-4">
                 {term.grades.map((g) => (
                   <div key={String(g.grade)} className="flex flex-col gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {g.grade != null ? `Grade ${g.grade}` : "No grade"}
+                    <h3>
+                      <span className="inline-block rounded-md bg-primary/10 px-2.5 py-1 text-sm font-bold text-primary">
+                        {g.grade != null ? `Grade ${g.grade}` : "No grade"}
+                      </span>
                     </h3>
                     <Card className="divide-y divide-border overflow-hidden">
                       {g.orders.map((o) => (
@@ -284,15 +287,19 @@ function OrderRow({ order }: { order: CotLibraryOrder }) {
           )}
         </div>
         {(order.competency || order.indicator) && (
-          <div className="mt-0.5 flex flex-col gap-0.5 text-xs text-muted-foreground sm:flex-row sm:gap-4">
+          <div className="mt-1 flex flex-col gap-1 text-sm">
             {order.competency && (
               <span>
-                <span className="font-medium">Competency:</span> {order.competency}
+                <span className="font-semibold text-foreground">Competency:</span>{" "}
+                <span className="text-muted-foreground">{order.competency}</span>
               </span>
             )}
             {order.indicator && (
-              <span>
-                <span className="font-medium">Indicator:</span> {order.indicator}
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold text-foreground">Indicator:</span>
+                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                  {order.indicator}
+                </span>
               </span>
             )}
           </div>
