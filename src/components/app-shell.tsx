@@ -69,7 +69,8 @@ export function AppShell({
   const items = NAV.filter(
     (item) =>
       (item.roles as readonly string[]).includes(user.role) &&
-      (!("payTypes" in item) || (item.payTypes as readonly string[]).includes(user.payType)),
+      // Time-only staff always get the time clock regardless of pay type.
+      (!("payTypes" in item) || user.role === "staff" || (item.payTypes as readonly string[]).includes(user.payType)),
   );
 
   return (

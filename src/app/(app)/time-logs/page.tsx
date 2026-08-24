@@ -11,7 +11,10 @@ const PH_TZ = "Asia/Manila";
 
 export default async function TimeLogsPage() {
   const user = await requireUser();
-  if (user.payType !== "hourly" && user.payType !== "both") redirect("/");
+  // Time-only staff always clock in (attendance/productivity); hourly/both
+  // staff clock for pay. Everyone else has no time clock.
+  const canClock = user.role === "staff" || user.payType === "hourly" || user.payType === "both";
+  if (!canClock) redirect("/");
 
   const [logs, active] = await Promise.all([getMyTimeLogs(user.id), getActiveTimeLog(user.id)]);
 
