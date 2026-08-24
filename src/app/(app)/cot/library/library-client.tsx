@@ -276,7 +276,7 @@ function OrderRow({ order }: { order: CotLibraryOrder }) {
             <Badge
               variant="secondary"
               className={cn(
-                "font-normal",
+                "px-2.5 py-0.5 text-sm font-semibold",
                 order.lessonFor.toLowerCase() === "demo"
                   ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
                   : "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
@@ -295,9 +295,9 @@ function OrderRow({ order }: { order: CotLibraryOrder }) {
               </span>
             )}
             {order.indicator && (
-              <span className="flex flex-wrap items-center gap-1.5">
+              <span className="flex flex-wrap items-center gap-1.5 text-base">
                 <span className="font-semibold text-foreground">Indicator:</span>
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                <span className="rounded bg-amber-100 px-2 py-0.5 text-base font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                   {order.indicator}
                 </span>
               </span>
