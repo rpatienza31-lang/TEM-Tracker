@@ -1,16 +1,76 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { type CotOrderView } from "@/lib/cot/queries";
+import { backjobCotAction } from "./actions";
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
+function todayPH() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
+}
+
 function shortType(type: CotOrderView["items"][number]["type"]) {
   return type === "COT_DLP" || type === "DLP" ? "DLP" : "PPT";
+}
+
+/** Per-deliverable "send back as a back job" control (independent DLP/PPT). */
+function BackjobControl({ itemId, label }: { itemId: string; label: string }) {
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(todayPH());
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-2 text-xs font-medium text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-red-600"
+      >
+        Send {label} to back job
+      </button>
+    );
+  }
+  return (
+    <div className="mt-2 flex flex-col gap-1.5 rounded-md border border-red-300 bg-red-50/60 p-2 dark:border-red-800 dark:bg-red-950/30">
+      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        New deadline
+        <input
+          type="date"
+          value={date}
+          disabled={pending}
+          onChange={(e) => setDate(e.target.value)}
+          className="h-7 w-[8rem] rounded border border-input bg-background px-1 text-xs"
+        />
+      </label>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={pending || !date}
+          onClick={() =>
+            startTransition(async () => {
+              setError(null);
+              const r = await backjobCotAction(itemId, date);
+              if (!r.ok) setError(r.message ?? "Could not send back.");
+              else setOpen(false);
+            })
+          }
+          className="rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          {pending ? "Sending…" : "Confirm back job"}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="text-xs text-muted-foreground underline">
+          cancel
+        </button>
+      </div>
+      {error && <span className="text-xs text-destructive">{error}</span>}
+    </div>
+  );
 }
 
 /**
@@ -18,7 +78,15 @@ function shortType(type: CotOrderView["items"][number]["type"]) {
  * rows expand to show every detail — customer, curriculum info, who produced
  * each deliverable, and the finished files — so a done order stays viewable.
  */
-export function CompletedCotList({ orders, isOwner }: { orders: CotOrderView[]; isOwner: boolean }) {
+export function CompletedCotList({
+  orders,
+  isOwner,
+  isAdmin,
+}: {
+  orders: CotOrderView[];
+  isOwner: boolean;
+  isAdmin: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -164,6 +232,7 @@ export function CompletedCotList({ orders, isOwner }: { orders: CotOrderView[]; 
                             Open file
                           </a>
                         )}
+                        {isAdmin && <BackjobControl itemId={it.id} label={`COT (${shortType(it.type)})`} />}
                       </div>
                     ))}
                   </div>

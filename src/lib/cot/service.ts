@@ -279,6 +279,45 @@ export async function requestCotRevisionItem(itemId: string, actor: CotActor): P
   return { ok: true };
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Sends ONE finished COT deliverable (approved or uploaded) back as a revision
+ * (back job), independently of its sibling — so only the DLP or only the PPT can
+ * be redone. Reverses any awarded points and drops it onto the given schedule
+ * day so it shows red on the Project Schedule. Admin only.
+ */
+export async function backjobCotItem(itemId: string, actor: CotActor, newDate?: string | null): Promise<CotResult> {
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can send a back job." };
+  if (newDate && !ISO_DATE.test(newDate)) return { ok: false, message: "Invalid date." };
+
+  return db.transaction(async (tx) => {
+    const [item] = await tx.select().from(customOrderItems).where(eq(customOrderItems.id, itemId)).limit(1);
+    if (!item) return { ok: false, message: "Item not found." };
+    if (item.status !== "approved" && item.status !== "uploaded") {
+      return { ok: false, message: "Only a finished deliverable can be sent as a back job." };
+    }
+
+    if (item.awardedCycleId && item.pointsAwarded) {
+      await reverseCotItemPoints(tx, item.awardedCycleId, Number(item.pointsAwarded));
+    }
+
+    await tx
+      .update(customOrderItems)
+      .set({
+        status: "revision",
+        approvedAt: null,
+        pointsAwarded: null,
+        awardedCycleId: null,
+        scheduledFor: newDate ?? item.scheduledFor,
+        updatedAt: new Date(),
+      })
+      .where(eq(customOrderItems.id, itemId));
+
+    return { ok: true };
+  });
+}
+
 /** Reverses an approval and its points (admin only). */
 export async function unapproveCotItem(itemId: string, actor: CotActor): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can un-approve." };

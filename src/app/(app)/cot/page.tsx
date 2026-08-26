@@ -69,7 +69,7 @@ export default async function CotOrdersPage({ searchParams }: { searchParams: Pr
           <CotOrderList orders={orders} editors={editors} isAdmin={isAdmin} isOwner={isOwner} canClaim={canClaim} />
         </>
       ) : (
-        <CompletedCotList orders={completed} isOwner={isOwner} />
+        <CompletedCotList orders={completed} isOwner={isOwner} isAdmin={isAdmin} />
       )}
     </div>
   );

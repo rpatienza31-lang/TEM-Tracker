@@ -6,6 +6,7 @@ import { requireRole, requireUser } from "@/lib/auth";
 import {
   approveCotItem,
   assignCotItem,
+  backjobCotItem,
   claimCotItem,
   createCotOrder,
   deleteCotOrder,
@@ -146,6 +147,19 @@ export async function requestCotRevisionAction(itemId: string): Promise<CotResul
   if (result.ok) {
     revalidatePath("/cot");
     revalidatePath("/review");
+  }
+  return result;
+}
+
+export async function backjobCotAction(itemId: string, newDate: string): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await backjobCotItem(itemId, actorOf(user), newDate || null);
+  if (result.ok) {
+    revalidatePath("/cot");
+    revalidatePath("/cot/library");
+    revalidatePath("/schedule");
+    revalidatePath("/review");
+    revalidatePath("/productivity");
   }
   return result;
 }
