@@ -217,6 +217,9 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
             .update(workItems)
             .set({
               status: "revision",
+              // Surface the reason on the Project Schedule card so the editor
+              // sees what to fix without opening the notification.
+              scheduleNote: `Revision: ${input.note.trim()}`.slice(0, 500),
               revisionCount: sql`${workItems.revisionCount} + 1`,
               version: sql`${workItems.version} + 1`,
               updatedAt: new Date(),
