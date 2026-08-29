@@ -97,8 +97,8 @@ function MarkHourlyPaidButton({
   );
 }
 
-/** One approved session, editable in place: owner corrects the clock times, hours recompute on save. */
-function EditableSessionRow({ session }: { session: ApprovedSession }) {
+/** One session, editable in place: owner corrects the clock times, hours recompute on save. */
+export function EditableSessionRow({ session }: { session: ApprovedSession }) {
   const [state, formAction, pending] = useActionState(editTimeLogTimesAction, initial);
   const savedIn = hhmm(session.clockInIso);
   const savedOut = hhmm(session.clockOutIso);

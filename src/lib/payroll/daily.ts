@@ -3,6 +3,57 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { payrollPayments, timeLogs, users } from "@/db/schema";
 
+export type DailySession = {
+  id: string;
+  workDate: string;
+  clockInIso: string | null;
+  clockOutIso: string | null;
+  hours: number;
+  note: string | null;
+};
+
+/**
+ * Every clock-in/out record for each daily staffer in the period, grouped by
+ * user — the attendance breakdown behind the day count. Includes in-progress
+ * sessions (no clock-out yet) so the owner can fix a forgotten clock-out.
+ */
+export async function getDailyStaffSessions(from: string, to: string): Promise<Record<string, DailySession[]>> {
+  const rows = await db
+    .select({
+      id: timeLogs.id,
+      userId: timeLogs.userId,
+      workDate: timeLogs.workDate,
+      clockIn: timeLogs.clockIn,
+      clockOut: timeLogs.clockOut,
+      hours: timeLogs.hours,
+      note: timeLogs.note,
+    })
+    .from(timeLogs)
+    .innerJoin(users, eq(users.id, timeLogs.userId))
+    .where(
+      and(
+        eq(users.role, "staff"),
+        sql`${timeLogs.clockIn} is not null`,
+        sql`${timeLogs.workDate} >= ${from}`,
+        sql`${timeLogs.workDate} <= ${to}`,
+      ),
+    )
+    .orderBy(asc(timeLogs.workDate), asc(timeLogs.clockIn));
+
+  const byUser: Record<string, DailySession[]> = {};
+  for (const r of rows) {
+    (byUser[r.userId] ??= []).push({
+      id: r.id,
+      workDate: r.workDate,
+      clockInIso: r.clockIn ? new Date(r.clockIn).toISOString() : null,
+      clockOutIso: r.clockOut ? new Date(r.clockOut).toISOString() : null,
+      hours: r.hours ? Number(r.hours) : 0,
+      note: r.note,
+    });
+  }
+  return byUser;
+}
+
 export type DailyStaffRow = {
   userId: string;
   fullName: string;
