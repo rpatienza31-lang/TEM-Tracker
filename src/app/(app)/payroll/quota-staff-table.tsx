@@ -62,6 +62,9 @@ function MarkPaidButton({
   salary,
   isPaid,
   lastPaidAt,
+  pointsUnpaid,
+  perSubjectRate,
+  quotaSize,
   from,
   to,
 }: {
@@ -69,10 +72,17 @@ function MarkPaidButton({
   salary: number;
   isPaid: boolean;
   lastPaidAt: string | null;
+  pointsUnpaid: number;
+  perSubjectRate: number;
+  quotaSize: number;
   from: string;
   to: string;
 }) {
   const [state, formAction, pending] = useActionState(markQuotaPaidAction, payInitial);
+  // When over one cycle, default to paying exactly one cycle (e.g. 21) so the
+  // excess carries over; otherwise pay the whole balance.
+  const defaultPoints = pointsUnpaid > quotaSize ? quotaSize : Math.round(pointsUnpaid * 10) / 10;
+  const [points, setPoints] = useState(defaultPoints);
 
   if (isPaid) {
     return (
@@ -83,20 +93,47 @@ function MarkPaidButton({
   }
   if (salary <= 0) return <span className="text-xs text-muted-foreground">—</span>;
 
+  const amount = Math.round(Math.min(points, pointsUnpaid) * perSubjectRate * 100) / 100;
+  const carried = Math.round((pointsUnpaid - Math.min(points, pointsUnpaid)) * 10) / 10;
+
   return (
     <form
       action={formAction}
+      className="flex flex-col items-end gap-1"
       onSubmit={(e) => {
-        if (!window.confirm(`Mark ${peso.format(salary)} as paid for this editor this period?`)) e.preventDefault();
+        if (!window.confirm(`Pay ${points} pt(s) = ${peso.format(amount)} to this editor?`)) e.preventDefault();
       }}
     >
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="from" value={from} />
       <input type="hidden" name="to" value={to} />
-      <Button type="submit" size="sm" variant="secondary" disabled={pending}>
-        {pending ? "Saving…" : "Mark paid"}
-      </Button>
-      {state.status === "error" && <span className="ml-1 text-xs text-destructive">{state.message}</span>}
+      <input type="hidden" name="points" value={points} />
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          step="0.5"
+          min={0.5}
+          max={pointsUnpaid}
+          value={points}
+          onChange={(e) => setPoints(Number(e.target.value))}
+          className="h-8 w-16 rounded-md border border-input bg-background px-1.5 text-right text-sm tabular-nums"
+          aria-label="Points to pay"
+        />
+        <span className="text-xs text-muted-foreground">pts</span>
+        <Button type="submit" size="sm" variant="secondary" disabled={pending || points <= 0}>
+          {pending ? "Saving…" : "Mark paid"}
+        </Button>
+      </div>
+      <div className="text-[11px] text-muted-foreground">
+        {peso.format(amount)}
+        {carried > 0 && ` · ${carried} pt${carried === 1 ? "" : "s"} carries over`}
+        {points < pointsUnpaid && (
+          <button type="button" onClick={() => setPoints(Math.round(pointsUnpaid * 10) / 10)} className="ml-1.5 text-primary underline">
+            pay all
+          </button>
+        )}
+      </div>
+      {state.status === "error" && <span className="text-xs text-destructive">{state.message}</span>}
     </form>
   );
 }
@@ -392,6 +429,9 @@ export function QuotaStaffTable({
                       salary={row.salary}
                       isPaid={row.isPaid}
                       lastPaidAt={row.lastPaidAt}
+                      pointsUnpaid={row.pointsUnpaid}
+                      perSubjectRate={row.perSubjectRate}
+                      quotaSize={row.perSubjectRate > 0 ? Math.round(row.rate / row.perSubjectRate) : 21}
                       from={from}
                       to={to}
                     />

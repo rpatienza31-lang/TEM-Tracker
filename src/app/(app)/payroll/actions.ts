@@ -199,29 +199,40 @@ export async function markQuotaPaidAction(
   if (!row) return { status: "error", message: "No quota staff found." };
   if (row.pointsUnpaid <= 0) return { status: "error", message: "No unpaid balance to record." };
 
-  // Snapshot the projects this payout covers: the currently-unpaid lines,
-  // taken from all of the editor's projects up to the period end.
+  // Optionally pay only part of the balance (e.g. one 21-point cycle); the rest
+  // stays unpaid and carries into the next cycle. Defaults to the full balance.
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const requested = Number(String(formData.get("points") ?? "").trim());
+  const pointsToPay =
+    Number.isFinite(requested) && requested > 0 ? Math.min(round2(requested), row.pointsUnpaid) : row.pointsUnpaid;
+  const amountToPay = round2(pointsToPay * row.perSubjectRate);
+
+  // Snapshot the projects this payout covers: unpaid lines oldest-first, only up
+  // to the points being paid now (a partial payout covers just those).
   const breakdown = await getPointsBreakdown("1970-01-01", to);
   const { unpaidLines } = splitPaidUnpaid(breakdown.get(userId) ?? [], row.pointsPaid);
-  const items: PaymentItem[] = unpaidLines.map((l) => ({
-    title: l.title,
-    subtitle: l.subtitle,
-    points: l.points,
-    dateIso: l.dateIso,
-    kind: l.kind,
-  }));
+  const items: PaymentItem[] = [];
+  let covered = 0;
+  for (const l of unpaidLines) {
+    if (covered >= pointsToPay) break;
+    items.push({ title: l.title, subtitle: l.subtitle, points: l.points, dateIso: l.dateIso, kind: l.kind });
+    covered += l.points;
+  }
+
+  const quotaSize = row.perSubjectRate > 0 ? Math.round(row.rate / row.perSubjectRate) : 0;
+  const cyclesPaid = quotaSize > 0 ? Math.round(pointsToPay / quotaSize) : row.completedCycles;
 
   // Recover the staff member's cash advance from this payout, up to the amount
   // being paid, and reduce their outstanding CA so it isn't deducted again.
   const [u] = await db.select({ cashAdvance: users.cashAdvance }).from(users).where(eq(users.id, userId)).limit(1);
   const outstandingCA = Number(u?.cashAdvance ?? 0);
-  const appliedCA = Math.min(Math.max(0, outstandingCA), row.salary);
+  const appliedCA = Math.min(Math.max(0, outstandingCA), amountToPay);
 
   await recordPayrollPayment({
     editorId: userId,
-    points: row.pointsUnpaid,
-    cycles: row.completedCycles,
-    amount: row.salary,
+    points: pointsToPay,
+    cycles: cyclesPaid,
+    amount: amountToPay,
     rate: row.rate,
     cashAdvance: appliedCA,
     items,
@@ -236,10 +247,13 @@ export async function markQuotaPaidAction(
       .where(eq(users.id, userId));
   }
   revalidatePath("/payroll");
-  const net = row.salary - appliedCA;
+  const carried = round2(row.pointsUnpaid - pointsToPay);
+  const net = amountToPay - appliedCA;
+  const carryMsg = carried > 0 ? ` ${carried} pt${carried === 1 ? "" : "s"} carried to the next cycle.` : "";
   return {
     status: "ok",
-    message: appliedCA > 0 ? `Paid — net ₱${net.toFixed(2)} after ₱${appliedCA.toFixed(2)} CA.` : "Marked as paid.",
+    message:
+      (appliedCA > 0 ? `Paid — net ₱${net.toFixed(2)} after ₱${appliedCA.toFixed(2)} CA.` : "Marked as paid.") + carryMsg,
   };
 }
 
