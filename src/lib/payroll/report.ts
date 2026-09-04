@@ -28,7 +28,14 @@ export type QuotaPayrollRow = {
   // The per-cycle rate, and the per-subject (per-point) rate derived from it.
   rate: number;
   perSubjectRate: number;
-  // Pro-rated pay on the unpaid balance: unpaid × (rate / quota).
+  // Points actually payable this payout: capped to one full cycle when the
+  // unpaid balance is over quota (the rest carries to the next cycle).
+  pointsPayable: number;
+  // Points carried to the next cycle when the balance is over one cycle
+  // (pointsUnpaid − pointsPayable); zero when under quota.
+  pointsCarried: number;
+  // Pro-rated pay on the payable points: pointsPayable × (rate / quota),
+  // i.e. capped to one cycle (21 pts) when over quota.
   salary: number;
   // Whether everything earned this period has been paid, and when it was last paid.
   isPaid: boolean;
@@ -55,6 +62,9 @@ export type PayslipRow = {
   fullName: string;
   quotaSalary: number;
   hourlySalary: number;
+  // Points held back to the next cycle because this payout is capped to one
+  // full cycle (0 when under quota). Purely informational for the summary.
+  quotaCarried: number;
   gross: number;
   cashAdvance: number;
   net: number;
@@ -118,6 +128,11 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
     const pointsUnpaid = p.pointsUnpaid;
     const completedCycles = quotaSize > 0 ? Math.floor(pointsUnpaid / quotaSize) : 0;
     const remainderCarried = round2(pointsUnpaid - completedCycles * quotaSize);
+    // Policy: pay one full cycle at a time. When the unpaid balance is over
+    // quota, this payout covers a single cycle (21 pts) and the rest carries to
+    // the next cycle. Under quota, pay the whole balance.
+    const pointsPayable = quotaSize > 0 ? Math.min(pointsUnpaid, quotaSize) : pointsUnpaid;
+    const pointsCarried = round2(Math.max(0, pointsUnpaid - pointsPayable));
     return {
       userId: p.editorId,
       fullName: p.fullName,
@@ -130,7 +145,9 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
       remainderCarried,
       rate,
       perSubjectRate: round2(perSubjectRate),
-      salary: round2(pointsUnpaid * perSubjectRate),
+      pointsPayable,
+      pointsCarried,
+      salary: round2(pointsPayable * perSubjectRate),
       isPaid: pointsUnpaid <= 0 && p.pointsPaid > 0,
       lastPaidAt: p.lastPaidAt,
     };
@@ -163,14 +180,15 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
 
   // One payslip per staff member with any earnings or cash advance, combining
   // their quota and hourly pay, less the cash advance to deduct this payout.
-  const bySalary = new Map<string, { quota: number; hourly: number }>();
+  const bySalary = new Map<string, { quota: number; hourly: number; quotaCarried: number }>();
   for (const r of quotaRows) {
-    const e = bySalary.get(r.userId) ?? { quota: 0, hourly: 0 };
+    const e = bySalary.get(r.userId) ?? { quota: 0, hourly: 0, quotaCarried: 0 };
     e.quota += r.salary;
+    e.quotaCarried += r.pointsCarried;
     bySalary.set(r.userId, e);
   }
   for (const r of hourlyRows) {
-    const e = bySalary.get(r.userId) ?? { quota: 0, hourly: 0 };
+    const e = bySalary.get(r.userId) ?? { quota: 0, hourly: 0, quotaCarried: 0 };
     e.hourly += r.salary;
     bySalary.set(r.userId, e);
   }
@@ -179,7 +197,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
 
   const payslips: PayslipRow[] = [...payslipUserIds]
     .map((userId) => {
-      const e = bySalary.get(userId) ?? { quota: 0, hourly: 0 };
+      const e = bySalary.get(userId) ?? { quota: 0, hourly: 0, quotaCarried: 0 };
       const gross = e.quota + e.hourly;
       const cashAdvance = cashAdvanceByUser.get(userId) ?? 0;
       return {
@@ -187,6 +205,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
         fullName: nameByUser.get(userId) ?? "",
         quotaSalary: e.quota,
         hourlySalary: e.hourly,
+        quotaCarried: round2(e.quotaCarried),
         gross,
         cashAdvance,
         net: gross - cashAdvance,

@@ -60,7 +60,7 @@ export async function emailPayslipAction(
     fullName: slip.fullName,
     from,
     to,
-    quota: quota ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: quotaAmount } : undefined,
+    quota: quota ? { points: quota.pointsPayable, perSubjectRate: quota.perSubjectRate, amount: quotaAmount } : undefined,
     hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: hourlyAmount } : undefined,
     gross,
     cashAdvance: slip.cashAdvance,

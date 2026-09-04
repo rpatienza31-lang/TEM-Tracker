@@ -41,7 +41,17 @@ export async function buildPayslipDetail(params: {
   if (quota && slip.quotaSalary > 0) {
     const breakdown = await getPointsBreakdown("1970-01-01", to);
     const { unpaidLines } = splitPaidUnpaid(breakdown.get(userId) ?? [], quota.pointsPaid);
-    quotaItems = unpaidLines.map((l) => ({
+    // Only list the projects this payout actually covers: unpaid lines
+    // oldest-first, up to the payable points (one cycle when over quota), so the
+    // detail matches the capped amount instead of listing carried-over work.
+    const covering: typeof unpaidLines = [];
+    let covered = 0;
+    for (const l of unpaidLines) {
+      if (covered >= quota.pointsPayable) break;
+      covering.push(l);
+      covered += l.points;
+    }
+    quotaItems = covering.map((l) => ({
       label: l.kind === "adjustment" ? "Adjustment" : DELIVERABLE_TYPE_LABELS[l.type ?? "DLP"] ?? l.title,
       detail: l.subtitle,
       points: l.points,

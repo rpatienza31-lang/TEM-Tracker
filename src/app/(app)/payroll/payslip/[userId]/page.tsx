@@ -66,7 +66,7 @@ export default async function PayslipPage({
     from,
     to,
     quota: quota
-      ? { points: quota.pointsUnpaid, perSubjectRate: quota.perSubjectRate, amount: quotaAmount }
+      ? { points: quota.pointsPayable, perSubjectRate: quota.perSubjectRate, amount: quotaAmount }
       : undefined,
     hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: hourlyAmount } : undefined,
     gross,

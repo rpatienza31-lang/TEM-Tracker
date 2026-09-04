@@ -12,6 +12,7 @@ export type PayslipRowData = {
   fullName: string;
   quotaSalary: number;
   hourlySalary: number;
+  quotaCarried: number;
   cashAdvance: number;
 };
 
@@ -95,6 +96,11 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
                   )}
                 >
                   {peso.format(r.quotaSalary)}
+                  {r.quotaCarried > 0 && !dropQuota && (
+                    <span className="mt-0.5 block text-[11px] font-normal not-italic text-amber-600 dark:text-amber-500">
+                      {r.quotaCarried} pt{r.quotaCarried === 1 ? "" : "s"} → next cycle
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell
                   className={cn(
