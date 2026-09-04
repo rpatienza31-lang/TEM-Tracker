@@ -215,8 +215,11 @@ export async function markQuotaPaidAction(
   let covered = 0;
   for (const l of unpaidLines) {
     if (covered >= pointsToPay) break;
-    items.push({ title: l.title, subtitle: l.subtitle, points: l.points, dateIso: l.dateIso, kind: l.kind });
-    covered += l.points;
+    // A line that straddles the cap is snapshotted with just the points that
+    // fit, so the recorded items sum to exactly pointsToPay (not overshoot).
+    const take = Math.min(l.points, round2(pointsToPay - covered));
+    items.push({ title: l.title, subtitle: l.subtitle, points: take, dateIso: l.dateIso, kind: l.kind });
+    covered = round2(covered + take);
   }
 
   const quotaSize = row.perSubjectRate > 0 ? Math.round(row.rate / row.perSubjectRate) : 0;

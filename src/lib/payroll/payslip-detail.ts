@@ -39,24 +39,28 @@ export async function buildPayslipDetail(params: {
 
   let quotaItems: PayslipItem[] | undefined;
   if (quota && slip.quotaSalary > 0) {
+    const round2 = (n: number) => Math.round(n * 100) / 100;
     const breakdown = await getPointsBreakdown("1970-01-01", to);
     const { unpaidLines } = splitPaidUnpaid(breakdown.get(userId) ?? [], quota.pointsPaid);
     // Only list the projects this payout actually covers: unpaid lines
-    // oldest-first, up to the payable points (one cycle when over quota), so the
-    // detail matches the capped amount instead of listing carried-over work.
-    const covering: typeof unpaidLines = [];
+    // oldest-first, up to the payable points (one cycle when over quota). A
+    // project that straddles the cap is listed with just the points that fit,
+    // so the payslip's total is exactly the payable amount (e.g. 21, not 21.5)
+    // and the rest carries to the next cycle.
+    const items: PayslipItem[] = [];
     let covered = 0;
     for (const l of unpaidLines) {
       if (covered >= quota.pointsPayable) break;
-      covering.push(l);
-      covered += l.points;
+      const take = Math.min(l.points, round2(quota.pointsPayable - covered));
+      items.push({
+        label: l.kind === "adjustment" ? "Adjustment" : DELIVERABLE_TYPE_LABELS[l.type ?? "DLP"] ?? l.title,
+        detail: l.subtitle,
+        points: take,
+        dateLabel: shortDayFmt.format(new Date(l.dateIso)),
+      });
+      covered = round2(covered + take);
     }
-    quotaItems = covering.map((l) => ({
-      label: l.kind === "adjustment" ? "Adjustment" : DELIVERABLE_TYPE_LABELS[l.type ?? "DLP"] ?? l.title,
-      detail: l.subtitle,
-      points: l.points,
-      dateLabel: shortDayFmt.format(new Date(l.dateIso)),
-    }));
+    quotaItems = items;
   }
 
   return { hourlySessions, quotaItems };
