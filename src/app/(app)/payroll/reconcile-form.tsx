@@ -54,7 +54,7 @@ export function ReconcileForm({
           name="points"
           type="number"
           min="0"
-          step="0.5"
+          step="0.01"
           value={points}
           onChange={(e) => setPoints(e.target.value)}
           className="w-24"
