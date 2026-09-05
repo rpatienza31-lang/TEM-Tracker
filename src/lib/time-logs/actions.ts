@@ -97,13 +97,22 @@ export async function createTimeLogAction(
   return { ok: true };
 }
 
-export async function approveTimeLogAction(logId: string): Promise<TimeLogActionResult> {
+/**
+ * Approves a completed time-log session. `countsHourly` decides whether the
+ * hours feed hourly pay ("Hourly (paid)") or are approved for monitoring only
+ * ("Attendance only" — a quota staffer's presence, paid ₱0 hourly). Both mark
+ * the session approved so it leaves the pending list.
+ */
+export async function approveTimeLogAction(
+  logId: string,
+  countsHourly: boolean,
+): Promise<TimeLogActionResult> {
   const actor = await requireUser();
   if (!isAdmin(actor.role)) return { ok: false, message: "Only admins can approve time logs." };
 
   await db
     .update(timeLogs)
-    .set({ approvedBy: actor.id, approvedAt: new Date() })
+    .set({ approvedBy: actor.id, approvedAt: new Date(), countsHourly })
     .where(and(eq(timeLogs.id, logId), isNull(timeLogs.approvedAt)));
 
   revalidatePath("/payroll");

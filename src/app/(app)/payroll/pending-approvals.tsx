@@ -45,18 +45,35 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
             <TableCell>{log.hours ?? "—"}</TableCell>
             <TableCell className="text-muted-foreground">{log.note}</TableCell>
             <TableCell>
-              <Button
-                size="sm"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => {
-                    const result = await approveTimeLogAction(log.id);
-                    if (result.ok) setApprovedIds((prev) => new Set(prev).add(log.id));
-                  })
-                }
-              >
-                Approve
-              </Button>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isPending}
+                  title="Approve for monitoring only — recorded and visible, but not paid hourly (use for quota-staff attendance)."
+                  onClick={() =>
+                    startTransition(async () => {
+                      const result = await approveTimeLogAction(log.id, false);
+                      if (result.ok) setApprovedIds((prev) => new Set(prev).add(log.id));
+                    })
+                  }
+                >
+                  Attendance only
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={isPending}
+                  title="Approve as paid hourly work — these hours count toward hourly salary."
+                  onClick={() =>
+                    startTransition(async () => {
+                      const result = await approveTimeLogAction(log.id, true);
+                      if (result.ok) setApprovedIds((prev) => new Set(prev).add(log.id));
+                    })
+                  }
+                >
+                  Hourly (paid)
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         ))}

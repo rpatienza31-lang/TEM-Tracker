@@ -259,7 +259,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         title="Approvals"
         badge={pending.length ? `${pending.length} pending` : undefined}
         tone="violet"
-        description="Approve hourly staff time before it counts toward pay."
+        description="Approve time as “Hourly (paid)” to count it toward hourly pay, or “Attendance only” to record a quota staffer’s presence without paying hourly."
       >
         <PendingApprovals
           logs={pending.map((p) => ({

@@ -65,6 +65,9 @@ export async function getApprovedHoursForPeriod(from: string, to: string): Promi
     .where(
       and(
         isNotNull(timeLogs.approvedAt),
+        // Only sessions approved as hourly pay count toward salary; attendance-
+        // only approvals (quota-staff monitoring) are recorded but not paid.
+        eq(timeLogs.countsHourly, true),
         gte(timeLogs.workDate, from),
         lte(timeLogs.workDate, to),
       ),
@@ -104,7 +107,16 @@ export async function getApprovedTimeLogsForPeriod(from: string, to: string): Pr
       approvedAt: timeLogs.approvedAt,
     })
     .from(timeLogs)
-    .where(and(isNotNull(timeLogs.approvedAt), gte(timeLogs.workDate, from), lte(timeLogs.workDate, to)))
+    .where(
+      and(
+        isNotNull(timeLogs.approvedAt),
+        // Match getApprovedHoursForPeriod: only the paid hourly sessions back
+        // the hourly total shown on the payslip.
+        eq(timeLogs.countsHourly, true),
+        gte(timeLogs.workDate, from),
+        lte(timeLogs.workDate, to),
+      ),
+    )
     .orderBy(desc(timeLogs.workDate), desc(timeLogs.clockIn));
 
   return rows.map((r) => ({ ...r, hours: Number(r.hours ?? 0) }));

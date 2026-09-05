@@ -295,6 +295,12 @@ export const timeLogs = pgTable(
     note: text("note"),
     approvedBy: uuid("approved_by").references(() => users.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    // Whether this approved session counts toward hourly pay. Approving as
+    // "attendance only" (monitoring a quota staffer's presence) sets this false,
+    // so the hours are recorded and visible but never paid hourly. "Hourly
+    // (paid)" approval sets it true. Legacy rows default true (their old
+    // behavior — every approved session was paid).
+    countsHourly: boolean("counts_hourly").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check("time_logs_hours_check", sql`${t.hours} is null or (${t.hours} > 0 and ${t.hours} <= 24)`)],
