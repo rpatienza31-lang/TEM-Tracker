@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ type AttendanceRow = {
 export function AttendanceLog({ rows, isAdmin }: { rows: AttendanceRow[]; isAdmin: boolean }) {
   const [movedIds, setMovedIds] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const visible = rows.filter((r) => !movedIds.has(r.id));
 
@@ -56,7 +58,10 @@ export function AttendanceLog({ rows, isAdmin }: { rows: AttendanceRow[]; isAdmi
                   onClick={() =>
                     startTransition(async () => {
                       const result = await reclassifyTimeLogAction(r.id, true);
-                      if (result.ok) setMovedIds((prev) => new Set(prev).add(r.id));
+                      if (result.ok) {
+                        setMovedIds((prev) => new Set(prev).add(r.id));
+                        router.refresh();
+                      }
                     })
                   }
                 >

@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth";
 import {
   getActiveClockIns,
   getApprovedTimeLogsForPeriod,
-  getAttendanceOnlyForPeriod,
+  getAttendanceOnlyLogs,
   getPendingTimeLogs,
 } from "@/lib/time-logs/queries";
 import { getPayrollReport } from "@/lib/payroll/report";
@@ -151,7 +151,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
       getApprovedTimeLogsForPeriod(from, to),
       getDailyStaffForPeriod(from, to),
       getDailyStaffSessions(from, to),
-      getAttendanceOnlyForPeriod(from, to),
+      getAttendanceOnlyLogs(),
     ]);
   // Show only the UNPAID projects in the live breakdown — already-paid ones live
   // in the Payment history, so the list isn't cluttered with settled work.
@@ -282,27 +282,25 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         />
       </SectionCard>
 
-      {attendanceOnly.length > 0 && (
-        <SectionCard
-          icon={Clock}
-          title="Attendance (monitor only)"
-          badge={`${attendanceOnly.length} record${attendanceOnly.length === 1 ? "" : "s"}`}
-          tone="blue"
-          description="Sessions approved as “Attendance only” — recorded presence for quota staff, not paid hourly. Move one to “Hourly (paid)” if it was classified by mistake."
-        >
-          <AttendanceLog
-            isAdmin
-            rows={attendanceOnly.map((a) => ({
-              id: a.id,
-              userName: a.userName,
-              workDate: a.workDate,
-              timeIn: phTime(a.clockIn),
-              timeOut: phTime(a.clockOut),
-              hours: a.hours ? a.hours.toFixed(2) : null,
-            }))}
-          />
-        </SectionCard>
-      )}
+      <SectionCard
+        icon={Clock}
+        title="Attendance (monitor only)"
+        badge={attendanceOnly.length ? `${attendanceOnly.length} record${attendanceOnly.length === 1 ? "" : "s"}` : undefined}
+        tone="blue"
+        description="Sessions approved as “Attendance only” — recorded presence for quota staff, not paid hourly (all dates). Move one to “Hourly (paid)” if it was classified by mistake."
+      >
+        <AttendanceLog
+          isAdmin
+          rows={attendanceOnly.map((a) => ({
+            id: a.id,
+            userName: a.userName,
+            workDate: a.workDate,
+            timeIn: phTime(a.clockIn),
+            timeOut: phTime(a.clockOut),
+            hours: a.hours ? a.hours.toFixed(2) : null,
+          }))}
+        />
+      </SectionCard>
 
       <SectionCard
         icon={Users}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ type PendingLog = {
 export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
   const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const visible = logs.filter((log) => !approvedIds.has(log.id));
 
@@ -54,7 +56,10 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
                   onClick={() =>
                     startTransition(async () => {
                       const result = await approveTimeLogAction(log.id, false);
-                      if (result.ok) setApprovedIds((prev) => new Set(prev).add(log.id));
+                      if (result.ok) {
+                        setApprovedIds((prev) => new Set(prev).add(log.id));
+                        router.refresh();
+                      }
                     })
                   }
                 >
@@ -67,7 +72,10 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
                   onClick={() =>
                     startTransition(async () => {
                       const result = await approveTimeLogAction(log.id, true);
-                      if (result.ok) setApprovedIds((prev) => new Set(prev).add(log.id));
+                      if (result.ok) {
+                        setApprovedIds((prev) => new Set(prev).add(log.id));
+                        router.refresh();
+                      }
                     })
                   }
                 >
