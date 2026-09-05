@@ -111,8 +111,8 @@ function MarkPaidButton({
       <div className="flex items-center gap-1.5">
         <input
           type="number"
-          step="0.5"
-          min={0.5}
+          step="0.01"
+          min={0.01}
           max={pointsUnpaid}
           value={points}
           onChange={(e) => setPoints(Number(e.target.value))}
