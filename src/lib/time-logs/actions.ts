@@ -119,6 +119,27 @@ export async function approveTimeLogAction(
   return { ok: true };
 }
 
+/**
+ * Re-classifies an already-approved session between "Hourly (paid)" and
+ * "Attendance only" without un-approving it — for fixing a mis-click. Admin
+ * only; revalidates payroll so the hourly totals update.
+ */
+export async function reclassifyTimeLogAction(
+  logId: string,
+  countsHourly: boolean,
+): Promise<TimeLogActionResult> {
+  const actor = await requireUser();
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only admins can change time logs." };
+
+  await db
+    .update(timeLogs)
+    .set({ countsHourly })
+    .where(and(eq(timeLogs.id, logId), isNotNull(timeLogs.approvedAt)));
+
+  revalidatePath("/payroll");
+  return { ok: true };
+}
+
 export async function deleteTimeLogAction(logId: string): Promise<TimeLogActionResult> {
   const actor = await requireUser();
 

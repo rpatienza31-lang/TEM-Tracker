@@ -80,6 +80,48 @@ export async function getApprovedHoursForPeriod(from: string, to: string): Promi
   return rows.map((r) => ({ userId: r.userId, hours: Number(r.hours) }));
 }
 
+export type AttendanceLog = {
+  id: string;
+  userId: string;
+  userName: string;
+  workDate: string;
+  clockIn: Date | null;
+  clockOut: Date | null;
+  hours: number;
+};
+
+/**
+ * Sessions approved as "Attendance only" in [from, to] — a quota staffer's
+ * recorded presence that is NOT paid hourly. This is where those records live
+ * for monitoring; the owner can move one back to paid hourly if it was
+ * misclassified. Newest work date first.
+ */
+export async function getAttendanceOnlyForPeriod(from: string, to: string): Promise<AttendanceLog[]> {
+  const rows = await db
+    .select({
+      id: timeLogs.id,
+      userId: timeLogs.userId,
+      userName: users.fullName,
+      workDate: timeLogs.workDate,
+      clockIn: timeLogs.clockIn,
+      clockOut: timeLogs.clockOut,
+      hours: timeLogs.hours,
+    })
+    .from(timeLogs)
+    .innerJoin(users, eq(users.id, timeLogs.userId))
+    .where(
+      and(
+        isNotNull(timeLogs.approvedAt),
+        eq(timeLogs.countsHourly, false),
+        gte(timeLogs.workDate, from),
+        lte(timeLogs.workDate, to),
+      ),
+    )
+    .orderBy(desc(timeLogs.workDate), desc(timeLogs.clockIn));
+
+  return rows.map((r) => ({ ...r, hours: Number(r.hours ?? 0) }));
+}
+
 export type ApprovedTimeLog = {
   id: string;
   userId: string;
