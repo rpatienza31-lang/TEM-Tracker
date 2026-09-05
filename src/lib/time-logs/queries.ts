@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { timeLogs, users } from "@/db/schema";
@@ -38,7 +38,10 @@ export async function getPendingTimeLogs() {
     .from(timeLogs)
     .innerJoin(users, eq(users.id, timeLogs.userId))
     // Only completed logs await approval — an open clock-in has hours = null.
-    .where(and(isNull(timeLogs.approvedAt), isNotNull(timeLogs.hours)))
+    // Daily staff are excluded: their pay is a fixed daily amount driven by
+    // attendance, so their clock-in/out is monitoring only and never needs the
+    // hourly/attendance approval.
+    .where(and(isNull(timeLogs.approvedAt), isNotNull(timeLogs.hours), ne(users.role, "staff")))
     .orderBy(asc(timeLogs.workDate));
 }
 
