@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { reconcileEditorAction, type SetRateState } from "./actions";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,13 @@ export function ReconcileForm({
   const [cycle, setCycle] = useState(String(cycleNumber));
   const [points, setPoints] = useState(String(currentPoints));
   const dirty = cycle.trim() !== String(cycleNumber) || points.trim() !== String(currentPoints);
+  const router = useRouter();
+
+  // Pull the corrected points into the table the moment the baseline saves,
+  // instead of waiting for a manual reload.
+  useEffect(() => {
+    if (state.status === "ok") router.refresh();
+  }, [state, router]);
 
   return (
     <form action={formAction} className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
