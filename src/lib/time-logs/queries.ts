@@ -91,13 +91,13 @@ export type AttendanceLog = {
 };
 
 /**
- * Sessions approved as "Attendance only" — a quota staffer's recorded presence
- * that is NOT paid hourly. This is where those records live for monitoring; the
- * owner can move one back to paid hourly if it was misclassified. Not filtered
- * by the payroll period (like the pending list) so an approval always shows up
- * here regardless of which month is selected. Newest work date first.
+ * Sessions approved as "Attendance only" within the payroll period [from, to] —
+ * a quota staffer's recorded presence that is NOT paid hourly. This is where
+ * those records live for monitoring; the owner can move one back to paid hourly
+ * if it was misclassified. Follows the selected date filter. Newest work date
+ * first.
  */
-export async function getAttendanceOnlyLogs(limit = 200): Promise<AttendanceLog[]> {
+export async function getAttendanceOnlyForPeriod(from: string, to: string): Promise<AttendanceLog[]> {
   const rows = await db
     .select({
       id: timeLogs.id,
@@ -110,9 +110,15 @@ export async function getAttendanceOnlyLogs(limit = 200): Promise<AttendanceLog[
     })
     .from(timeLogs)
     .innerJoin(users, eq(users.id, timeLogs.userId))
-    .where(and(isNotNull(timeLogs.approvedAt), eq(timeLogs.countsHourly, false)))
-    .orderBy(desc(timeLogs.workDate), desc(timeLogs.clockIn))
-    .limit(limit);
+    .where(
+      and(
+        isNotNull(timeLogs.approvedAt),
+        eq(timeLogs.countsHourly, false),
+        gte(timeLogs.workDate, from),
+        lte(timeLogs.workDate, to),
+      ),
+    )
+    .orderBy(desc(timeLogs.workDate), desc(timeLogs.clockIn));
 
   return rows.map((r) => ({ ...r, hours: Number(r.hours ?? 0) }));
 }

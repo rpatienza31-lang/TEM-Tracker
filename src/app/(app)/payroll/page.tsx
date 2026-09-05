@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/auth";
 import {
   getActiveClockIns,
   getApprovedTimeLogsForPeriod,
-  getAttendanceOnlyLogs,
+  getAttendanceOnlyForPeriod,
   getPendingTimeLogs,
 } from "@/lib/time-logs/queries";
 import { getPayrollReport } from "@/lib/payroll/report";
@@ -151,7 +151,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
       getApprovedTimeLogsForPeriod(from, to),
       getDailyStaffForPeriod(from, to),
       getDailyStaffSessions(from, to),
-      getAttendanceOnlyLogs(),
+      getAttendanceOnlyForPeriod(from, to),
     ]);
   // Show only the UNPAID projects in the live breakdown — already-paid ones live
   // in the Payment history, so the list isn't cluttered with settled work.
@@ -287,7 +287,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
         title="Attendance (monitor only)"
         badge={attendanceOnly.length ? `${attendanceOnly.length} record${attendanceOnly.length === 1 ? "" : "s"}` : undefined}
         tone="blue"
-        description="Sessions approved as “Attendance only” — recorded presence for quota staff, not paid hourly (all dates). Move one to “Hourly (paid)” if it was classified by mistake."
+        description="Sessions approved as “Attendance only” — recorded presence for quota staff, not paid hourly (for the selected date range). Move one to “Hourly (paid)” if it was classified by mistake."
       >
         <AttendanceLog
           isAdmin

@@ -24,11 +24,25 @@ type AttendanceRow = {
 export function AttendanceLog({ rows, isAdmin }: { rows: AttendanceRow[]; isAdmin: boolean }) {
   const [movedIds, setMovedIds] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
   const router = useRouter();
 
   const visible = rows.filter((r) => !movedIds.has(r.id));
 
   return (
+    <div className="flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex w-fit items-center gap-1.5 rounded-md text-sm font-medium text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
+        aria-expanded={open}
+      >
+        {open ? "Hide" : "Show"} records
+        <span className="text-xs text-muted-foreground">
+          ({visible.length}) {open ? "▲" : "▼"}
+        </span>
+      </button>
+      {open && (
     <Table>
       <TableHeader>
         <TableRow>
@@ -80,5 +94,7 @@ export function AttendanceLog({ rows, isAdmin }: { rows: AttendanceRow[]; isAdmi
         )}
       </TableBody>
     </Table>
+      )}
+    </div>
   );
 }
