@@ -31,8 +31,15 @@ export type TimeLogActionResult = { ok: true } | { ok: false; message: string };
 /** Starts a shift. Records the server's current time (stored UTC, shown in PH time). */
 export async function clockInAction(): Promise<TimeLogActionResult> {
   const actor = await requireUser();
-  if (actor.role !== "staff" && actor.payType !== "hourly" && actor.payType !== "both") {
-    return { ok: false, message: "Only hourly or time-only staff use the time clock." };
+  // staff clock for attendance; hourly/both clock for pay; quota clock for
+  // attendance monitoring. Roles with no pay-time (e.g. plain admin) do not.
+  if (
+    actor.role !== "staff" &&
+    actor.payType !== "hourly" &&
+    actor.payType !== "both" &&
+    actor.payType !== "quota"
+  ) {
+    return { ok: false, message: "Your account doesn't use the time clock." };
   }
   if (await getOpenSession(actor.id)) {
     return { ok: false, message: "You're already clocked in. Clock out first." };

@@ -68,15 +68,20 @@ export function UserRow({ user, canDelete = false, isSelf = false }: { user: Row
             startTransition(() => updateUserAction(user.id, { payType: v as Row["payType"] }));
           }}
         >
-          <SelectTrigger className="w-28">
+          <SelectTrigger className="w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="quota">Quota</SelectItem>
-            <SelectItem value="hourly">Hourly</SelectItem>
-            <SelectItem value="both">Both</SelectItem>
+            <SelectItem value="quota">Quota (points)</SelectItem>
+            <SelectItem value="hourly">Hourly (clock)</SelectItem>
+            <SelectItem value="both">Both — quota + hourly rate</SelectItem>
           </SelectContent>
         </Select>
+        {payType === "quota" && (
+          <p className="mt-1 max-w-[11rem] text-[11px] leading-tight text-muted-foreground">
+            Choose “Both” to add an hourly rate and time clock for this quota staffer.
+          </p>
+        )}
       </TableCell>
       <TableCell>
         <SetPasswordCell userId={user.id} />

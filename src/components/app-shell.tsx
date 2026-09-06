@@ -35,7 +35,7 @@ const NAV = [
   { href: "/review", label: "Review Queue", roles: ["owner", "admin"] },
   { href: "/productivity", label: "Productivity & Quota", roles: ["owner", "admin", "editor"] },
   { href: "/my-pay", label: "My Pay", roles: ["owner", "admin", "sales", "editor", "staff"] },
-  { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales", "editor", "staff"], payTypes: ["hourly", "both"] },
+  { href: "/time-logs", label: "My Hours", roles: ["owner", "admin", "sales", "editor", "staff"], payTypes: ["hourly", "both", "quota"] },
   { href: "/payroll", label: "Payroll Period", roles: ["owner", "admin"] },
   { href: "/admin/backfill", label: "Bulk Backfill", roles: ["owner", "admin"] },
   { href: "/admin", label: "Admin / Setup", roles: ["owner", "admin"] },
