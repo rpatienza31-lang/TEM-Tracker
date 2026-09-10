@@ -154,9 +154,21 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   });
 
   const hoursByUser = new Map(approvedHours.map((h) => [h.userId, h.hours]));
+  // Who appears in the hourly table: everyone paid hourly (payType hourly/both)
+  // PLUS anyone who has hours approved as "Hourly (paid)" this period even if
+  // their pay type is quota — otherwise a quota staffer's approved admin hours
+  // would be recorded but never shown or paid. Ordered by name.
+  const hourlyStaffIds = new Map(hourlyStaff.map((u) => [u.id, u.fullName]));
+  for (const h of approvedHours) {
+    if (!hourlyStaffIds.has(h.userId)) hourlyStaffIds.set(h.userId, nameByUser.get(h.userId) ?? "");
+  }
+  const hourlyStaffList = [...hourlyStaffIds]
+    .map(([id, fullName]) => ({ id, fullName }))
+    .sort((a, b) => a.fullName.localeCompare(b.fullName));
+
   // Hourly pay: pay the UNPAID hours for the period (approved − already paid for
   // this period), so it matches the selected date filter and isn't paid twice.
-  const hourlyRows: HourlyPayrollRow[] = hourlyStaff.map((u) => {
+  const hourlyRows: HourlyPayrollRow[] = hourlyStaffList.map((u) => {
     const approvedHrs = hoursByUser.get(u.id) ?? 0;
     const rate = hourlyRateByUser.get(u.id) ?? 0;
     const summary = hourlyPayments.get(u.id);
