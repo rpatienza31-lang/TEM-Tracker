@@ -12,6 +12,35 @@ import { CotOrderEdit } from "./cot-order-edit";
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
+/**
+ * Copies a value to the clipboard without toggling the surrounding clickable
+ * card. Shows a brief "Copied ✓" so the user knows it worked — handy for
+ * pasting the customer name into DepEd forms / chats.
+ */
+function CopyButton({ value, label }: { value: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard?.writeText(value).then(
+          () => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          },
+          () => {},
+        );
+      }}
+      title={`Copy ${label ?? "to clipboard"}`}
+      aria-label={`Copy ${label ?? value}`}
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10"
+    >
+      {copied ? "Copied ✓" : "Copy"}
+    </button>
+  );
+}
+
 const PRIORITY_CLASS: Record<PriorityLevel, string> = {
   overdue: "border-l-red-600 bg-red-50 dark:bg-red-950/30",
   red: "border-l-red-500 bg-red-50 dark:bg-red-950/20",
@@ -254,7 +283,10 @@ export function CotOrderList({
                   <span className="text-muted-foreground transition-transform" aria-hidden>
                     {isOpen ? "▾" : "▸"}
                   </span>
-                  <span className={`font-semibold ${isOpen ? "text-xl" : "text-base"}`}>{o.customerName}</span>
+                  <span className={`select-text font-semibold ${isOpen ? "text-xl" : "text-base"}`}>
+                    {o.customerName}
+                  </span>
+                  <CopyButton value={o.customerName} label="customer name" />
                   <Badge variant="outline" className="uppercase">
                     {o.orderType}
                   </Badge>
