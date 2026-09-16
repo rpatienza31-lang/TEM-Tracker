@@ -10,11 +10,13 @@ export function EmailPayslipButton({
   from,
   to,
   include = "both",
+  payAllQuota = false,
 }: {
   userId: string;
   from: string;
   to: string;
   include?: "both" | "quota" | "hourly";
+  payAllQuota?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -22,7 +24,7 @@ export function EmailPayslipButton({
   function send() {
     setMsg(null);
     startTransition(async () => {
-      const result = await emailPayslipAction(userId, from, to, include);
+      const result = await emailPayslipAction(userId, from, to, include, payAllQuota);
       setMsg({ ok: result.ok, text: result.ok ? "Payslip emailed to the employee." : (result.message ?? "Failed to send.") });
     });
   }

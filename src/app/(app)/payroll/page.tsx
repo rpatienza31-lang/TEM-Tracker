@@ -347,6 +347,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
               userId: p.userId,
               fullName: p.fullName,
               quotaSalary: p.quotaSalary,
+              quotaSalaryFull: p.quotaSalaryFull,
               hourlySalary: p.hourlySalary,
               quotaCarried: p.quotaCarried,
               cashAdvance: p.cashAdvance,

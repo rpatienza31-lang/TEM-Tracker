@@ -60,7 +60,11 @@ export type HourlyPayrollRow = {
 export type PayslipRow = {
   userId: string;
   fullName: string;
+  // Quota pay capped to one cycle (the default payout).
   quotaSalary: number;
+  // Quota pay for the WHOLE unpaid balance (no one-cycle cap) — used when the
+  // owner chooses "Pay all" on the payslip.
+  quotaSalaryFull: number;
   hourlySalary: number;
   // Points held back to the next cycle because this payout is capped to one
   // full cycle (0 when under quota). Purely informational for the summary.
@@ -192,15 +196,17 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
 
   // One payslip per staff member with any earnings or cash advance, combining
   // their quota and hourly pay, less the cash advance to deduct this payout.
-  const bySalary = new Map<string, { quota: number; hourly: number; quotaCarried: number }>();
+  const bySalary = new Map<string, { quota: number; quotaFull: number; hourly: number; quotaCarried: number }>();
   for (const r of quotaRows) {
-    const e = bySalary.get(r.userId) ?? { quota: 0, hourly: 0, quotaCarried: 0 };
+    const e = bySalary.get(r.userId) ?? { quota: 0, quotaFull: 0, hourly: 0, quotaCarried: 0 };
     e.quota += r.salary;
+    // The uncapped amount pays every unpaid point, not just one cycle.
+    e.quotaFull += round2(r.pointsUnpaid * r.perSubjectRate);
     e.quotaCarried += r.pointsCarried;
     bySalary.set(r.userId, e);
   }
   for (const r of hourlyRows) {
-    const e = bySalary.get(r.userId) ?? { quota: 0, hourly: 0, quotaCarried: 0 };
+    const e = bySalary.get(r.userId) ?? { quota: 0, quotaFull: 0, hourly: 0, quotaCarried: 0 };
     e.hourly += r.salary;
     bySalary.set(r.userId, e);
   }
@@ -209,13 +215,14 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
 
   const payslips: PayslipRow[] = [...payslipUserIds]
     .map((userId) => {
-      const e = bySalary.get(userId) ?? { quota: 0, hourly: 0, quotaCarried: 0 };
+      const e = bySalary.get(userId) ?? { quota: 0, quotaFull: 0, hourly: 0, quotaCarried: 0 };
       const gross = e.quota + e.hourly;
       const cashAdvance = cashAdvanceByUser.get(userId) ?? 0;
       return {
         userId,
         fullName: nameByUser.get(userId) ?? "",
         quotaSalary: e.quota,
+        quotaSalaryFull: e.quotaFull,
         hourlySalary: e.hourly,
         quotaCarried: round2(e.quotaCarried),
         gross,
@@ -223,7 +230,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
         net: gross - cashAdvance,
       };
     })
-    .filter((p) => p.gross > 0 || p.cashAdvance > 0)
+    .filter((p) => p.gross > 0 || p.quotaSalaryFull > 0 || p.cashAdvance > 0)
     .sort((a, b) => a.fullName.localeCompare(b.fullName));
 
   const totalNet = payslips.reduce((sum, p) => sum + p.net, 0);

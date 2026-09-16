@@ -28,6 +28,7 @@ export async function emailPayslipAction(
   from: string,
   to: string,
   include: "both" | "quota" | "hourly" = "both",
+  payAllQuota = false,
 ): Promise<{ ok: boolean; message?: string }> {
   await requireRole("owner");
 
@@ -49,9 +50,17 @@ export async function emailPayslipAction(
   const includeHourly = include !== "quota";
   const quota = includeQuota ? report.quotaRows.find((r) => r.userId === userId) : undefined;
   const hourly = includeHourly ? report.hourlyRows.find((r) => r.userId === userId) : undefined;
-  const { hourlySessions, quotaItems } = await buildPayslipDetail({ userId, from, to, quota, hourly, slip });
+  const { hourlySessions, quotaItems } = await buildPayslipDetail({
+    userId,
+    from,
+    to,
+    quota,
+    hourly,
+    slip,
+    payAll: payAllQuota,
+  });
 
-  const quotaAmount = includeQuota ? slip.quotaSalary : 0;
+  const quotaAmount = includeQuota ? (payAllQuota ? slip.quotaSalaryFull : slip.quotaSalary) : 0;
   const hourlyAmount = includeHourly ? slip.hourlySalary : 0;
   const gross = quotaAmount + hourlyAmount;
   const net = gross - slip.cashAdvance;
@@ -60,7 +69,13 @@ export async function emailPayslipAction(
     fullName: slip.fullName,
     from,
     to,
-    quota: quota ? { points: quota.pointsPayable, perSubjectRate: quota.perSubjectRate, amount: quotaAmount } : undefined,
+    quota: quota
+      ? {
+          points: payAllQuota ? quota.pointsUnpaid : quota.pointsPayable,
+          perSubjectRate: quota.perSubjectRate,
+          amount: quotaAmount,
+        }
+      : undefined,
     hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: hourlyAmount } : undefined,
     gross,
     cashAdvance: slip.cashAdvance,

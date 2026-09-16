@@ -21,8 +21,11 @@ export async function buildPayslipDetail(params: {
   quota?: QuotaPayrollRow;
   hourly?: HourlyPayrollRow;
   slip: PayslipRow;
+  // When true, list every unpaid project (pay the whole balance) instead of
+  // capping to one cycle.
+  payAll?: boolean;
 }): Promise<{ hourlySessions?: PayslipSession[]; quotaItems?: PayslipItem[] }> {
-  const { userId, from, to, quota, hourly, slip } = params;
+  const { userId, from, to, quota, hourly, slip, payAll } = params;
 
   let hourlySessions: PayslipSession[] | undefined;
   if (hourly && slip.hourlySalary > 0) {
@@ -42,16 +45,16 @@ export async function buildPayslipDetail(params: {
     const round2 = (n: number) => Math.round(n * 100) / 100;
     const breakdown = await getPointsBreakdown("1970-01-01", to);
     const { unpaidLines } = splitPaidUnpaid(breakdown.get(userId) ?? [], quota.pointsPaid);
-    // Only list the projects this payout actually covers: unpaid lines
-    // oldest-first, up to the payable points (one cycle when over quota). A
-    // project that straddles the cap is listed with just the points that fit,
-    // so the payslip's total is exactly the payable amount (e.g. 21, not 21.5)
-    // and the rest carries to the next cycle.
+    // Only list the projects this payout covers: unpaid lines oldest-first, up
+    // to the points being paid — one cycle by default (a project straddling the
+    // cap is listed with just the points that fit, so the total is exactly the
+    // payable amount, e.g. 21 not 21.5), or every unpaid point when paying all.
+    const cap = payAll ? quota.pointsUnpaid : quota.pointsPayable;
     const items: PayslipItem[] = [];
     let covered = 0;
     for (const l of unpaidLines) {
-      if (covered >= quota.pointsPayable) break;
-      const take = Math.min(l.points, round2(quota.pointsPayable - covered));
+      if (covered >= cap) break;
+      const take = Math.min(l.points, round2(cap - covered));
       items.push({
         label: l.kind === "adjustment" ? "Adjustment" : DELIVERABLE_TYPE_LABELS[l.type ?? "DLP"] ?? l.title,
         detail: l.subtitle,

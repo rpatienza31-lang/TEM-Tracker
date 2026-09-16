@@ -11,12 +11,14 @@ export type PayslipRowData = {
   userId: string;
   fullName: string;
   quotaSalary: number;
+  quotaSalaryFull: number;
   hourlySalary: number;
   quotaCarried: number;
   cashAdvance: number;
 };
 
 type Include = "both" | "quota" | "hourly";
+type QuotaScope = "cycle" | "all";
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 
@@ -34,9 +36,13 @@ const INCLUDE_LABEL: Record<Include, string> = {
  */
 export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from: string; to: string }) {
   const [include, setInclude] = useState<Record<string, Include>>({});
+  const [quotaScope, setQuotaScope] = useState<Record<string, QuotaScope>>({});
 
   const inc = (id: string): Include => include[id] ?? "both";
-  const effQuota = (r: PayslipRowData) => (inc(r.userId) === "hourly" ? 0 : r.quotaSalary);
+  // Whether to pay one cycle (default) or the whole unpaid balance for this row.
+  const scope = (id: string): QuotaScope => quotaScope[id] ?? "cycle";
+  const quotaFor = (r: PayslipRowData) => (scope(r.userId) === "all" ? r.quotaSalaryFull : r.quotaSalary);
+  const effQuota = (r: PayslipRowData) => (inc(r.userId) === "hourly" ? 0 : quotaFor(r));
   const effHourly = (r: PayslipRowData) => (inc(r.userId) === "quota" ? 0 : r.hourlySalary);
   const effGross = (r: PayslipRowData) => effQuota(r) + effHourly(r);
   const effNet = (r: PayslipRowData) => effGross(r) - r.cashAdvance;
@@ -95,10 +101,30 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
                     dropQuota && "line-through opacity-50",
                   )}
                 >
-                  {peso.format(r.quotaSalary)}
-                  {r.quotaCarried > 0 && !dropQuota && (
-                    <span className="mt-0.5 block text-[11px] font-normal not-italic text-amber-600 dark:text-amber-500">
-                      {r.quotaCarried} pt{r.quotaCarried === 1 ? "" : "s"} → next cycle
+                  {peso.format(quotaFor(r))}
+                  {/* Choose one cycle (default, carries the rest) or pay every
+                      unpaid point — reflected in the payslip printout too. */}
+                  {!dropQuota && r.quotaCarried > 0 && (
+                    <span className="mt-0.5 flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQuotaScope((prev) => ({
+                            ...prev,
+                            [r.userId]: scope(r.userId) === "all" ? "cycle" : "all",
+                          }))
+                        }
+                        className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-primary hover:bg-accent"
+                      >
+                        {scope(r.userId) === "all" ? "Pay 1 cycle" : "Pay all"}
+                      </button>
+                      {scope(r.userId) === "all" ? (
+                        <span className="text-[11px] font-normal text-emerald-600 dark:text-emerald-500">all points</span>
+                      ) : (
+                        <span className="text-[11px] font-normal text-amber-600 dark:text-amber-500">
+                          {r.quotaCarried} pt{r.quotaCarried === 1 ? "" : "s"} → next cycle
+                        </span>
+                      )}
                     </span>
                   )}
                 </TableCell>
@@ -119,7 +145,7 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
                 </TableCell>
                 <TableCell>
                   <a
-                    href={`/payroll/payslip/${r.userId}?from=${from}&to=${to}&include=${inc(r.userId)}`}
+                    href={`/payroll/payslip/${r.userId}?from=${from}&to=${to}&include=${inc(r.userId)}&quota=${scope(r.userId)}`}
                     target="_blank"
                     rel="noopener"
                     className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-accent"

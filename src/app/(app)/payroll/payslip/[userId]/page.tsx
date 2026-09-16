@@ -7,7 +7,7 @@ import { buildPayslipDetail } from "@/lib/payroll/payslip-detail";
 import { PrintButton } from "./print-button";
 import { EmailPayslipButton } from "./email-button";
 
-type SearchParams = { from?: string; to?: string; include?: string };
+type SearchParams = { from?: string; to?: string; include?: string; quota?: string };
 
 function defaultRange() {
   const to = new Date();
@@ -33,6 +33,8 @@ export default async function PayslipPage({
   const include = sp.include === "quota" || sp.include === "hourly" ? sp.include : "both";
   const includeQuota = include !== "hourly";
   const includeHourly = include !== "quota";
+  // Quota scope: one cycle (default) or the whole unpaid balance.
+  const payAllQuota = sp.quota === "all";
 
   const report = await getPayrollReport(from, to);
   const slip = report.payslips.find((p) => p.userId === userId);
@@ -52,11 +54,20 @@ export default async function PayslipPage({
     );
   }
 
-  const { hourlySessions, quotaItems } = await buildPayslipDetail({ userId, from, to, quota, hourly, slip });
+  const { hourlySessions, quotaItems } = await buildPayslipDetail({
+    userId,
+    from,
+    to,
+    quota,
+    hourly,
+    slip,
+    payAll: payAllQuota,
+  });
 
   // Recompute the totals for the chosen components so an hourly-only (or
-  // quota-only) slip pays exactly that.
-  const quotaAmount = includeQuota ? slip.quotaSalary : 0;
+  // quota-only) slip pays exactly that. Quota is one cycle by default, or the
+  // whole unpaid balance when "Pay all" was chosen.
+  const quotaAmount = includeQuota ? (payAllQuota ? slip.quotaSalaryFull : slip.quotaSalary) : 0;
   const hourlyAmount = includeHourly ? slip.hourlySalary : 0;
   const gross = quotaAmount + hourlyAmount;
   const net = gross - slip.cashAdvance;
@@ -66,7 +77,11 @@ export default async function PayslipPage({
     from,
     to,
     quota: quota
-      ? { points: quota.pointsPayable, perSubjectRate: quota.perSubjectRate, amount: quotaAmount }
+      ? {
+          points: payAllQuota ? quota.pointsUnpaid : quota.pointsPayable,
+          perSubjectRate: quota.perSubjectRate,
+          amount: quotaAmount,
+        }
       : undefined,
     hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: hourlyAmount } : undefined,
     gross,
@@ -83,7 +98,7 @@ export default async function PayslipPage({
           ← Back to Payroll
         </Link>
         <div className="flex items-center gap-2">
-          <EmailPayslipButton userId={userId} from={from} to={to} include={include} />
+          <EmailPayslipButton userId={userId} from={from} to={to} include={include} payAllQuota={payAllQuota} />
           <PrintButton />
         </div>
       </div>
