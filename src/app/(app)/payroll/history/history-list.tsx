@@ -1,12 +1,39 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 
 import type { PaymentHistoryRow } from "@/lib/payroll/payments";
 import { DELIVERABLE_TYPE_LABELS } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { emailRecordedPayslipAction } from "../actions";
+
+/** Re-sends the payslip for an already-recorded payout to the employee's email. */
+function ResendPayslipButton({ paymentId }: { paymentId: string }) {
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            setMsg(null);
+            const res = await emailRecordedPayslipAction(paymentId);
+            setMsg({ ok: res.ok, text: res.ok ? "Emailed ✓" : res.message ?? "Failed to send." });
+          })
+        }
+      >
+        {pending ? "Sending…" : "Email payslip"}
+      </Button>
+      {msg && <span className={`text-xs ${msg.ok ? "text-status-approved" : "text-destructive"}`}>{msg.text}</span>}
+    </div>
+  );
+}
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const dateFmt = new Intl.DateTimeFormat("en-PH", {
@@ -49,6 +76,7 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
             <TableHead className="text-right">Net</TableHead>
             <TableHead>Paid by</TableHead>
             <TableHead>Received</TableHead>
+            <TableHead className="text-right">Payslip</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -98,10 +126,13 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
                       </span>
                     )}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <ResendPayslipButton paymentId={p.id} />
+                  </TableCell>
                 </TableRow>
                 {isOpen && (
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableCell colSpan={10} className="py-3">
+                    <TableCell colSpan={11} className="py-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Projects covered by this payout
                         {p.itemsReconstructed && (
@@ -145,7 +176,7 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
           })}
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={10} className="text-center text-muted-foreground">
+              <TableCell colSpan={11} className="text-center text-muted-foreground">
                 {payments.length === 0 ? "No payouts recorded yet." : "No payments match that name."}
               </TableCell>
             </TableRow>

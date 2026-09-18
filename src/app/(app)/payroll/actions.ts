@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { requireRole } from "@/lib/auth";
 import { db } from "@/db/client";
-import { users } from "@/db/schema";
+import { payrollPayments, users } from "@/db/schema";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { renderPayslipHtml } from "@/lib/payroll/payslip-html";
 import { recordPointAdjustment } from "@/lib/quota/adjustments";
@@ -81,6 +81,77 @@ export async function emailPayslipAction(
     cashAdvance: slip.cashAdvance,
     net,
     hourlySessions,
+    quotaItems,
+  });
+
+  return sendMail({ to: staff.email, subject: `Your payslip — ${from} to ${to}`, html });
+}
+
+/**
+ * Re-sends the payslip for an ALREADY-RECORDED payout (from Payment history).
+ * Rebuilds the slip from the stored payment row — points, amount, cash advance,
+ * and the project snapshot — instead of the live unpaid balance (which is now
+ * zero for a paid-out cycle). Owner only.
+ */
+export async function emailRecordedPayslipAction(paymentId: string): Promise<{ ok: boolean; message?: string }> {
+  await requireRole("owner");
+
+  const [p] = await db
+    .select({
+      editorId: payrollPayments.editorId,
+      kind: payrollPayments.kind,
+      points: payrollPayments.points,
+      rate: payrollPayments.rate,
+      amount: payrollPayments.amount,
+      cashAdvance: payrollPayments.cashAdvance,
+      items: payrollPayments.items,
+      periodFrom: payrollPayments.periodFrom,
+      periodTo: payrollPayments.periodTo,
+      paidAt: payrollPayments.paidAt,
+    })
+    .from(payrollPayments)
+    .where(eq(payrollPayments.id, paymentId))
+    .limit(1);
+  if (!p) return { ok: false, message: "Payment not found." };
+
+  const [staff] = await db
+    .select({ email: users.email, fullName: users.fullName })
+    .from(users)
+    .where(eq(users.id, p.editorId))
+    .limit(1);
+  if (!staff?.email) return { ok: false, message: "This staff member has no email on file." };
+
+  const points = Number(p.points);
+  const amount = Number(p.amount);
+  const cashAdvance = Number(p.cashAdvance);
+  const isQuota = p.kind !== "hourly" && p.kind !== "daily";
+  const paidDay = new Date(p.paidAt).toISOString().slice(0, 10);
+  const from = p.periodFrom ?? paidDay;
+  const to = p.periodTo ?? paidDay;
+
+  // The project snapshot stored with the payout (quota only).
+  const snapshot = Array.isArray(p.items) ? (p.items as PaymentItem[]) : [];
+  const shortDayFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
+  const quotaItems = isQuota
+    ? snapshot.map((l) => ({
+        label: l.kind === "adjustment" ? "Adjustment" : l.title,
+        detail: l.subtitle,
+        points: l.points,
+        dateLabel: shortDayFmt.format(new Date(l.dateIso)),
+      }))
+    : undefined;
+
+  const html = renderPayslipHtml({
+    fullName: staff.fullName,
+    from,
+    to,
+    quota: isQuota
+      ? { points, perSubjectRate: points > 0 ? Math.round((amount / points) * 100) / 100 : Number(p.rate), amount }
+      : undefined,
+    hourly: isQuota ? undefined : { hours: points, rate: Number(p.rate), amount },
+    gross: amount,
+    cashAdvance,
+    net: amount - cashAdvance,
     quotaItems,
   });
 
