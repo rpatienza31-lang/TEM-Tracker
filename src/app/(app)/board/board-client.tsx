@@ -115,6 +115,13 @@ export function BoardClient({
 
   const selectedIds = [...selected];
   const selectedApprovedIds = items.filter((i) => selected.has(i.id) && i.status === "approved").map((i) => i.id);
+  // The "Ready to upload" quick filter just pins the status filter to approved.
+  const readyToUpload = searchParams.get("status") === "approved";
+  const allSelected = items.length > 0 && items.every((i) => selected.has(i.id));
+
+  function toggleSelectAll(checked: boolean) {
+    setSelected(checked ? new Set(items.map((i) => i.id)) : new Set());
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -239,11 +246,37 @@ export function BoardClient({
           />
           Overdue only
         </label>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setParam("status", readyToUpload ? null : "approved")}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium",
+              readyToUpload
+                ? "border-status-approved bg-status-approved/10 text-status-approved"
+                : "border-input text-muted-foreground hover:bg-accent",
+            )}
+            aria-pressed={readyToUpload}
+            title="Show only approved deliverables that still need to be marked uploaded"
+          >
+            ⬆ Ready to upload
+          </button>
+        )}
       </div>
 
       {isAdmin && selectedIds.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/50 p-2">
-          <span className="text-sm text-muted-foreground">{selectedIds.length} selected</span>
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.length} selected
+            {selectedApprovedIds.length > 0 && ` · ${selectedApprovedIds.length} ready to upload`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="text-sm text-primary underline hover:no-underline"
+          >
+            Uncheck all
+          </button>
           <AssignDialog itemIds={selectedIds} editors={editors} label="Bulk assign" onDone={(m) => setBanner({ kind: "success", message: m })} />
           <BulkActionButton
             itemIds={selectedIds}
@@ -254,7 +287,7 @@ export function BoardClient({
           />
           <BulkActionButton
             itemIds={selectedApprovedIds}
-            label="Bulk mark uploaded"
+            label={`Bulk mark uploaded${selectedApprovedIds.length ? ` (${selectedApprovedIds.length})` : ""}`}
             pendingLabel="Uploading…"
             action={uploadItemAction}
             onDone={(m) => setBanner({ kind: "success", message: m })}
@@ -265,7 +298,15 @@ export function BoardClient({
       <Table>
         <TableHeader>
           <TableRow>
-            {isAdmin && <TableHead className="w-8" />}
+            {isAdmin && (
+              <TableHead className="w-8">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={(c) => toggleSelectAll(c === true)}
+                  aria-label="Select all shown"
+                />
+              </TableHead>
+            )}
             <TableHead>Grade</TableHead>
             <TableHead>Subject</TableHead>
             <TableHead>Week</TableHead>
