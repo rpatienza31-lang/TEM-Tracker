@@ -643,16 +643,32 @@ export function ScheduleClient({
   const [q, setQ] = useState("");
 
   // Text search across every card — handy for finding one COT in a long
-  // Unassigned column. Matches customer/subject, grade/week, term and type.
+  // Unassigned column. Matches customer/subject, grade/week, term, type and the
+  // schedule note.
   const filteredItems = useMemo(() => {
     const query = q.trim().toLowerCase();
     if (!query) return items;
     return items.filter((it) =>
-      [it.title, it.subtitle, it.termName, DELIVERABLE_TYPE_LABELS[it.type], it.kind === "cot" ? "cot" : ""]
+      [
+        it.title,
+        it.subtitle,
+        it.termName,
+        it.scheduleNote,
+        DELIVERABLE_TYPE_LABELS[it.type],
+        it.kind === "cot" ? "cot" : "",
+      ]
         .filter(Boolean)
         .some((s) => String(s).toLowerCase().includes(query)),
     );
   }, [items, q]);
+
+  // When searching, a flat list of the matches sorted by their scheduled date —
+  // so you see at a glance WHEN each subject/grade/week is scheduled, plus its
+  // note, without scanning the grid.
+  const matches = useMemo(() => {
+    if (!q.trim()) return [];
+    return [...filteredItems].sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title));
+  }, [filteredItems, q]);
 
   // key `${editorId}|${date}` -> kind
   const availByKey = useMemo(() => {
@@ -941,6 +957,44 @@ export function ScheduleClient({
         {rangeLabel}
         {q && <span className="ml-2 text-primary">· filtered by “{q}”</span>}
       </div>
+
+      {q.trim() && (
+        <div className="rounded-xl border border-border bg-card shadow-sm">
+          <div className="border-b border-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {matches.length} match{matches.length === 1 ? "" : "es"} for “{q.trim()}” — scheduled date, staff & note
+          </div>
+          {matches.length === 0 ? (
+            <p className="px-3 py-3 text-sm text-muted-foreground">
+              Nothing in this date range matches. Try a wider range (14 / 30 days) or the Next arrow.
+            </p>
+          ) : (
+            <ul className="max-h-64 divide-y divide-border/60 overflow-auto">
+              {matches.map((it) => (
+                <li key={it.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
+                  <span className="w-24 shrink-0 font-semibold tabular-nums">
+                    {dateFmt.format(new Date(`${it.dueDate}T00:00:00+08:00`))}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                      {dayShortFmt.format(new Date(`${it.dueDate}T00:00:00+08:00`))}
+                    </span>
+                  </span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] font-medium">
+                    {DELIVERABLE_TYPE_LABELS[it.type]}
+                  </span>
+                  <span className="font-medium">{it.title}</span>
+                  <span className="text-muted-foreground">{it.subtitle}</span>
+                  <span className="text-xs text-muted-foreground">· {it.assigneeName ?? "Unassigned"}</span>
+                  {it.overdue && <span className="text-xs font-semibold text-destructive">· OVERDUE</span>}
+                  {it.scheduleNote && (
+                    <span className="w-full pl-24 text-xs italic text-amber-700 dark:text-amber-400">
+                      📝 {it.scheduleNote}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
