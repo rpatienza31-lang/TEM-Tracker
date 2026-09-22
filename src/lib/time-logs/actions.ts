@@ -5,7 +5,7 @@ import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { formatInTimeZone } from "date-fns-tz";
 
 import { db } from "@/db/client";
-import { timeLogs } from "@/db/schema";
+import { timeLogs, users } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 
 const ADMIN_ROLES = ["owner", "admin"] as const;
@@ -142,6 +142,41 @@ export async function reclassifyTimeLogAction(
     .update(timeLogs)
     .set({ countsHourly })
     .where(and(eq(timeLogs.id, logId), isNotNull(timeLogs.approvedAt)));
+
+  revalidatePath("/payroll");
+  return { ok: true };
+}
+
+/**
+ * Owner adds a missing attendance day for a daily (time-only) staffer, so the
+ * day count — and every payslip figure derived from it — reflects a day they
+ * were present but forgot to clock in. Inserts a normal 8am–5pm PH session that
+ * the owner can fine-tune afterwards. Refuses a duplicate date.
+ */
+export async function addAttendanceDayAction(userId: string, date: string): Promise<TimeLogActionResult> {
+  const actor = await requireUser();
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only admins can add an attendance day." };
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, message: "Pick a valid date." };
+
+  const [target] = await db.select({ role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!target) return { ok: false, message: "Staff member not found." };
+  if (target.role !== "staff") return { ok: false, message: "Attendance days are only for daily staff." };
+
+  const [existing] = await db
+    .select({ id: timeLogs.id })
+    .from(timeLogs)
+    .where(and(eq(timeLogs.userId, userId), eq(timeLogs.workDate, date), isNotNull(timeLogs.clockIn)))
+    .limit(1);
+  if (existing) return { ok: false, message: "That day already has attendance." };
+
+  await db.insert(timeLogs).values({
+    userId,
+    workDate: date,
+    clockIn: new Date(`${date}T08:00:00+08:00`),
+    clockOut: new Date(`${date}T17:00:00+08:00`),
+    hours: "9.00",
+    note: "Manual attendance (added by admin)",
+  });
 
   revalidatePath("/payroll");
   return { ok: true };

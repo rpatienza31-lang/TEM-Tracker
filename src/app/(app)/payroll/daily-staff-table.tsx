@@ -1,13 +1,77 @@
 "use client";
 
-import { Fragment, useActionState, useState } from "react";
+import { Fragment, useActionState, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { RateCell } from "./rate-cell";
 import { EditableSessionRow } from "./hourly-staff-table";
 import { markDailyPaidAction, type SetRateState } from "./actions";
+import { addAttendanceDayAction, deleteTimeLogAction } from "@/lib/time-logs/actions";
 import type { DailyStaffRow, DailySession } from "@/lib/payroll/daily";
+
+/** Owner control to remove one attendance day (a wrong or duplicate clock-in). */
+function RemoveDayButton({ logId }: { logId: string }) {
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      title="Remove this attendance day"
+      onClick={() => {
+        if (!window.confirm("Remove this attendance day? It will lower the day count.")) return;
+        startTransition(async () => {
+          const res = await deleteTimeLogAction(logId);
+          if (res.ok) router.refresh();
+        });
+      }}
+      className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium text-destructive hover:bg-destructive/10"
+    >
+      Remove
+    </button>
+  );
+}
+
+/** Owner control to add a missing attendance day for a daily staffer. */
+function AddDayForm({ userId }: { userId: string }) {
+  const [date, setDate] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+  const router = useRouter();
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/60 pt-2">
+      <span className="text-xs text-muted-foreground">Add a missing day:</span>
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="h-8 rounded-md border border-input bg-background px-1.5 text-xs"
+        aria-label="Attendance date to add"
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        disabled={pending || !date}
+        onClick={() => {
+          setErr(null);
+          startTransition(async () => {
+            const res = await addAttendanceDayAction(userId, date);
+            if (res.ok) {
+              setDate("");
+              router.refresh();
+            } else setErr(res.message);
+          });
+        }}
+      >
+        {pending ? "Adding…" : "Add day"}
+      </Button>
+      {err && <span className="text-xs text-destructive">{err}</span>}
+    </div>
+  );
+}
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const timeFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit" });
@@ -169,7 +233,7 @@ export function DailyStaffTable({
                     <div className="flex flex-col gap-2">
                       <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                         Clock-in / clock-out (attendance)
-                        {isOwner && " — edit a time if a staffer forgot to clock in or out"}
+                        {isOwner && " — edit a time, or add / remove a day so the day count is correct"}
                       </div>
                       {isOwner ? (
                         <div className="flex flex-col">
@@ -181,8 +245,14 @@ export function DailyStaffTable({
                             <span className="min-w-[4.5rem]" />
                           </div>
                           {list.map((s) => (
-                            <EditableSessionRow key={s.id} session={s} />
+                            <div key={s.id} className="flex items-center gap-1">
+                              <div className="flex-1">
+                                <EditableSessionRow session={s} />
+                              </div>
+                              <RemoveDayButton logId={s.id} />
+                            </div>
                           ))}
+                          <AddDayForm userId={row.userId} />
                         </div>
                       ) : (
                         <div className="overflow-x-auto">
