@@ -16,39 +16,72 @@ const time = (iso: string | null) => (iso ? timeFmt.format(new Date(iso)) : "—
 const day = (workDate: string) => dateFmt.format(new Date(`${workDate}T00:00:00+08:00`));
 const initial: SetRateState = { status: "idle" };
 
-/** Owner control that records a daily-staff payout for the period. */
+/**
+ * Owner control that records a daily-staff payout for the period. The number of
+ * days is editable here, so the owner can adjust it (e.g. a staffer forgot to
+ * clock in, or a clocked-in day shouldn't be paid) before recording the payout.
+ */
 function MarkDailyPaidButton({
   userId,
-  salary,
+  daysUnpaid,
+  dailyRate,
   isPaid,
   from,
   to,
 }: {
   userId: string;
-  salary: number;
+  daysUnpaid: number;
+  dailyRate: number;
   isPaid: boolean;
   from: string;
   to: string;
 }) {
   const [state, formAction, pending] = useActionState(markDailyPaidAction, initial);
+  const [days, setDays] = useState(daysUnpaid);
 
   if (isPaid) return <span className="text-xs text-status-approved">Paid ✓</span>;
-  if (salary <= 0) return <span className="text-xs text-muted-foreground">—</span>;
+  if (daysUnpaid <= 0 && dailyRate <= 0) return <span className="text-xs text-muted-foreground">—</span>;
+
+  const amount = Math.round(days * dailyRate * 100) / 100;
 
   return (
     <form
       action={formAction}
+      className="flex flex-col items-end gap-1"
       onSubmit={(e) => {
-        if (!window.confirm(`Mark ${peso.format(salary)} as paid for this staff member this period?`)) e.preventDefault();
+        if (!window.confirm(`Mark ${days} day(s) = ${peso.format(amount)} as paid for this staff member?`)) {
+          e.preventDefault();
+        }
       }}
     >
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="from" value={from} />
       <input type="hidden" name="to" value={to} />
-      <Button type="submit" size="sm" variant="secondary" disabled={pending}>
-        {pending ? "Saving…" : "Mark paid"}
-      </Button>
-      {state.status === "error" && <span className="ml-1 text-xs text-destructive">{state.message}</span>}
+      <input type="hidden" name="days" value={days} />
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          step="0.5"
+          min={0}
+          value={days}
+          onChange={(e) => setDays(Number(e.target.value))}
+          className="h-8 w-16 rounded-md border border-input bg-background px-1.5 text-right text-sm tabular-nums"
+          aria-label="Days to pay"
+        />
+        <span className="text-xs text-muted-foreground">days</span>
+        <Button type="submit" size="sm" variant="secondary" disabled={pending || days <= 0}>
+          {pending ? "Saving…" : "Mark paid"}
+        </Button>
+      </div>
+      <div className="text-[11px] text-muted-foreground">
+        {peso.format(amount)}
+        {days !== daysUnpaid && (
+          <button type="button" onClick={() => setDays(daysUnpaid)} className="ml-1.5 text-primary underline">
+            reset ({daysUnpaid})
+          </button>
+        )}
+      </div>
+      {state.status === "error" && <span className="text-xs text-destructive">{state.message}</span>}
     </form>
   );
 }
@@ -119,7 +152,14 @@ export function DailyStaffTable({
                 )}
                 {isOwner && (
                   <TableCell>
-                    <MarkDailyPaidButton userId={row.userId} salary={row.salary} isPaid={row.isPaid} from={from} to={to} />
+                    <MarkDailyPaidButton
+                      userId={row.userId}
+                      daysUnpaid={row.daysUnpaid}
+                      dailyRate={row.dailyRate}
+                      isPaid={row.isPaid}
+                      from={from}
+                      to={to}
+                    />
                   </TableCell>
                 )}
               </TableRow>

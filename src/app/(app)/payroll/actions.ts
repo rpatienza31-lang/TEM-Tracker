@@ -198,17 +198,25 @@ export async function markDailyPaidAction(_prev: SetRateState, formData: FormDat
   const rows = await getDailyStaffForPeriod(from, to);
   const row = rows.find((r) => r.userId === userId);
   if (!row) return { status: "error", message: "No daily staff found." };
-  if (row.daysUnpaid <= 0) return { status: "error", message: "Nothing unpaid for this period." };
+
+  // Days are editable: the owner may adjust the count (a forgotten clock-in, or
+  // a clocked day that shouldn't be paid). Default to the attendance-derived
+  // unpaid days; the amount is recomputed from days × daily rate server-side.
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const requestedDays = Number(String(formData.get("days") ?? "").trim());
+  const daysToPay = Number.isFinite(requestedDays) && requestedDays > 0 ? round2(requestedDays) : row.daysUnpaid;
+  if (daysToPay <= 0) return { status: "error", message: "Enter a number of days (more than 0)." };
+  const amountToPay = round2(daysToPay * row.dailyRate);
 
   const outstandingCA = row.cashAdvance;
-  const appliedCA = Math.min(Math.max(0, outstandingCA), row.salary);
+  const appliedCA = Math.min(Math.max(0, outstandingCA), amountToPay);
 
   await recordPayrollPayment({
     editorId: userId,
     kind: "daily",
-    points: row.daysUnpaid,
+    points: daysToPay,
     cycles: 0,
-    amount: row.salary,
+    amount: amountToPay,
     rate: row.dailyRate,
     cashAdvance: appliedCA,
     from,
@@ -222,7 +230,7 @@ export async function markDailyPaidAction(_prev: SetRateState, formData: FormDat
       .where(eq(users.id, userId));
   }
   revalidatePath("/payroll");
-  return { status: "ok", message: `Recorded ${row.daysUnpaid} day(s).` };
+  return { status: "ok", message: `Recorded ${daysToPay} day(s).` };
 }
 
 /** Sets a staff member's cash advance (deducted from their payout). Owner-only. */
