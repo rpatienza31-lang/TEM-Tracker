@@ -13,6 +13,7 @@ export type PayslipRowData = {
   quotaSalary: number;
   quotaSalaryFull: number;
   hourlySalary: number;
+  dailySalary: number;
   quotaCarried: number;
   cashAdvance: number;
 };
@@ -44,20 +45,24 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
   const quotaFor = (r: PayslipRowData) => (scope(r.userId) === "all" ? r.quotaSalaryFull : r.quotaSalary);
   const effQuota = (r: PayslipRowData) => (inc(r.userId) === "hourly" ? 0 : quotaFor(r));
   const effHourly = (r: PayslipRowData) => (inc(r.userId) === "quota" ? 0 : r.hourlySalary);
-  const effGross = (r: PayslipRowData) => effQuota(r) + effHourly(r);
+  // Fixed-daily pay is always part of the payout (it's not a quota/hourly split).
+  const effGross = (r: PayslipRowData) => effQuota(r) + effHourly(r) + r.dailySalary;
   const effNet = (r: PayslipRowData) => effGross(r) - r.cashAdvance;
 
   const totals = rows.reduce(
     (acc, r) => {
       acc.quota += effQuota(r);
       acc.hourly += effHourly(r);
+      acc.daily += r.dailySalary;
       acc.gross += effGross(r);
       acc.ca += r.cashAdvance;
       acc.net += effNet(r);
       return acc;
     },
-    { quota: 0, hourly: 0, gross: 0, ca: 0, net: 0 },
+    { quota: 0, hourly: 0, daily: 0, gross: 0, ca: 0, net: 0 },
   );
+
+  const anyDaily = rows.some((r) => r.dailySalary > 0);
 
   return (
     <div className="overflow-x-auto">
@@ -68,6 +73,7 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
             <TableHead>Pay for</TableHead>
             <TableHead className="text-right">Quota</TableHead>
             <TableHead className="text-right">Hourly</TableHead>
+            {anyDaily && <TableHead className="text-right">Daily</TableHead>}
             <TableHead className="text-right">Gross</TableHead>
             <TableHead>Cash advance (CA)</TableHead>
             <TableHead className="text-right">Net pay</TableHead>
@@ -136,6 +142,11 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
                 >
                   {peso.format(r.hourlySalary)}
                 </TableCell>
+                {anyDaily && (
+                  <TableCell className="text-right tabular-nums text-muted-foreground">
+                    {peso.format(r.dailySalary)}
+                  </TableCell>
+                )}
                 <TableCell className="text-right tabular-nums">{peso.format(effGross(r))}</TableCell>
                 <TableCell>
                   <CashAdvanceCell userId={r.userId} amount={r.cashAdvance} />
@@ -159,7 +170,7 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
           })}
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+              <TableCell colSpan={anyDaily ? 9 : 8} className="py-8 text-center text-muted-foreground">
                 No payslips for this period yet.
               </TableCell>
             </TableRow>
@@ -171,6 +182,7 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
               <TableCell colSpan={2}>Total</TableCell>
               <TableCell className="text-right tabular-nums">{peso.format(totals.quota)}</TableCell>
               <TableCell className="text-right tabular-nums">{peso.format(totals.hourly)}</TableCell>
+              {anyDaily && <TableCell className="text-right tabular-nums">{peso.format(totals.daily)}</TableCell>}
               <TableCell className="text-right tabular-nums">{peso.format(totals.gross)}</TableCell>
               <TableCell className="text-right tabular-nums">{peso.format(totals.ca)}</TableCell>
               <TableCell className="text-right tabular-nums text-emerald-700 dark:text-emerald-400">

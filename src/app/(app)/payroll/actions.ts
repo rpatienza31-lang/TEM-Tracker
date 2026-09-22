@@ -50,6 +50,7 @@ export async function emailPayslipAction(
   const includeHourly = include !== "quota";
   const quota = includeQuota ? report.quotaRows.find((r) => r.userId === userId) : undefined;
   const hourly = includeHourly ? report.hourlyRows.find((r) => r.userId === userId) : undefined;
+  const daily = report.dailyRows.find((r) => r.userId === userId);
   const { hourlySessions, quotaItems } = await buildPayslipDetail({
     userId,
     from,
@@ -62,7 +63,8 @@ export async function emailPayslipAction(
 
   const quotaAmount = includeQuota ? (payAllQuota ? slip.quotaSalaryFull : slip.quotaSalary) : 0;
   const hourlyAmount = includeHourly ? slip.hourlySalary : 0;
-  const gross = quotaAmount + hourlyAmount;
+  const dailyAmount = slip.dailySalary;
+  const gross = quotaAmount + hourlyAmount + dailyAmount;
   const net = gross - slip.cashAdvance;
 
   const html = renderPayslipHtml({
@@ -77,6 +79,7 @@ export async function emailPayslipAction(
         }
       : undefined,
     hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: hourlyAmount } : undefined,
+    daily: daily && dailyAmount > 0 ? { days: daily.daysUnpaid, rate: daily.dailyRate, amount: dailyAmount } : undefined,
     gross,
     cashAdvance: slip.cashAdvance,
     net,
@@ -125,6 +128,7 @@ export async function emailRecordedPayslipAction(paymentId: string): Promise<{ o
   const amount = Number(p.amount);
   const cashAdvance = Number(p.cashAdvance);
   const isQuota = p.kind !== "hourly" && p.kind !== "daily";
+  const isDaily = p.kind === "daily";
   const paidDay = new Date(p.paidAt).toISOString().slice(0, 10);
   const from = p.periodFrom ?? paidDay;
   const to = p.periodTo ?? paidDay;
@@ -148,7 +152,8 @@ export async function emailRecordedPayslipAction(paymentId: string): Promise<{ o
     quota: isQuota
       ? { points, perSubjectRate: points > 0 ? Math.round((amount / points) * 100) / 100 : Number(p.rate), amount }
       : undefined,
-    hourly: isQuota ? undefined : { hours: points, rate: Number(p.rate), amount },
+    hourly: isQuota || isDaily ? undefined : { hours: points, rate: Number(p.rate), amount },
+    daily: isDaily ? { days: points, rate: Number(p.rate), amount } : undefined,
     gross: amount,
     cashAdvance,
     net: amount - cashAdvance,

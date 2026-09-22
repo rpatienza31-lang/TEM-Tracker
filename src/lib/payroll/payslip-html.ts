@@ -9,6 +9,7 @@ export type PayslipData = {
   to: string;
   quota?: { points: number; perSubjectRate: number; amount: number };
   hourly?: { hours: number; rate: number; amount: number };
+  daily?: { days: number; rate: number; amount: number };
   gross: number;
   cashAdvance: number;
   net: number;
@@ -109,6 +110,9 @@ export function renderPayslipHtml(d: PayslipData): string {
   }
   if (d.hourly && d.hourly.amount > 0) {
     earnings.push(earningRow("Hourly work", `${d.hourly.hours.toFixed(2)} hr × ${peso.format(d.hourly.rate)}`, d.hourly.amount));
+  }
+  if (d.daily && d.daily.amount > 0) {
+    earnings.push(earningRow("Daily attendance", `${d.daily.days} day(s) × ${peso.format(d.daily.rate)}`, d.daily.amount));
   }
   if (earnings.length === 0) {
     earnings.push(

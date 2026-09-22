@@ -5,6 +5,7 @@ import { users } from "@/db/schema";
 import { getProductivityStats } from "@/lib/quota/productivity";
 import { getQuotaSize } from "@/lib/settings";
 import { getPaymentsForPeriod } from "@/lib/payroll/payments";
+import { getDailyStaffForPeriod, type DailyStaffRow } from "@/lib/payroll/daily";
 import { getApprovedHoursForPeriod } from "@/lib/time-logs/queries";
 
 export type QuotaPayrollRow = {
@@ -66,6 +67,8 @@ export type PayslipRow = {
   // owner chooses "Pay all" on the payslip.
   quotaSalaryFull: number;
   hourlySalary: number;
+  // Fixed-daily pay (days present × daily rate) for time-only staff.
+  dailySalary: number;
   // Points held back to the next cycle because this payout is capped to one
   // full cycle (0 when under quota). Purely informational for the summary.
   quotaCarried: number;
@@ -79,6 +82,7 @@ export type PayrollReport = {
   to: string;
   quotaRows: QuotaPayrollRow[];
   hourlyRows: HourlyPayrollRow[];
+  dailyRows: DailyStaffRow[];
   payslips: PayslipRow[];
   totalSalary: number;
   totalNet: number;
@@ -91,7 +95,7 @@ export type PayrollReport = {
  * reconcile. Hourly totals only ever include approved time logs.
  */
 export async function getPayrollReport(from: string, to: string): Promise<PayrollReport> {
-  const [productivity, quotaSize, hourlyPayments, approvedHours, hourlyStaff, rateRows] = await Promise.all([
+  const [productivity, quotaSize, hourlyPayments, approvedHours, hourlyStaff, rateRows, dailyRows] = await Promise.all([
     // Cumulative points as of the period end; the unpaid balance (points −
     // lifetime paid) is what's owed, matching the dashboard.
     getProductivityStats({ to }),
@@ -114,6 +118,8 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
         cashAdvance: users.cashAdvance,
       })
       .from(users),
+    // Fixed-daily staff (time-only): unpaid days × daily rate for the period.
+    getDailyStaffForPeriod(from, to),
   ]);
 
   const hourlyRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.hourlyRate)]));
@@ -196,9 +202,13 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
 
   // One payslip per staff member with any earnings or cash advance, combining
   // their quota and hourly pay, less the cash advance to deduct this payout.
-  const bySalary = new Map<string, { quota: number; quotaFull: number; hourly: number; quotaCarried: number }>();
+  const bySalary = new Map<
+    string,
+    { quota: number; quotaFull: number; hourly: number; daily: number; quotaCarried: number }
+  >();
+  const empty = () => ({ quota: 0, quotaFull: 0, hourly: 0, daily: 0, quotaCarried: 0 });
   for (const r of quotaRows) {
-    const e = bySalary.get(r.userId) ?? { quota: 0, quotaFull: 0, hourly: 0, quotaCarried: 0 };
+    const e = bySalary.get(r.userId) ?? empty();
     e.quota += r.salary;
     // The uncapped amount pays every unpaid point, not just one cycle.
     e.quotaFull += round2(r.pointsUnpaid * r.perSubjectRate);
@@ -206,8 +216,13 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
     bySalary.set(r.userId, e);
   }
   for (const r of hourlyRows) {
-    const e = bySalary.get(r.userId) ?? { quota: 0, quotaFull: 0, hourly: 0, quotaCarried: 0 };
+    const e = bySalary.get(r.userId) ?? empty();
     e.hourly += r.salary;
+    bySalary.set(r.userId, e);
+  }
+  for (const r of dailyRows) {
+    const e = bySalary.get(r.userId) ?? empty();
+    e.daily += r.salary;
     bySalary.set(r.userId, e);
   }
   const payslipUserIds = new Set<string>([...bySalary.keys()]);
@@ -215,8 +230,8 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
 
   const payslips: PayslipRow[] = [...payslipUserIds]
     .map((userId) => {
-      const e = bySalary.get(userId) ?? { quota: 0, quotaFull: 0, hourly: 0, quotaCarried: 0 };
-      const gross = e.quota + e.hourly;
+      const e = bySalary.get(userId) ?? empty();
+      const gross = e.quota + e.hourly + e.daily;
       const cashAdvance = cashAdvanceByUser.get(userId) ?? 0;
       return {
         userId,
@@ -224,6 +239,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
         quotaSalary: e.quota,
         quotaSalaryFull: e.quotaFull,
         hourlySalary: e.hourly,
+        dailySalary: e.daily,
         quotaCarried: round2(e.quotaCarried),
         gross,
         cashAdvance,
@@ -235,7 +251,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
 
   const totalNet = payslips.reduce((sum, p) => sum + p.net, 0);
 
-  return { from, to, quotaRows, hourlyRows, payslips, totalSalary, totalNet };
+  return { from, to, quotaRows, hourlyRows, dailyRows, payslips, totalSalary, totalNet };
 }
 
 /**

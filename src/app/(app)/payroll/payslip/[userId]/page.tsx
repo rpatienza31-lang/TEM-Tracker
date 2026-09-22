@@ -40,6 +40,7 @@ export default async function PayslipPage({
   const slip = report.payslips.find((p) => p.userId === userId);
   const quota = includeQuota ? report.quotaRows.find((r) => r.userId === userId) : undefined;
   const hourly = includeHourly ? report.hourlyRows.find((r) => r.userId === userId) : undefined;
+  const daily = report.dailyRows.find((r) => r.userId === userId);
 
   if (!slip) {
     return (
@@ -69,7 +70,8 @@ export default async function PayslipPage({
   // whole unpaid balance when "Pay all" was chosen.
   const quotaAmount = includeQuota ? (payAllQuota ? slip.quotaSalaryFull : slip.quotaSalary) : 0;
   const hourlyAmount = includeHourly ? slip.hourlySalary : 0;
-  const gross = quotaAmount + hourlyAmount;
+  const dailyAmount = slip.dailySalary;
+  const gross = quotaAmount + hourlyAmount + dailyAmount;
   const net = gross - slip.cashAdvance;
 
   const html = renderPayslipHtml({
@@ -84,6 +86,7 @@ export default async function PayslipPage({
         }
       : undefined,
     hourly: hourly ? { hours: hourly.hoursUnpaid, rate: hourly.rate, amount: hourlyAmount } : undefined,
+    daily: daily && dailyAmount > 0 ? { days: daily.daysUnpaid, rate: daily.dailyRate, amount: dailyAmount } : undefined,
     gross,
     cashAdvance: slip.cashAdvance,
     net,

@@ -349,6 +349,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
               quotaSalary: p.quotaSalary,
               quotaSalaryFull: p.quotaSalaryFull,
               hourlySalary: p.hourlySalary,
+              dailySalary: p.dailySalary,
               quotaCarried: p.quotaCarried,
               cashAdvance: p.cashAdvance,
             }))}
