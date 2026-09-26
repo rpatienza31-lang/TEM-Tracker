@@ -7,7 +7,7 @@ import { terms } from "@/db/schema";
 import { getTermGrades, getUploadMatrix, type UploadRow } from "@/lib/work-items/queries";
 import type { ItemStatus } from "@/lib/constants";
 
-type SearchParams = { term?: string; grade?: string };
+type SearchParams = { term?: string; grade?: string; week?: string };
 
 type Cell = { name: string; DLP?: UploadRow; PPT?: UploadRow; note: string | null };
 
@@ -130,17 +130,23 @@ export default async function UploadTrackerPage({ searchParams }: { searchParams
     weeks.set(r.week, bySubject);
   }
   const weekNumbers = [...weeks.keys()].sort((a, b) => a - b);
+  // Week filter: null = all weeks. Only weeks that actually exist are selectable.
+  const selectedWeek = sp.week && weeks.has(Number(sp.week)) ? Number(sp.week) : null;
+  const shownWeeks = selectedWeek ? [selectedWeek] : weekNumbers;
 
   const totalItems = rows.length;
   const uploadedItems = rows.filter((r) => r.status === "uploaded").length;
   const overallPct = totalItems ? Math.round((uploadedItems / totalItems) * 100) : 0;
   const activeTermName = termRows.find((t) => t.id === termId)?.name ?? "";
 
-  function linkFor(patch: { term?: string; grade?: string }) {
+  function linkFor(patch: { term?: string; grade?: string; week?: string }) {
     const params = new URLSearchParams({
       term: patch.term ?? termId ?? "",
       grade: patch.grade ?? (grade ? String(grade) : ""),
     });
+    // Changing term or grade resets the week filter; otherwise keep it.
+    const week = patch.term !== undefined || patch.grade !== undefined ? (patch.week ?? "") : (patch.week ?? sp.week ?? "");
+    if (week) params.set("week", week);
     return `/uploads?${params.toString()}`;
   }
 
@@ -200,6 +206,30 @@ export default async function UploadTrackerPage({ searchParams }: { searchParams
             </Link>
           ))}
         </div>
+        {weekNumbers.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-14 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Week</span>
+            <Link
+              href={linkFor({ week: "" })}
+              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                selectedWeek === null ? "border-foreground bg-foreground text-background shadow-sm" : "hover:bg-accent"
+              }`}
+            >
+              All
+            </Link>
+            {weekNumbers.map((w) => (
+              <Link
+                key={w}
+                href={linkFor({ week: String(w) })}
+                className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  w === selectedWeek ? "border-foreground bg-foreground text-background shadow-sm" : "hover:bg-accent"
+                }`}
+              >
+                Week {w}
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       {weekNumbers.length === 0 && (
@@ -208,7 +238,13 @@ export default async function UploadTrackerPage({ searchParams }: { searchParams
         </div>
       )}
 
-      {weekNumbers.map((week) => {
+      {weekNumbers.length > 0 && shownWeeks.length === 0 && (
+        <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
+          No items for that week.
+        </div>
+      )}
+
+      {shownWeeks.map((week) => {
         const bySubject = weeks.get(week)!;
         const subjects = [...bySubject.values()].sort((a, b) => a.name.localeCompare(b.name));
         const cells = subjects.flatMap((s) => [s.DLP, s.PPT].filter(Boolean) as UploadRow[]);
