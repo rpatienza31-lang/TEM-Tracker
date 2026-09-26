@@ -1,12 +1,41 @@
 "use client";
 
-import { Fragment, useActionState, useState } from "react";
+import { Fragment, useActionState, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RateCell } from "./rate-cell";
 import { editTimeLogTimesAction, markHourlyPaidAction, type SetRateState } from "./actions";
+import { reclassifyTimeLogAction } from "@/lib/time-logs/actions";
+
+/**
+ * Owner control to fix a mis-approval: move a session that was approved as
+ * "Hourly (paid)" back to "Attendance only" (not paid hourly). It then leaves
+ * the hourly total and appears in the Attendance (monitor-only) log.
+ */
+function ToAttendanceButton({ logId }: { logId: string }) {
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      title="Approved as hourly by mistake? Move it to Attendance only (won't be paid hourly)."
+      onClick={() => {
+        if (!window.confirm("Move this session to Attendance only? It will stop counting toward hourly pay.")) return;
+        startTransition(async () => {
+          const res = await reclassifyTimeLogAction(logId, false);
+          if (res.ok) router.refresh();
+        });
+      }}
+      className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-accent"
+    >
+      → Attendance only
+    </button>
+  );
+}
 
 export type ApprovedSession = {
   id: string;
@@ -244,7 +273,12 @@ export function HourlyStaffTable({
                             <span className="min-w-[4.5rem]" />
                           </div>
                           {list.map((s) => (
-                            <EditableSessionRow key={s.id} session={s} />
+                            <div key={s.id} className="flex items-center gap-1">
+                              <div className="flex-1">
+                                <EditableSessionRow session={s} />
+                              </div>
+                              <ToAttendanceButton logId={s.id} />
+                            </div>
                           ))}
                         </div>
                       ) : (
