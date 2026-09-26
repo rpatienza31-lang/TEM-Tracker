@@ -11,6 +11,7 @@ import { SubmitDialog } from "@/components/work-items/submit-dialog";
 import { AssignDialog } from "@/components/work-items/assign-dialog";
 import { BulkActionButton } from "@/components/work-items/bulk-action-button";
 import { DeleteItemButton } from "@/components/work-items/delete-item-button";
+import { RequestRevisionDialog } from "@/components/work-items/request-revision-dialog";
 import { releaseItemAction, setDueDateAction, uploadItemAction } from "@/lib/work-items/actions";
 import { useWorkItemsRealtime } from "@/hooks/use-work-items-realtime";
 import { ALL_DELIVERABLE_TYPES, ALL_GRADES, DELIVERABLE_TYPE_LABELS, STATUS_LABELS, WEEK_NUMBERS, type ItemStatus } from "@/lib/constants";
@@ -375,6 +376,13 @@ export function BoardClient({
                       label="Mark uploaded"
                       pendingLabel="…"
                       action={uploadItemAction}
+                      onDone={(m) => setBanner({ kind: "success", message: m })}
+                    />
+                  )}
+                  {isAdmin && (item.status === "approved" || item.status === "uploaded") && (
+                    <RequestRevisionDialog
+                      itemId={item.id}
+                      defaultDate={item.dueDate ?? undefined}
                       onDone={(m) => setBanner({ kind: "success", message: m })}
                     />
                   )}

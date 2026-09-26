@@ -209,9 +209,15 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
 
           const current = await tx.query.workItems.findFirst({ where: eq(workItems.id, input.itemId) });
           if (!current) return notFound();
-          if (current.status !== "in_review") {
+          // A revision (back job) can be requested on work that's in review, or
+          // even after it was approved or uploaded (a late-caught problem). When
+          // it was already approved/uploaded, the awarded points are reversed
+          // and the approval/upload cleared, so it truly re-enters the pipeline.
+          const revisable = ["in_review", "approved", "uploaded"] as const;
+          if (!(revisable as readonly string[]).includes(current.status)) {
             return invalid(`Cannot request revision on an item in status "${current.status}".`);
           }
+          const wasCredited = current.status === "approved" || current.status === "uploaded";
 
           const [updated] = await tx
             .update(workItems)
@@ -221,6 +227,8 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
               // sees what to fix without opening the notification.
               scheduleNote: `Revision: ${input.note.trim()}`.slice(0, 500),
               revisionCount: sql`${workItems.revisionCount} + 1`,
+              // Clear the completion stamps + points when reopening finished work.
+              ...(wasCredited ? { approvedAt: null, uploadedAt: null, pointsAwarded: null } : {}),
               version: sql`${workItems.version} + 1`,
               updatedAt: new Date(),
             })
@@ -228,6 +236,7 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
             .returning();
 
           if (!updated) return await conflictMessage(tx, input.itemId);
+          if (wasCredited) await reverseApprovalPoints(tx, input.itemId);
           if (current.assigneeId) {
             await createNotification(
               tx,
@@ -237,7 +246,7 @@ export async function transitionWorkItem(input: TransitionInput): Promise<Transi
               input.itemId,
             );
           }
-          await logEvent(tx, input.itemId, input.actor.id, "in_review", "revision", input.note);
+          await logEvent(tx, input.itemId, input.actor.id, current.status, "revision", input.note);
           return { ok: true, item: updated };
         }
 
