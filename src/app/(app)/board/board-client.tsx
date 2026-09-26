@@ -95,6 +95,7 @@ export function BoardClient({
   useWorkItemsRealtime(searchParams.get("term") ?? undefined);
 
   const isAdmin = currentUser.role === "owner" || currentUser.role === "admin";
+  const today = new Date().toISOString().slice(0, 10);
   // Any active user can be assigned work, not just those with the editor role.
   const editors = useMemo(() => staff, [staff]);
 
@@ -382,7 +383,7 @@ export function BoardClient({
                   {isAdmin && (item.status === "approved" || item.status === "uploaded") && (
                     <RequestRevisionDialog
                       itemId={item.id}
-                      defaultDate={item.dueDate ?? undefined}
+                      defaultDate={item.status === "uploaded" || !item.dueDate || item.dueDate < today ? today : item.dueDate}
                       onDone={(m) => setBanner({ kind: "success", message: m })}
                     />
                   )}
