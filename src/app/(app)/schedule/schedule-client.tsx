@@ -16,7 +16,7 @@ import {
   setScheduleNoteAction,
   toggleScheduleTaskAction,
 } from "@/lib/work-items/actions";
-import type { AvailabilityKind, ScheduleEntry, ScheduleTask, TaskPriority, StaffAvailability } from "@/lib/work-items/queries";
+import type { AvailabilityKind, BackjobEntry, ScheduleEntry, ScheduleTask, TaskPriority, StaffAvailability } from "@/lib/work-items/queries";
 import { requestCotRevisionAction } from "@/app/(app)/cot/actions";
 import { cn } from "@/lib/utils";
 import { AvailabilityDialog } from "./availability-dialog";
@@ -618,6 +618,7 @@ export function ScheduleClient({
   currentUserId,
   currentUserRole,
   tasks,
+  backjobs,
 }: {
   items: ScheduleItem[];
   availability: StaffAvailability[];
@@ -632,6 +633,7 @@ export function ScheduleClient({
   currentUserId: string;
   currentUserRole: string;
   tasks: ScheduleTask[];
+  backjobs: BackjobEntry[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -641,6 +643,15 @@ export function ScheduleClient({
   const [error, setError] = useState<string | null>(null);
   const [showAllStaff, setShowAllStaff] = useState(false);
   const [q, setQ] = useState("");
+  const [backjobsOpen, setBackjobsOpen] = useState(false);
+
+  // Back jobs (items in revision) — admins see all, editors only their own.
+  // Shown regardless of the date window so a back job on a past deadline is
+  // never missed.
+  const visibleBackjobs = useMemo(
+    () => (isAdmin ? backjobs : backjobs.filter((b) => b.assigneeId === currentUserId)),
+    [backjobs, isAdmin, currentUserId],
+  );
 
   // Text search across every card — handy for finding one COT in a long
   // Unassigned column. Matches customer/subject, grade/week, term, type and the
@@ -957,6 +968,50 @@ export function ScheduleClient({
         {rangeLabel}
         {q && <span className="ml-2 text-primary">· filtered by “{q}”</span>}
       </div>
+
+      {visibleBackjobs.length > 0 && (
+        <div className="rounded-xl border border-red-300 bg-red-50 shadow-sm dark:border-red-900/60 dark:bg-red-950/20">
+          <button
+            type="button"
+            onClick={() => setBackjobsOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+            aria-expanded={backjobsOpen}
+          >
+            <span className="text-sm font-semibold text-red-700 dark:text-red-300">
+              🔴 Back jobs — {visibleBackjobs.length} item{visibleBackjobs.length === 1 ? "" : "s"} in revision
+            </span>
+            <span className="text-xs text-red-700/80 dark:text-red-300/80">{backjobsOpen ? "Hide ▲" : "Show ▼"}</span>
+          </button>
+          {backjobsOpen && (
+            <ul className="max-h-64 divide-y divide-red-200/70 overflow-auto border-t border-red-200/70 dark:divide-red-900/50 dark:border-red-900/50">
+              {visibleBackjobs.map((b) => (
+                <li key={b.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 py-2 text-sm">
+                  <span className="rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                    {DELIVERABLE_TYPE_LABELS[b.type]}
+                  </span>
+                  <span className="font-medium">{b.title}</span>
+                  <span className="text-muted-foreground">{b.subtitle}</span>
+                  {isAdmin && <span className="text-xs text-muted-foreground">· {b.assigneeName ?? "Unassigned"}</span>}
+                  {b.date ? (
+                    <button
+                      type="button"
+                      onClick={() => setParam({ from: b.date, days: String(days) })}
+                      className="text-xs font-medium text-primary underline hover:no-underline"
+                    >
+                      {dateFmt.format(new Date(`${b.date}T00:00:00+08:00`))} → go to date
+                    </button>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">(no deadline set)</span>
+                  )}
+                  {b.scheduleNote && (
+                    <span className="w-full text-xs italic text-amber-700 dark:text-amber-400">📝 {b.scheduleNote}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {q.trim() && (
         <div className="rounded-xl border border-border bg-card shadow-sm">

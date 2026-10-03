@@ -572,6 +572,89 @@ export async function getRevisionItems() {
     .orderBy(asc(workItems.updatedAt));
 }
 
+export type BackjobEntry = {
+  id: string;
+  kind: "catalog" | "cot";
+  type: DeliverableType;
+  date: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  title: string;
+  subtitle: string;
+  scheduleNote: string | null;
+};
+
+/**
+ * Every deliverable currently in revision (a back job), catalog + COT, with the
+ * day it's scheduled on — independent of any date window, so the Project
+ * Schedule can always surface pending back jobs even when their deadline is in
+ * the past. Soonest date first.
+ */
+export async function getScheduleBackjobs(): Promise<BackjobEntry[]> {
+  const [catalogRows, cotRows] = await Promise.all([
+    db
+      .select({
+        id: workItems.id,
+        type: workItems.type,
+        dueDate: workItems.dueDate,
+        assigneeId: workItems.assigneeId,
+        assigneeName: users.fullName,
+        termName: terms.name,
+        grade: workItems.grade,
+        weekNumber: workItems.weekNumber,
+        subjectName: subjects.name,
+        scheduleNote: workItems.scheduleNote,
+      })
+      .from(workItems)
+      .innerJoin(subjects, eq(subjects.id, workItems.subjectId))
+      .innerJoin(terms, eq(terms.id, workItems.termId))
+      .leftJoin(users, eq(users.id, workItems.assigneeId))
+      .where(eq(workItems.status, "revision")),
+    db
+      .select({
+        id: customOrderItems.id,
+        type: customOrderItems.type,
+        planned: sql<string>`coalesce(${customOrderItems.scheduledFor}, ${customOrders.deadline})`,
+        assigneeId: customOrderItems.assigneeId,
+        assigneeName: users.fullName,
+        customerName: customOrders.customerName,
+        grade: customOrders.grade,
+        subjectName: customOrders.subjectName,
+        topic: customOrders.topic,
+        scheduleNote: customOrders.scheduleNote,
+      })
+      .from(customOrderItems)
+      .innerJoin(customOrders, eq(customOrders.id, customOrderItems.orderId))
+      .leftJoin(users, eq(users.id, customOrderItems.assigneeId))
+      .where(eq(customOrderItems.status, "revision")),
+  ]);
+
+  const catalog: BackjobEntry[] = catalogRows.map((r) => ({
+    id: r.id,
+    kind: "catalog",
+    type: r.type,
+    date: r.dueDate,
+    assigneeId: r.assigneeId,
+    assigneeName: r.assigneeName,
+    title: r.subjectName,
+    subtitle: [r.termName, `Grade ${r.grade}`, `Week ${r.weekNumber}`].filter(Boolean).join(" · "),
+    scheduleNote: r.scheduleNote,
+  }));
+  const cot: BackjobEntry[] = cotRows.map((r) => ({
+    id: r.id,
+    kind: "cot",
+    type: r.type,
+    date: r.planned,
+    assigneeId: r.assigneeId,
+    assigneeName: r.assigneeName,
+    title: r.customerName,
+    subtitle: ["COT", r.grade ? `Grade ${r.grade}` : null, r.subjectName, r.topic].filter(Boolean).join(" · "),
+    scheduleNote: r.scheduleNote,
+  }));
+
+  return [...catalog, ...cot].sort((a, b) => (a.date ?? "9999").localeCompare(b.date ?? "9999"));
+}
+
 export async function getApprovedReadyToUpload() {
   return db
     .select(boardColumns)

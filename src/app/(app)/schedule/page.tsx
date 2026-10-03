@@ -4,7 +4,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { requireEditorialUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms, users } from "@/db/schema";
-import { getScheduleItems, getScheduleTasks, getStaffAvailability } from "@/lib/work-items/queries";
+import { getScheduleBackjobs, getScheduleItems, getScheduleTasks, getStaffAvailability } from "@/lib/work-items/queries";
 import { ScheduleClient } from "./schedule-client";
 
 type SearchParams = Record<string, string | undefined>;
@@ -32,7 +32,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const from = sp.from && /^\d{4}-\d{2}-\d{2}$/.test(sp.from) ? sp.from : today;
   const to = addDays(from, days - 1);
 
-  const [items, availability, staffRows, tasks] = await Promise.all([
+  const [items, availability, staffRows, tasks, backjobs] = await Promise.all([
     getScheduleItems(from, to, { termId, today }),
     getStaffAvailability(from, to),
     db
@@ -41,6 +41,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       .where(and(eq(users.isActive, true), ne(users.role, "staff")))
       .orderBy(asc(users.fullName)),
     getScheduleTasks(from, to),
+    getScheduleBackjobs(),
   ]);
 
   const dates: string[] = [];
@@ -61,6 +62,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
       currentUserId={user.id}
       currentUserRole={user.role}
       tasks={tasks}
+      backjobs={backjobs}
     />
   );
 }
