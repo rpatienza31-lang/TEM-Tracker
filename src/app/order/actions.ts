@@ -19,8 +19,9 @@ const s = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
  * folded into the order's Notes in a clean, labelled format so staff see them.
  */
 export async function submitPublicCotOrder(_prev: PublicOrderState, formData: FormData): Promise<PublicOrderState> {
-  // Honeypot: bots fill hidden fields; humans never see this one.
-  if (s(formData, "company")) return { status: "ok", message: "Thank you!" };
+  // Honeypot: bots fill hidden fields; humans never see this one. Named to
+  // avoid browser autofill, which was silently dropping real orders.
+  if (s(formData, "hp_url")) return { status: "ok", message: "Thank you!" };
 
   const requiredCode = process.env.COT_PUBLIC_CODE;
   if (requiredCode && s(formData, "accessCode") !== requiredCode) {

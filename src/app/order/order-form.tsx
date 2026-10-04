@@ -99,15 +99,15 @@ export function OrderForm({ requireCode }: { requireCode: boolean }) {
       noValidate
       className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6"
     >
-      {/* Honeypot — hidden from people, catches bots. */}
-      <input
-        type="text"
-        name="company"
-        tabIndex={-1}
-        autoComplete="off"
-        aria-hidden="true"
-        className="absolute left-[-9999px] h-0 w-0 opacity-0"
-      />
+      {/* Honeypot — hidden from people, catches bots. Named oddly and set to
+          display:none so browser/password-manager autofill never fills it (a
+          filled "company"-style field was silently dropping real orders). */}
+      <div aria-hidden="true" style={{ display: "none" }}>
+        <label>
+          Leave this field empty
+          <input type="text" name="hp_url" tabIndex={-1} autoComplete="off" />
+        </label>
+      </div>
 
       {requireCode && (
         <Field label="Access code" required>
