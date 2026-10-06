@@ -330,7 +330,7 @@ export async function backjobCotItem(itemId: string, actor: CotActor, newDate?: 
  * unknown), leaving already-credited items and their points untouched. Admin only.
  */
 export async function archiveCotOrder(orderId: string, actor: CotActor): Promise<CotResult> {
-  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can archive an order." };
+  if (actor.role !== "owner") return { ok: false, message: "Only the owner can mark a COT order as done." };
 
   return db.transaction(async (tx) => {
     const items = await tx.select().from(customOrderItems).where(eq(customOrderItems.orderId, orderId));
