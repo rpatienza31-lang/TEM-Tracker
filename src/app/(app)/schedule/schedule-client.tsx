@@ -644,6 +644,17 @@ export function ScheduleClient({
   const [showAllStaff, setShowAllStaff] = useState(false);
   const [q, setQ] = useState("");
   const [backjobsOpen, setBackjobsOpen] = useState(false);
+  // Multi-staff filter — show only the picked staff columns.
+  const [staffFilter, setStaffFilter] = useState<Set<string>>(new Set());
+  const [staffMenuOpen, setStaffMenuOpen] = useState(false);
+  function toggleStaff(id: string) {
+    setStaffFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Back jobs (items in revision) — admins see all, editors only their own.
   // Shown regardless of the date window so a back job on a past deadline is
@@ -826,6 +837,9 @@ export function ScheduleClient({
     // current admin's own column so they can add tasks even without work.
     for (const t of tasks) present.add(t.userId);
     if (isAdmin) present.add(currentUserId);
+    // Picked staff always get a column (even with no work in the window).
+    for (const id of staffFilter) if (id !== UNASSIGNED) present.add(id);
+    if (staffFilter.has(UNASSIGNED)) hasUnassigned = true;
 
     const ids = showAllStaff ? allStaff.map((s) => s.id) : [...present];
     const cols = [...new Set(ids)]
@@ -836,8 +850,11 @@ export function ScheduleClient({
         return a.name.localeCompare(b.name);
       });
     if (hasUnassigned) cols.push({ id: UNASSIGNED, name: "Unassigned" });
+    // Multi-staff filter: when the owner has picked specific staff, show only
+    // those columns (Unassigned included only if explicitly picked).
+    if (staffFilter.size > 0) return cols.filter((c) => staffFilter.has(c.id));
     return cols;
-  }, [items, filteredItems, availability, allStaff, showAllStaff, currentUserId, tasks, isAdmin]);
+  }, [items, filteredItems, availability, allStaff, showAllStaff, currentUserId, tasks, isAdmin, staffFilter]);
 
   // date -> column -> items
   const grid = useMemo(() => {
@@ -939,6 +956,52 @@ export function ScheduleClient({
               />
               Show all staff
             </label>
+          )}
+          {isAdmin && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setStaffMenuOpen((o) => !o)}
+                className={`h-9 rounded-md border px-2.5 text-sm ${
+                  staffFilter.size > 0 ? "border-foreground bg-foreground text-background" : "border-input hover:bg-accent"
+                }`}
+                aria-expanded={staffMenuOpen}
+              >
+                {staffFilter.size > 0 ? `Staff: ${staffFilter.size} selected` : "Filter staff"} ▾
+              </button>
+              {staffMenuOpen && (
+                <div className="absolute z-40 mt-1 max-h-72 w-56 overflow-auto rounded-md border border-border bg-card p-1 shadow-lg">
+                  <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground">
+                    <span>Show only these staff</span>
+                    {staffFilter.size > 0 && (
+                      <button type="button" className="text-primary underline" onClick={() => setStaffFilter(new Set())}>
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {allStaff.map((s) => (
+                    <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent">
+                      <input
+                        type="checkbox"
+                        checked={staffFilter.has(s.id)}
+                        onChange={() => toggleStaff(s.id)}
+                        className="h-4 w-4 rounded border-input"
+                      />
+                      {s.name}
+                    </label>
+                  ))}
+                  <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-accent">
+                    <input
+                      type="checkbox"
+                      checked={staffFilter.has(UNASSIGNED)}
+                      onChange={() => toggleStaff(UNASSIGNED)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    Unassigned
+                  </label>
+                </div>
+              )}
+            </div>
           )}
           {isAdmin && <AvailabilityDialog allStaff={allStaff} defaultFrom={from} />}
           <div className="relative">
