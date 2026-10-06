@@ -62,18 +62,22 @@ function daysLabel(level: PriorityLevel, daysLeft: number) {
   return `${daysLeft} days left`;
 }
 
-type Filter = "all" | PriorityLevel | "due2" | "unclaimed" | "none_assigned" | "partial" | "assigned";
+// Two combinable filter groups: pick any mix across groups to narrow. Within a
+// group the picks are OR'd; across groups (and with type/date/search) they're AND'd.
+type TimeKey = "overdue" | "red" | "due2" | "alert" | "normal";
+type AssignKey = "none_assigned" | "partial" | "assigned";
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "All" },
+const TIME_FILTERS: { key: TimeKey; label: string }[] = [
   { key: "overdue", label: "Overdue" },
   { key: "red", label: "Due now" },
   { key: "due2", label: "≤2 days" },
   { key: "alert", label: "Soon" },
   { key: "normal", label: "On track" },
+];
+
+const ASSIGN_FILTERS: { key: AssignKey; label: string }[] = [
   { key: "none_assigned", label: "No editor yet" },
   { key: "partial", label: "Missing 1 editor" },
-  { key: "unclaimed", label: "Needs editor (any)" },
   { key: "assigned", label: "Assigned" },
 ];
 
@@ -106,15 +110,13 @@ function isDueWithin2(o: CotOrderView) {
   return o.daysLeft >= 0 && o.daysLeft <= 2;
 }
 
-function matchesFilter(o: CotOrderView, filter: Filter) {
-  if (filter === "all") return true;
-  if (filter === "unclaimed") return isUnclaimed(o);
-  if (filter === "none_assigned") return isNoneAssigned(o);
-  if (filter === "partial") return isPartlyAssigned(o);
-  if (filter === "assigned") return isFullyAssigned(o);
-  if (filter === "due2") return isDueWithin2(o);
-  return o.priority === filter;
-}
+const matchesTime = (o: CotOrderView, keys: Set<TimeKey>) =>
+  keys.size === 0 || [...keys].some((k) => (k === "due2" ? isDueWithin2(o) : o.priority === k));
+const matchesAssign = (o: CotOrderView, keys: Set<AssignKey>) =>
+  keys.size === 0 ||
+  [...keys].some((k) =>
+    k === "none_assigned" ? isNoneAssigned(o) : k === "partial" ? isPartlyAssigned(o) : isFullyAssigned(o),
+  );
 
 export function CotOrderList({
   orders,
@@ -130,10 +132,31 @@ export function CotOrderList({
   canClaim: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [timeFilter, setTimeFilter] = useState<Set<TimeKey>>(new Set());
+  const [assignFilter, setAssignFilter] = useState<Set<AssignKey>>(new Set());
   const [typeFilter, setTypeFilter] = useState<"all" | "rush" | "regular">("all");
   const [dateFilter, setDateFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function toggleTime(key: TimeKey) {
+    setTimeFilter((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+  function toggleAssign(key: AssignKey) {
+    setAssignFilter((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+  const anyChip = timeFilter.size > 0 || assignFilter.size > 0;
+  function clearChips() {
+    setTimeFilter(new Set());
+    setAssignFilter(new Set());
+  }
 
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
@@ -144,7 +167,7 @@ export function CotOrderList({
     });
 
   const counts = useMemo(() => {
-    const c = { total: orders.length, overdue: 0, due2: 0, alert: 0, unclaimed: 0, none_assigned: 0, partial: 0, rush: 0, regular: 0 };
+    const c = { total: orders.length, overdue: 0, due2: 0, alert: 0, unclaimed: 0, none_assigned: 0, partial: 0, assigned: 0, rush: 0, regular: 0 };
     for (const o of orders) {
       if (o.priority === "overdue") c.overdue += 1;
       if (isDueWithin2(o)) c.due2 += 1;
@@ -152,6 +175,7 @@ export function CotOrderList({
       if (isUnclaimed(o)) c.unclaimed += 1;
       if (isNoneAssigned(o)) c.none_assigned += 1;
       if (isPartlyAssigned(o)) c.partial += 1;
+      if (isFullyAssigned(o)) c.assigned += 1;
       if (o.orderType === "rush") c.rush += 1;
       else c.regular += 1;
     }
@@ -161,7 +185,8 @@ export function CotOrderList({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return orders
-      .filter((o) => matchesFilter(o, filter))
+      .filter((o) => matchesTime(o, timeFilter))
+      .filter((o) => matchesAssign(o, assignFilter))
       .filter((o) => typeFilter === "all" || o.orderType === typeFilter)
       .filter((o) => !dateFilter || o.orderDate === dateFilter)
       .filter((o) => {
@@ -170,26 +195,29 @@ export function CotOrderList({
           .filter(Boolean)
           .some((field) => String(field).toLowerCase().includes(q));
       });
-  }, [orders, query, filter, typeFilter, dateFilter]);
+  }, [orders, query, timeFilter, assignFilter, typeFilter, dateFilter]);
 
-  const tiles: { key: Filter; label: string; value: number; className: string }[] = [
-    { key: "overdue", label: "Overdue", value: counts.overdue, className: "text-red-600" },
-    { key: "due2", label: "Due within 2 days", value: counts.due2, className: "text-red-500" },
-    { key: "alert", label: "Due within 3 days", value: counts.alert, className: "text-amber-500" },
-    { key: "unclaimed", label: "Needs an editor", value: counts.unclaimed, className: "text-foreground" },
+  const tiles: { onClick: () => void; active: boolean; label: string; value: number; className: string }[] = [
+    { onClick: () => toggleTime("overdue"), active: timeFilter.has("overdue"), label: "Overdue", value: counts.overdue, className: "text-red-600" },
+    { onClick: () => toggleTime("due2"), active: timeFilter.has("due2"), label: "Due within 2 days", value: counts.due2, className: "text-red-500" },
+    { onClick: () => toggleTime("alert"), active: timeFilter.has("alert"), label: "Due within 3 days", value: counts.alert, className: "text-amber-500" },
+    { onClick: () => { toggleAssign("none_assigned"); }, active: assignFilter.has("none_assigned"), label: "No editor yet", value: counts.none_assigned, className: "text-foreground" },
   ];
+
+  const assignCount = (k: AssignKey) =>
+    k === "none_assigned" ? counts.none_assigned : k === "partial" ? counts.partial : counts.assigned;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Priority summary — click a tile to filter */}
+      {/* Priority summary — click a tile to toggle that filter */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map((t) => (
           <button
-            key={t.key}
+            key={t.label}
             type="button"
-            onClick={() => setFilter((f) => (f === t.key ? "all" : t.key))}
+            onClick={t.onClick}
             className={`rounded-lg border p-3 text-left transition-colors hover:bg-accent ${
-              filter === t.key ? "border-foreground ring-1 ring-foreground" : ""
+              t.active ? "border-foreground ring-1 ring-foreground" : ""
             }`}
           >
             <div className={`text-2xl font-semibold tabular-nums ${t.className}`}>{t.value}</div>
@@ -198,39 +226,50 @@ export function CotOrderList({
         ))}
       </div>
 
-      {/* Filter chips + search */}
-      <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((f) => {
-          const badge =
-            f.key === "none_assigned"
-              ? counts.none_assigned
-              : f.key === "partial"
-                ? counts.partial
-                : f.key === "unclaimed"
-                  ? counts.unclaimed
-                  : null;
-          return (
+      {/* Combinable filter chips — pick any mix of Time and Editor to narrow */}
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-14 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Time</span>
+          {TIME_FILTERS.map((f) => (
             <button
               key={f.key}
               type="button"
-              onClick={() => setFilter(f.key)}
+              onClick={() => toggleTime(f.key)}
               className={`rounded-full border px-3 py-1 text-sm transition-colors ${
-                filter === f.key ? "border-foreground bg-foreground text-background" : "hover:bg-accent"
+                timeFilter.has(f.key) ? "border-foreground bg-foreground text-background" : "hover:bg-accent"
               }`}
             >
               {f.label}
-              {badge != null && (
-                <span
-                  className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
-                    filter === f.key ? "bg-background/20" : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {badge}
-                </span>
-              )}
             </button>
-          );
-        })}
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-14 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Editor</span>
+          {ASSIGN_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => toggleAssign(f.key)}
+              className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+                assignFilter.has(f.key) ? "border-foreground bg-foreground text-background" : "hover:bg-accent"
+              }`}
+            >
+              {f.label}
+              <span
+                className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
+                  assignFilter.has(f.key) ? "bg-background/20" : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {assignCount(f.key)}
+              </span>
+            </button>
+          ))}
+          {anyChip && (
+            <button className="ml-1 text-xs text-muted-foreground underline hover:text-foreground" onClick={clearChips}>
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Order type (Rush / Regular) + ordered-on date filter */}
