@@ -259,6 +259,7 @@ function ScheduleCard({
 }) {
   const status = STATUS_STYLES[item.status];
   const isCot = item.kind === "cot";
+  const isAlign = isCot && item.cotWorkKind === "align";
   const [noteOpen, setNoteOpen] = useState(false);
   const [reviseOpen, setReviseOpen] = useState(false);
   const [revNote, setRevNote] = useState("");
@@ -268,10 +269,12 @@ function ScheduleCard({
       className={cn(
         "relative overflow-hidden rounded-lg border pl-2.5 pr-2 py-2 shadow-sm transition-shadow hover:shadow-md",
         status.card,
+        // Align-only COT (DLP only) gets an orange ring so it's spotted instantly.
+        isAlign && "ring-2 ring-orange-400 dark:ring-orange-500",
         pending && "opacity-50",
       )}
     >
-      <span className={cn("absolute inset-y-0 left-0 w-1.5", status.bar)} />
+      <span className={cn("absolute inset-y-0 left-0 w-1.5", isAlign ? "bg-orange-500" : status.bar)} />
       <div className="flex flex-wrap items-center gap-1">
         {isCot ? (
           <>
@@ -283,11 +286,11 @@ function ScheduleCard({
                 className={cn(
                   "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
                   item.cotWorkKind === "align"
-                    ? "bg-orange-500 text-white"
+                    ? "bg-orange-500 text-white ring-1 ring-orange-600"
                     : "bg-emerald-600 text-white",
                 )}
               >
-                {item.cotWorkKind === "align" ? "Align" : "New"}
+                {item.cotWorkKind === "align" ? "⬦ Align only" : "New"}
               </span>
             )}
           </>

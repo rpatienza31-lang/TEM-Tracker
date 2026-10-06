@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { type CotOrderView } from "@/lib/cot/queries";
 import { type PriorityLevel } from "@/lib/cot/deadline";
 import { CotItemControls, type EditorOption } from "./cot-item-controls";
@@ -409,7 +410,13 @@ export function CotOrderList({
       {filtered.map((o) => {
         const isOpen = expanded.has(o.id);
         return (
-          <Card key={o.id} className={`border-l-4 ${PRIORITY_CLASS[o.priority]}`}>
+          <Card
+            key={o.id}
+            className={cn(
+              `border-l-4 ${PRIORITY_CLASS[o.priority]}`,
+              o.workKind === "align" && "ring-1 ring-orange-400 dark:ring-orange-500",
+            )}
+          >
             {/* Collapsed summary row — click to expand full details */}
             <CardHeader
               role="button"
@@ -446,8 +453,8 @@ export function CotOrderList({
                   <Badge variant="outline" className="uppercase">
                     {o.orderType}
                   </Badge>
-                  <Badge className={o.workKind === "align" ? "bg-orange-500 text-white" : "bg-emerald-600 text-white"}>
-                    {o.workKind === "align" ? "Align only" : "New"}
+                  <Badge className={o.workKind === "align" ? "bg-orange-500 text-white ring-1 ring-orange-600" : "bg-emerald-600 text-white"}>
+                    {o.workKind === "align" ? "⬦ Align only" : "New"}
                   </Badge>
                   {o.lessonFor && (
                     <Badge
