@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { type CotOrderView } from "@/lib/cot/queries";
 import { type PriorityLevel } from "@/lib/cot/deadline";
 import { CotItemControls, type EditorOption } from "./cot-item-controls";
+import { archiveCotOrdersAction } from "./actions";
 import { CotOrderEdit } from "./cot-order-edit";
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
@@ -137,6 +139,9 @@ export function CotOrderList({
   const [typeFilter, setTypeFilter] = useState<"all" | "rush" | "regular">("all");
   const [dateFilter, setDateFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const router = useRouter();
+  const [archiving, startArchive] = useTransition();
+  const [archiveMsg, setArchiveMsg] = useState<string | null>(null);
 
   function toggleTime(key: TimeKey) {
     setTimeFilter((prev) => {
@@ -156,6 +161,26 @@ export function CotOrderList({
   function clearChips() {
     setTimeFilter(new Set());
     setAssignFilter(new Set());
+  }
+
+  function archiveShown(ids: string[]) {
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        `Mark ${ids.length} shown order(s) as DONE?\n\nThey move to Completed and the Available Library. No points are awarded (the editor is unknown). You can send any of them back as a back job later from the Completed tab.`,
+      )
+    )
+      return;
+    setArchiveMsg(null);
+    startArchive(async () => {
+      const res = await archiveCotOrdersAction(ids);
+      if (res.ok) {
+        setArchiveMsg(`✓ Marked ${res.done} order(s) as done — now in Completed & the Library.`);
+        router.refresh();
+      } else {
+        setArchiveMsg(res.message ?? "Could not mark as done.");
+      }
+    });
   }
 
   const toggleExpanded = (id: string) =>
@@ -322,11 +347,27 @@ export function CotOrderList({
         className="max-w-sm"
       />
 
-      <p className="text-xs text-muted-foreground">
-        Showing {filtered.length} of {counts.total} open order{counts.total === 1 ? "" : "s"}
-        {typeFilter !== "all" && ` · ${typeFilter}`}
-        {dateFilter && ` · ordered ${dateFilter}`}
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Showing {filtered.length} of {counts.total} open order{counts.total === 1 ? "" : "s"}
+          {typeFilter !== "all" && ` · ${typeFilter}`}
+          {dateFilter && ` · ordered ${dateFilter}`}
+        </p>
+        {isOwner && filtered.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {archiveMsg && <span className="text-xs text-status-approved">{archiveMsg}</span>}
+            <button
+              type="button"
+              disabled={archiving}
+              onClick={() => archiveShown(filtered.map((o) => o.id))}
+              className="rounded-md border border-status-approved/50 px-2.5 py-1 text-xs font-medium text-status-approved hover:bg-status-approved/10 disabled:opacity-50"
+              title="Force-complete the shown orders (no points) so they move to Completed and the Available Library"
+            >
+              {archiving ? "Marking…" : `Mark these ${filtered.length} as done`}
+            </button>
+          </div>
+        )}
+      </div>
 
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground">

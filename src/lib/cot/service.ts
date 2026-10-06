@@ -323,6 +323,30 @@ export async function backjobCotItem(itemId: string, actor: CotActor, newDate?: 
   });
 }
 
+/**
+ * Force-completes a COT order so it moves to Completed and the Available
+ * Library — for old orders whose editors/files are lost track of. Marks every
+ * not-yet-approved deliverable "approved" WITHOUT awarding points (the editor is
+ * unknown), leaving already-credited items and their points untouched. Admin only.
+ */
+export async function archiveCotOrder(orderId: string, actor: CotActor): Promise<CotResult> {
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can archive an order." };
+
+  return db.transaction(async (tx) => {
+    const items = await tx.select().from(customOrderItems).where(eq(customOrderItems.orderId, orderId));
+    if (items.length === 0) return { ok: false, message: "Order not found." };
+
+    for (const it of items) {
+      if (it.status === "approved") continue; // keep credited work and its points
+      await tx
+        .update(customOrderItems)
+        .set({ status: "approved", approvedAt: new Date(), pointsAwarded: null, updatedAt: new Date() })
+        .where(eq(customOrderItems.id, it.id));
+    }
+    return { ok: true };
+  });
+}
+
 /** Reverses an approval and its points (admin only). */
 export async function unapproveCotItem(itemId: string, actor: CotActor): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can un-approve." };

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireRole, requireUser } from "@/lib/auth";
 import {
   approveCotItem,
+  archiveCotOrder,
   assignCotItem,
   backjobCotItem,
   claimCotItem,
@@ -22,6 +23,41 @@ import { type OrderType } from "@/lib/cot/deadline";
 
 function actorOf(user: Awaited<ReturnType<typeof requireUser>>) {
   return { id: user.id, role: user.role };
+}
+
+/**
+ * Force-completes a COT order (moves it to Completed + the Library) without
+ * awarding points — for old orders whose editor/files are lost track of.
+ */
+export async function archiveCotOrderAction(orderId: string): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await archiveCotOrder(orderId, actorOf(user));
+  if (result.ok) {
+    revalidatePath("/cot");
+    revalidatePath("/cot/library");
+    revalidatePath("/schedule");
+    revalidatePath("/review");
+  }
+  return result;
+}
+
+/** Bulk force-complete several COT orders at once. Returns how many succeeded. */
+export async function archiveCotOrdersAction(orderIds: string[]): Promise<{ ok: boolean; done: number; message?: string }> {
+  const user = await requireUser();
+  const actor = actorOf(user);
+  let done = 0;
+  for (const id of orderIds) {
+    const r = await archiveCotOrder(id, actor);
+    if (r.ok) done += 1;
+    else if (done === 0) return { ok: false, done, message: r.message };
+  }
+  if (done > 0) {
+    revalidatePath("/cot");
+    revalidatePath("/cot/library");
+    revalidatePath("/schedule");
+    revalidatePath("/review");
+  }
+  return { ok: true, done };
 }
 
 export type NewCotState = { status: "idle" | "ok" | "error"; message?: string };
