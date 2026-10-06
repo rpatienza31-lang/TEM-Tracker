@@ -173,22 +173,60 @@ export async function updateCotOrderDetails(
     })
     .where(eq(customOrders.id, orderId));
 
-  // Switching New ⇄ Align re-prices the order's not-yet-credited items with the
-  // matching rate. Already-approved items keep their snapshot (no history rewrite).
+  // Switching New ⇄ Align re-prices the order's not-yet-credited items AND
+  // adjusts which deliverables exist: Align only = DLP only (the PPT is
+  // removed, so no PPT editor is needed); New = DLP + PPT (a PPT is restored
+  // if it was removed). Already-approved items keep their snapshot.
   if (patch.workKind) {
+    const kind = patch.workKind;
     const points = await getPointsTable();
-    for (const type of ["COT_DLP", "COT_PPT"] as const) {
-      await db
+    await db.transaction(async (tx) => {
+      // DLP always exists — re-price it if it's still unfinished.
+      await tx
         .update(customOrderItems)
-        .set({ pointsValue: String(cotPointsFor(points, type, patch.workKind)), updatedAt: new Date() })
+        .set({ pointsValue: String(cotPointsFor(points, "COT_DLP", kind)), updatedAt: new Date() })
         .where(
           and(
             eq(customOrderItems.orderId, orderId),
-            eq(customOrderItems.type, type),
+            eq(customOrderItems.type, "COT_DLP"),
             inArray(customOrderItems.status, [...UNFINISHED_COT]),
           ),
         );
-    }
+
+      const ppts = await tx
+        .select()
+        .from(customOrderItems)
+        .where(and(eq(customOrderItems.orderId, orderId), eq(customOrderItems.type, "COT_PPT")));
+
+      if (kind === "align") {
+        // Remove the PPT deliverable(s); reverse any points they had awarded.
+        for (const p of ppts) {
+          if (p.awardedCycleId && p.pointsAwarded) {
+            await reverseCotItemPoints(tx, p.awardedCycleId, Number(p.pointsAwarded));
+          }
+          await tx.delete(customOrderItems).where(eq(customOrderItems.id, p.id));
+        }
+      } else if (ppts.length === 0) {
+        // Back to New with no PPT — recreate one.
+        await tx.insert(customOrderItems).values({
+          orderId,
+          type: "COT_PPT",
+          pointsValue: String(cotPointsFor(points, "COT_PPT", "new")),
+        });
+      } else {
+        // Keep the PPT, re-price it if unfinished.
+        await tx
+          .update(customOrderItems)
+          .set({ pointsValue: String(cotPointsFor(points, "COT_PPT", kind)), updatedAt: new Date() })
+          .where(
+            and(
+              eq(customOrderItems.orderId, orderId),
+              eq(customOrderItems.type, "COT_PPT"),
+              inArray(customOrderItems.status, [...UNFINISHED_COT]),
+            ),
+          );
+      }
+    });
   }
   return { ok: true };
 }
