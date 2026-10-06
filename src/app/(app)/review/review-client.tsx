@@ -54,7 +54,17 @@ export function ReviewClient({
   const [subject, setSubject] = useState("");
   const [week, setWeek] = useState("");
   const [type, setType] = useState("");
+  const [q, setQ] = useState("");
   useWorkItemsRealtime();
+
+  // Free-text search: COT by client name / subject / topic, catalog by subject —
+  // handy for finding a client's COT when its DLP and PPT sit with different
+  // editors across the queue.
+  const matchesQuery = (fields: (string | null | undefined)[]) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    return fields.some((f) => f && f.toLowerCase().includes(needle));
+  };
 
   const options = useMemo(
     () => ({
@@ -85,13 +95,20 @@ export function ReviewClient({
         (!grade || String(i.grade) === grade) &&
         (!subject || i.subjectName === subject) &&
         (!week || String(i.weekNumber) === week) &&
-        (!type || i.type === type),
+        (!type || i.type === type) &&
+        matchesQuery([i.subjectName, i.termName]),
     );
-  }, [inReview, term, editor, grade, subject, week, type]);
+  }, [inReview, term, editor, grade, subject, week, type, q]);
 
   const filteredCot = useMemo(
-    () => cotInReview.filter((i) => (!editor || i.assigneeName === editor) && (!type || i.type === type)),
-    [cotInReview, editor, type],
+    () =>
+      cotInReview.filter(
+        (i) =>
+          (!editor || i.assigneeName === editor) &&
+          (!type || i.type === type) &&
+          matchesQuery([i.customerName, i.subjectName, i.topic]),
+      ),
+    [cotInReview, editor, type, q],
   );
 
   const filteredRevision = useMemo(() => {
@@ -102,13 +119,20 @@ export function ReviewClient({
         (!grade || String(i.grade) === grade) &&
         (!subject || i.subjectName === subject) &&
         (!week || String(i.weekNumber) === week) &&
-        (!type || i.type === type),
+        (!type || i.type === type) &&
+        matchesQuery([i.subjectName, i.termName]),
     );
-  }, [inRevision, term, editor, grade, subject, week, type]);
+  }, [inRevision, term, editor, grade, subject, week, type, q]);
 
   const filteredCotRevision = useMemo(
-    () => cotInRevision.filter((i) => (!editor || i.assigneeName === editor) && (!type || i.type === type)),
-    [cotInRevision, editor, type],
+    () =>
+      cotInRevision.filter(
+        (i) =>
+          (!editor || i.assigneeName === editor) &&
+          (!type || i.type === type) &&
+          matchesQuery([i.customerName, i.subjectName, i.topic]),
+      ),
+    [cotInRevision, editor, type, q],
   );
 
   const revisionCount = filteredRevision.length + filteredCotRevision.length;
@@ -178,6 +202,26 @@ export function ReviewClient({
         </h2>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search client name, subject, topic…"
+              className="h-9 w-64 rounded-md border border-input bg-background pl-2 pr-6 text-sm"
+              aria-label="Search the review queue"
+            />
+            {q && (
+              <button
+                type="button"
+                onClick={() => setQ("")}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
           <FilterSelect label="Term" allLabel="All terms" value={term} onChange={setTerm} options={options.terms} />
           <FilterSelect label="Editor" allLabel="All editors" value={editor} onChange={setEditor} options={options.editors} />
           <FilterSelect label="Grade" value={grade} onChange={setGrade} options={options.grades} render={(g) => `Grade ${g}`} />
@@ -190,7 +234,7 @@ export function ReviewClient({
             options={options.types}
             render={(t) => DELIVERABLE_TYPE_LABELS[t as keyof typeof DELIVERABLE_TYPE_LABELS] ?? t}
           />
-          {(term || editor || grade || subject || week || type) && (
+          {(term || editor || grade || subject || week || type || q) && (
             <button
               className="text-sm text-muted-foreground underline"
               onClick={() => {
@@ -200,6 +244,7 @@ export function ReviewClient({
                 setSubject("");
                 setWeek("");
                 setType("");
+                setQ("");
               }}
             >
               Clear
