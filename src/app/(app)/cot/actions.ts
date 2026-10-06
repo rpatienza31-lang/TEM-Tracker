@@ -92,11 +92,12 @@ export async function updateCotOrderAction(
   lessonFor: string | null,
   deadline?: string | null,
   workKind?: "new" | "align",
+  customerName?: string,
 ): Promise<CotResult> {
   const user = await requireUser();
   const result = await updateCotOrderDetails(
     orderId,
-    { grade, subjectName, topic, lessonFor, deadline, workKind },
+    { grade, subjectName, topic, lessonFor, deadline, workKind, customerName },
     actorOf(user),
   );
   if (result.ok) {

@@ -24,6 +24,7 @@ export function CotOrderEdit({ order }: { order: Order }) {
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [grade, setGrade] = useState(order.grade != null ? String(order.grade) : "");
+  const [customerName, setCustomerName] = useState(order.customerName);
   const [subject, setSubject] = useState(order.subjectName ?? "");
   const [topic, setTopic] = useState(order.topic ?? "");
   const [lessonFor, setLessonFor] = useState(order.lessonFor ?? "");
@@ -73,6 +74,17 @@ export function CotOrderEdit({ order }: { order: Order }) {
 
       {open && (
         <div className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs" htmlFor={`customer-${order.id}`}>
+              Facebook name
+            </Label>
+            <Input
+              id={`customer-${order.id}`}
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              className="h-8 w-48"
+            />
+          </div>
           <div className="flex flex-col gap-1">
             <Label className="text-xs" htmlFor={`grade-${order.id}`}>
               Grade
@@ -161,6 +173,7 @@ export function CotOrderEdit({ order }: { order: Order }) {
                   lessonFor.trim() || null,
                   deadline || null,
                   workKind,
+                  customerName.trim(),
                 ),
               )
             }

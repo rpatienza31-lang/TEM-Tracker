@@ -147,12 +147,16 @@ export async function updateCotOrderDetails(
     lessonFor: string | null;
     deadline?: string | null;
     workKind?: "new" | "align";
+    customerName?: string;
   },
   actor: CotActor,
 ): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can edit an order." };
   if (patch.deadline && !/^\d{4}-\d{2}-\d{2}$/.test(patch.deadline)) {
     return { ok: false, message: "Invalid deadline." };
+  }
+  if (patch.customerName !== undefined && !patch.customerName.trim()) {
+    return { ok: false, message: "Customer name can't be empty." };
   }
 
   await db
@@ -162,9 +166,10 @@ export async function updateCotOrderDetails(
       subjectName: patch.subjectName,
       topic: patch.topic,
       lessonFor: patch.lessonFor,
-      // Only overwrite the deadline / work kind when provided.
+      // Only overwrite the deadline / work kind / name when provided.
       ...(patch.deadline ? { deadline: patch.deadline } : {}),
       ...(patch.workKind ? { workKind: patch.workKind } : {}),
+      ...(patch.customerName !== undefined ? { customerName: patch.customerName.trim() } : {}),
     })
     .where(eq(customOrders.id, orderId));
 
