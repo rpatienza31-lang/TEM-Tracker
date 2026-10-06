@@ -62,7 +62,7 @@ function daysLabel(level: PriorityLevel, daysLeft: number) {
   return `${daysLeft} days left`;
 }
 
-type Filter = "all" | PriorityLevel | "due2" | "unclaimed" | "assigned";
+type Filter = "all" | PriorityLevel | "due2" | "unclaimed" | "none_assigned" | "partial" | "assigned";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
@@ -71,12 +71,24 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "due2", label: "≤2 days" },
   { key: "alert", label: "Soon" },
   { key: "normal", label: "On track" },
-  { key: "unclaimed", label: "Needs editor" },
+  { key: "none_assigned", label: "No editor yet" },
+  { key: "partial", label: "Missing 1 editor" },
+  { key: "unclaimed", label: "Needs editor (any)" },
   { key: "assigned", label: "Assigned" },
 ];
 
 function isUnclaimed(o: CotOrderView) {
   return o.items.some((i) => i.status === "available");
+}
+
+/** Neither deliverable has an editor yet (both DLP and PPT unassigned). */
+function isNoneAssigned(o: CotOrderView) {
+  return o.items.length > 0 && o.items.every((i) => i.status === "available");
+}
+
+/** Some but not all deliverables are assigned (e.g. DLP has an editor, PPT doesn't). */
+function isPartlyAssigned(o: CotOrderView) {
+  return o.items.some((i) => i.status === "available") && o.items.some((i) => i.status !== "available");
 }
 
 /** Every deliverable now has an editor (nothing left in the available pool). */
@@ -97,6 +109,8 @@ function isDueWithin2(o: CotOrderView) {
 function matchesFilter(o: CotOrderView, filter: Filter) {
   if (filter === "all") return true;
   if (filter === "unclaimed") return isUnclaimed(o);
+  if (filter === "none_assigned") return isNoneAssigned(o);
+  if (filter === "partial") return isPartlyAssigned(o);
   if (filter === "assigned") return isFullyAssigned(o);
   if (filter === "due2") return isDueWithin2(o);
   return o.priority === filter;
@@ -130,12 +144,14 @@ export function CotOrderList({
     });
 
   const counts = useMemo(() => {
-    const c = { total: orders.length, overdue: 0, due2: 0, alert: 0, unclaimed: 0, rush: 0, regular: 0 };
+    const c = { total: orders.length, overdue: 0, due2: 0, alert: 0, unclaimed: 0, none_assigned: 0, partial: 0, rush: 0, regular: 0 };
     for (const o of orders) {
       if (o.priority === "overdue") c.overdue += 1;
       if (isDueWithin2(o)) c.due2 += 1;
       if (o.priority === "alert") c.alert += 1;
       if (isUnclaimed(o)) c.unclaimed += 1;
+      if (isNoneAssigned(o)) c.none_assigned += 1;
+      if (isPartlyAssigned(o)) c.partial += 1;
       if (o.orderType === "rush") c.rush += 1;
       else c.regular += 1;
     }
@@ -184,18 +200,37 @@ export function CotOrderList({
 
       {/* Filter chips + search */}
       <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            className={`rounded-full border px-3 py-1 text-sm transition-colors ${
-              filter === f.key ? "border-foreground bg-foreground text-background" : "hover:bg-accent"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+        {FILTERS.map((f) => {
+          const badge =
+            f.key === "none_assigned"
+              ? counts.none_assigned
+              : f.key === "partial"
+                ? counts.partial
+                : f.key === "unclaimed"
+                  ? counts.unclaimed
+                  : null;
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+                filter === f.key ? "border-foreground bg-foreground text-background" : "hover:bg-accent"
+              }`}
+            >
+              {f.label}
+              {badge != null && (
+                <span
+                  className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums ${
+                    filter === f.key ? "bg-background/20" : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Order type (Rush / Regular) + ordered-on date filter */}
