@@ -140,8 +140,17 @@ export function CotOrderList({
   const [dateFilter, setDateFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const router = useRouter();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [archiving, startArchive] = useTransition();
   const [archiveMsg, setArchiveMsg] = useState<string | null>(null);
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   function toggleTime(key: TimeKey) {
     setTimeFilter((prev) => {
@@ -176,6 +185,7 @@ export function CotOrderList({
       const res = await archiveCotOrdersAction(ids);
       if (res.ok) {
         setArchiveMsg(`✓ Marked ${res.done} order(s) as done — now in Completed & the Library.`);
+        setSelected(new Set());
         router.refresh();
       } else {
         setArchiveMsg(res.message ?? "Could not mark as done.");
@@ -354,20 +364,41 @@ export function CotOrderList({
           {dateFilter && ` · ordered ${dateFilter}`}
         </p>
         {isOwner && filtered.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {archiveMsg && <span className="text-xs text-status-approved">{archiveMsg}</span>}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <button
               type="button"
-              disabled={archiving}
-              onClick={() => archiveShown(filtered.map((o) => o.id))}
-              className="rounded-md border border-status-approved/50 px-2.5 py-1 text-xs font-medium text-status-approved hover:bg-status-approved/10 disabled:opacity-50"
-              title="Force-complete the shown orders (no points) so they move to Completed and the Available Library"
+              onClick={() => setSelected(new Set(filtered.map((o) => o.id)))}
+              className="text-primary underline hover:no-underline"
             >
-              {archiving ? "Marking…" : `Mark these ${filtered.length} as done`}
+              Select all shown ({filtered.length})
             </button>
+            {selected.size > 0 && (
+              <button type="button" onClick={() => setSelected(new Set())} className="text-muted-foreground underline hover:text-foreground">
+                Clear
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {isOwner && selected.size > 0 && (
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 rounded-md border border-border bg-card p-2 shadow-sm">
+          <span className="text-sm font-medium tabular-nums">{selected.size} selected</span>
+          <button
+            type="button"
+            disabled={archiving}
+            onClick={() => archiveShown([...selected])}
+            className="rounded-md border border-status-approved/50 bg-status-approved/10 px-3 py-1 text-sm font-medium text-status-approved hover:bg-status-approved/20 disabled:opacity-50"
+            title="Force-complete the selected orders (no points) so they move to Completed and the Available Library"
+          >
+            {archiving ? "Marking…" : `Mark ${selected.size} as done`}
+          </button>
+          {archiveMsg && <span className="text-xs text-status-approved">{archiveMsg}</span>}
+        </div>
+      )}
+      {isOwner && selected.size === 0 && archiveMsg && (
+        <p className="text-xs text-status-approved">{archiveMsg}</p>
+      )}
 
       {filtered.length === 0 && (
         <p className="text-sm text-muted-foreground">
@@ -395,6 +426,16 @@ export function CotOrderList({
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  {isOwner && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(o.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggleSelected(o.id)}
+                      className="h-4 w-4 rounded border-input"
+                      aria-label={`Select ${o.customerName}`}
+                    />
+                  )}
                   <span className="text-muted-foreground transition-transform" aria-hidden>
                     {isOpen ? "▾" : "▸"}
                   </span>
