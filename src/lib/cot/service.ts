@@ -231,6 +231,24 @@ export async function updateCotOrderDetails(
   return { ok: true };
 }
 
+/**
+ * Owner force-completes ONE COT deliverable (DLP or PPT) — approves it directly
+ * without the submit/file step, awarding no points (used for stuck or
+ * owner-done items). Owner only. Already-approved items are left as-is.
+ */
+export async function markCotItemDone(itemId: string, actor: CotActor): Promise<CotResult> {
+  if (actor.role !== "owner") return { ok: false, message: "Only the owner can mark a deliverable as done." };
+  const [item] = await db.select().from(customOrderItems).where(eq(customOrderItems.id, itemId)).limit(1);
+  if (!item) return { ok: false, message: "Item not found." };
+  if (item.status === "approved") return { ok: false, message: "This deliverable is already done." };
+
+  await db
+    .update(customOrderItems)
+    .set({ status: "approved", approvedAt: new Date(), pointsAwarded: null, updatedAt: new Date() })
+    .where(eq(customOrderItems.id, itemId));
+  return { ok: true };
+}
+
 /** Owner/admin assigns (or reassigns) an editor to a COT item directly. */
 export async function assignCotItem(itemId: string, editorId: string, actor: CotActor): Promise<CotResult> {
   if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can assign." };

@@ -557,6 +557,7 @@ export function CotOrderList({
                         key={item.id}
                         item={item}
                         isAdmin={isAdmin}
+                        isOwner={isOwner}
                         canClaim={canClaim}
                         editors={editors}
                         orderDeadline={o.deadline}

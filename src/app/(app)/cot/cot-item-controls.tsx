@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { STATUS_BADGE_CLASS, STATUS_LABELS, DELIVERABLE_TYPE_LABELS, type ItemStatus, type DeliverableType } from "@/lib/constants";
 import { setCotItemScheduleAction } from "@/lib/work-items/actions";
-import { approveCotAction, assignCotAction, claimCotAction, releaseCotAction, submitCotAction, unapproveCotAction } from "./actions";
+import { approveCotAction, assignCotAction, claimCotAction, markCotItemDoneAction, releaseCotAction, submitCotAction, unapproveCotAction } from "./actions";
 
 type Item = {
   id: string;
@@ -24,12 +24,14 @@ export type EditorOption = { id: string; fullName: string };
 export function CotItemControls({
   item,
   isAdmin,
+  isOwner,
   canClaim,
   editors,
   orderDeadline,
 }: {
   item: Item;
   isAdmin: boolean;
+  isOwner?: boolean;
   canClaim: boolean;
   editors: EditorOption[];
   orderDeadline: string;
@@ -156,6 +158,23 @@ export function CotItemControls({
         {status === "approved" && isAdmin && (
           <Button size="sm" variant="outline" disabled={pending} onClick={() => run(() => unapproveCotAction(item.id))}>
             Un-approve
+          </Button>
+        )}
+
+        {isOwner && status !== "approved" && (
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={pending}
+            title="Owner: complete this deliverable directly (no file, no points) — for stuck or owner-done work"
+            onClick={() => {
+              if (window.confirm("Mark this deliverable as DONE? It will be approved with no points (no file/submit needed).")) {
+                run(() => markCotItemDoneAction(item.id));
+              }
+            }}
+            className="border-status-approved/50 text-status-approved hover:bg-status-approved/10"
+          >
+            Mark as done (no points)
           </Button>
         )}
       </div>

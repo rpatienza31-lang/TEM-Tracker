@@ -11,6 +11,7 @@ import {
   claimCotItem,
   createCotOrder,
   deleteCotOrder,
+  markCotItemDone,
   releaseCotItem,
   requestCotRevisionItem,
   setCotOrderType,
@@ -58,6 +59,19 @@ export async function archiveCotOrdersAction(orderIds: string[]): Promise<{ ok: 
     revalidatePath("/review");
   }
   return { ok: true, done };
+}
+
+/** Owner force-completes one COT deliverable (DLP or PPT) directly — no points. */
+export async function markCotItemDoneAction(itemId: string): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await markCotItemDone(itemId, actorOf(user));
+  if (result.ok) {
+    revalidatePath("/cot");
+    revalidatePath("/cot/library");
+    revalidatePath("/schedule");
+    revalidatePath("/review");
+  }
+  return result;
 }
 
 export type NewCotState = { status: "idle" | "ok" | "error"; message?: string };
