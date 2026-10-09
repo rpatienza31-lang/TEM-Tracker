@@ -542,6 +542,8 @@ export function CotOrderList({
                       grade: o.grade,
                       subjectName: o.subjectName,
                       topic: o.topic,
+                      competency: o.competency,
+                      indicator: o.indicator,
                       lessonFor: o.lessonFor,
                       deadline: o.deadline,
                       customerName: o.customerName,

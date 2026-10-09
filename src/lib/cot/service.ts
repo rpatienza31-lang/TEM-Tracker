@@ -148,6 +148,8 @@ export async function updateCotOrderDetails(
     deadline?: string | null;
     workKind?: "new" | "align";
     customerName?: string;
+    competency?: string | null;
+    indicator?: string | null;
   },
   actor: CotActor,
 ): Promise<CotResult> {
@@ -166,10 +168,12 @@ export async function updateCotOrderDetails(
       subjectName: patch.subjectName,
       topic: patch.topic,
       lessonFor: patch.lessonFor,
-      // Only overwrite the deadline / work kind / name when provided.
+      // Only overwrite the deadline / work kind / name / competency / indicator when provided.
       ...(patch.deadline ? { deadline: patch.deadline } : {}),
       ...(patch.workKind ? { workKind: patch.workKind } : {}),
       ...(patch.customerName !== undefined ? { customerName: patch.customerName.trim() } : {}),
+      ...(patch.competency !== undefined ? { competency: patch.competency } : {}),
+      ...(patch.indicator !== undefined ? { indicator: patch.indicator } : {}),
     })
     .where(eq(customOrders.id, orderId));
 

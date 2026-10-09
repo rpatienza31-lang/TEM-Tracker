@@ -143,11 +143,13 @@ export async function updateCotOrderAction(
   deadline?: string | null,
   workKind?: "new" | "align",
   customerName?: string,
+  competency?: string | null,
+  indicator?: string | null,
 ): Promise<CotResult> {
   const user = await requireUser();
   const result = await updateCotOrderDetails(
     orderId,
-    { grade, subjectName, topic, lessonFor, deadline, workKind, customerName },
+    { grade, subjectName, topic, lessonFor, deadline, workKind, customerName, competency, indicator },
     actorOf(user),
   );
   if (result.ok) {

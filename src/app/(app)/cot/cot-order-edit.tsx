@@ -14,6 +14,8 @@ type Order = {
   grade: number | null;
   subjectName: string | null;
   topic: string | null;
+  competency: string | null;
+  indicator: string | null;
   lessonFor: string | null;
   deadline: string;
   customerName: string;
@@ -27,6 +29,8 @@ export function CotOrderEdit({ order }: { order: Order }) {
   const [customerName, setCustomerName] = useState(order.customerName);
   const [subject, setSubject] = useState(order.subjectName ?? "");
   const [topic, setTopic] = useState(order.topic ?? "");
+  const [competency, setCompetency] = useState(order.competency ?? "");
+  const [indicator, setIndicator] = useState(order.indicator ?? "");
   const [lessonFor, setLessonFor] = useState(order.lessonFor ?? "");
   const [deadline, setDeadline] = useState(order.deadline);
   const [workKind, setWorkKind] = useState<"new" | "align">(order.workKind);
@@ -119,6 +123,29 @@ export function CotOrderEdit({ order }: { order: Order }) {
               className="h-8 w-48"
             />
           </div>
+          <div className="flex w-full flex-col gap-1">
+            <Label className="text-xs" htmlFor={`competency-${order.id}`}>
+              Competency
+            </Label>
+            <textarea
+              id={`competency-${order.id}`}
+              value={competency}
+              onChange={(e) => setCompetency(e.target.value)}
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs" htmlFor={`indicator-${order.id}`}>
+              Indicator
+            </Label>
+            <Input
+              id={`indicator-${order.id}`}
+              value={indicator}
+              onChange={(e) => setIndicator(e.target.value)}
+              className="h-8 w-40"
+            />
+          </div>
           <div className="flex flex-col gap-1">
             <Label className="text-xs" htmlFor={`lessonfor-${order.id}`}>
               Lesson For
@@ -174,6 +201,8 @@ export function CotOrderEdit({ order }: { order: Order }) {
                   deadline || null,
                   workKind,
                   customerName.trim(),
+                  competency.trim() || null,
+                  indicator.trim() || null,
                 ),
               )
             }
