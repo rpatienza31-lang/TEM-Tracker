@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RateCell } from "./rate-cell";
 import { editTimeLogTimesAction, markHourlyPaidAction, type SetRateState } from "./actions";
-import { reclassifyTimeLogAction } from "@/lib/time-logs/actions";
+import { reclassifyTimeLogAction, removeSessionAction } from "@/lib/time-logs/actions";
 
 /**
  * Owner control to fix a mis-approval: move a session that was approved as
@@ -33,6 +33,29 @@ function ToAttendanceButton({ logId }: { logId: string }) {
       className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-accent"
     >
       → Attendance only
+    </button>
+  );
+}
+
+/** Owner control to delete a clock-in/out session — e.g. a duplicate or one already paid last period. */
+function RemoveSessionButton({ logId }: { logId: string }) {
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      title="Remove this session from the payroll history (e.g. a duplicate or already paid last period)."
+      onClick={() => {
+        if (!window.confirm("Remove this clock-in/out session? It will be deleted from the payroll history.")) return;
+        startTransition(async () => {
+          const res = await removeSessionAction(logId);
+          if (res.ok) router.refresh();
+        });
+      }}
+      className="shrink-0 rounded border border-destructive/40 px-1.5 py-0.5 text-[11px] font-medium text-destructive hover:bg-destructive/10"
+    >
+      ✕ Remove
     </button>
   );
 }
@@ -278,6 +301,7 @@ export function HourlyStaffTable({
                                 <EditableSessionRow session={s} />
                               </div>
                               <ToAttendanceButton logId={s.id} />
+                              <RemoveSessionButton logId={s.id} />
                             </div>
                           ))}
                         </div>

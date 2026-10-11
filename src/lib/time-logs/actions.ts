@@ -198,3 +198,18 @@ export async function deleteTimeLogAction(logId: string): Promise<TimeLogActionR
   revalidatePath("/payroll");
   return { ok: true };
 }
+
+/**
+ * Owner removes an approved clock-in/out session from the payroll history — for
+ * a duplicate or a session already paid in a previous period. Owner only;
+ * deletes regardless of approval.
+ */
+export async function removeSessionAction(logId: string): Promise<TimeLogActionResult> {
+  const actor = await requireUser();
+  if (actor.role !== "owner") return { ok: false, message: "Only the owner can remove a session." };
+
+  await db.delete(timeLogs).where(eq(timeLogs.id, logId));
+  revalidatePath("/payroll");
+  revalidatePath("/time-logs");
+  return { ok: true };
+}
