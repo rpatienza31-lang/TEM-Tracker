@@ -161,12 +161,12 @@ export function CotItemControls({
           </Button>
         )}
 
-        {isOwner && status !== "approved" && (
+        {isAdmin && status !== "approved" && (
           <Button
             size="sm"
             variant="secondary"
             disabled={pending}
-            title="Owner: complete this deliverable directly (no file, no points) — for stuck or owner-done work"
+            title="Complete this deliverable directly (no file, no points) — for a topic already made, or stuck/owner-done work"
             onClick={() => {
               if (window.confirm("Mark this deliverable as DONE? It will be approved with no points (no file/submit needed).")) {
                 run(() => markCotItemDoneAction(item.id));

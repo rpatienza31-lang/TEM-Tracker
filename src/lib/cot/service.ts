@@ -241,7 +241,7 @@ export async function updateCotOrderDetails(
  * owner-done items). Owner only. Already-approved items are left as-is.
  */
 export async function markCotItemDone(itemId: string, actor: CotActor): Promise<CotResult> {
-  if (actor.role !== "owner") return { ok: false, message: "Only the owner can mark a deliverable as done." };
+  if (!isAdmin(actor.role)) return { ok: false, message: "Only owners and admins can mark a deliverable as done." };
   const [item] = await db.select().from(customOrderItems).where(eq(customOrderItems.id, itemId)).limit(1);
   if (!item) return { ok: false, message: "Item not found." };
   if (item.status === "approved") return { ok: false, message: "This deliverable is already done." };
