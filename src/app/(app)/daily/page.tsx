@@ -1,6 +1,9 @@
 import { formatInTimeZone } from "date-fns-tz";
+import { and, asc, eq } from "drizzle-orm";
 
 import { requireRole } from "@/lib/auth";
+import { db } from "@/db/client";
+import { users } from "@/db/schema";
 import { getDailyLog, type DailyEntry } from "@/lib/work-items/queries";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,10 +32,21 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
   const today = formatInTimeZone(new Date(), PH_TZ, "yyyy-MM-dd");
   const date = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : today;
 
-  const entries = await getDailyLog(date);
+  const [entries, roster] = await Promise.all([
+    getDailyLog(date),
+    db
+      .select({ fullName: users.fullName })
+      .from(users)
+      .where(and(eq(users.isActive, true), eq(users.role, "editor")))
+      .orderBy(asc(users.fullName)),
+  ]);
 
   // Group by editor, Unassigned last; submitted rows before pending within each.
   const byEditor = new Map<string, DailyEntry[]>();
+  // Seed every active editor so those with no activity still show (0 submitted).
+  for (const r of roster) {
+    if (r.fullName) byEditor.set(r.fullName, []);
+  }
   for (const e of entries) {
     const key = e.editorName ?? "— Unassigned";
     const list = byEditor.get(key) ?? [];
@@ -109,6 +123,13 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {list.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-sm text-muted-foreground">
+                        Nothing submitted and nothing pending for this day.
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {list
                     .slice()
                     // Submitted first, then pending.
