@@ -290,6 +290,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
             timeOut: phTime(p.clockOut),
             hours: p.hours,
             note: p.note,
+            productivity: p.productivity,
           }))}
         />
       </SectionCard>

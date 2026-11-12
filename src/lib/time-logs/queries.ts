@@ -33,6 +33,7 @@ export async function getPendingTimeLogs() {
       clockIn: timeLogs.clockIn,
       clockOut: timeLogs.clockOut,
       note: timeLogs.note,
+      productivity: timeLogs.productivity,
       createdAt: timeLogs.createdAt,
     })
     .from(timeLogs)

@@ -15,6 +15,7 @@ type PendingLog = {
   timeOut: string | null;
   hours: string | null;
   note: string | null;
+  productivity: string | null;
 };
 
 export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
@@ -33,6 +34,7 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
           <TableHead>Time in</TableHead>
           <TableHead>Time out</TableHead>
           <TableHead>Hours</TableHead>
+          <TableHead>What they did</TableHead>
           <TableHead>Note</TableHead>
           <TableHead />
         </TableRow>
@@ -45,6 +47,9 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
             <TableCell className="text-muted-foreground">{log.timeIn ?? "—"}</TableCell>
             <TableCell className="text-muted-foreground">{log.timeOut ?? "—"}</TableCell>
             <TableCell>{log.hours ?? "—"}</TableCell>
+            <TableCell className="max-w-xs whitespace-pre-wrap text-sm">
+              {log.productivity ? log.productivity : <span className="text-muted-foreground">—</span>}
+            </TableCell>
             <TableCell className="text-muted-foreground">{log.note}</TableCell>
             <TableCell>
               <div className="flex flex-wrap justify-end gap-1.5">
@@ -87,7 +92,7 @@ export function PendingApprovals({ logs }: { logs: PendingLog[] }) {
         ))}
         {visible.length === 0 && (
           <TableRow>
-            <TableCell colSpan={7} className="text-center text-muted-foreground">
+            <TableCell colSpan={8} className="text-center text-muted-foreground">
               Nothing pending approval.
             </TableCell>
           </TableRow>
