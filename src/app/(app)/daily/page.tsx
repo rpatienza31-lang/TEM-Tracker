@@ -1,5 +1,5 @@
 import { formatInTimeZone } from "date-fns-tz";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 
 import { requireRole } from "@/lib/auth";
 import { db } from "@/db/client";
@@ -37,13 +37,14 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
     db
       .select({ fullName: users.fullName })
       .from(users)
-      .where(and(eq(users.isActive, true), eq(users.role, "editor")))
+      .where(and(eq(users.isActive, true), ne(users.role, "staff")))
       .orderBy(asc(users.fullName)),
   ]);
 
   // Group by editor, Unassigned last; submitted rows before pending within each.
   const byEditor = new Map<string, DailyEntry[]>();
-  // Seed every active editor so those with no activity still show (0 submitted).
+  // Seed every active non-staff member (editors, admins, sales, owner) so
+  // those with no activity still show (0 submitted).
   for (const r of roster) {
     if (r.fullName) byEditor.set(r.fullName, []);
   }
