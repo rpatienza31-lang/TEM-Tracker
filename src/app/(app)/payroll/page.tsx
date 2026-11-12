@@ -1,5 +1,5 @@
 import { formatInTimeZone } from "date-fns-tz";
-import { Banknote, CalendarRange, Clock, Download, History, Receipt, Users, Wallet } from "lucide-react";
+import { Banknote, CalendarRange, Clock, Download, History, ListChecks, Receipt, Users, Wallet } from "lucide-react";
 
 import { requireRole } from "@/lib/auth";
 import {
@@ -7,6 +7,7 @@ import {
   getApprovedTimeLogsForPeriod,
   getAttendanceOnlyForPeriod,
   getPendingTimeLogs,
+  getProductivityReportsForPeriod,
 } from "@/lib/time-logs/queries";
 import { getPayrollReport } from "@/lib/payroll/report";
 import { getPointsBreakdown } from "@/lib/payroll/breakdown";
@@ -22,6 +23,7 @@ import { DailyStaffTable } from "./daily-staff-table";
 import { getDailyStaffForPeriod, getDailyStaffSessions } from "@/lib/payroll/daily";
 import { PayslipsTable } from "./payslips-table";
 import { AttendanceLog } from "./attendance-log";
+import { ProductivityLog } from "./productivity-log";
 
 type SearchParams = { from?: string; to?: string };
 
@@ -141,18 +143,28 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   const from = sp.from || defaults.from;
   const to = sp.to || defaults.to;
 
-  const [pending, report, activeClockIns, breakdownMap, approvedLogs, dailyStaff, dailySessions, attendanceOnly] =
-    await Promise.all([
-      getPendingTimeLogs(),
-      getPayrollReport(from, to),
-      getActiveClockIns(),
-      // All projects up to the period end, so the split against lifetime-paid points is correct.
-      getPointsBreakdown("1970-01-01", to),
-      getApprovedTimeLogsForPeriod(from, to),
-      getDailyStaffForPeriod(from, to),
-      getDailyStaffSessions(from, to),
-      getAttendanceOnlyForPeriod(from, to),
-    ]);
+  const [
+    pending,
+    report,
+    activeClockIns,
+    breakdownMap,
+    approvedLogs,
+    dailyStaff,
+    dailySessions,
+    attendanceOnly,
+    productivityReports,
+  ] = await Promise.all([
+    getPendingTimeLogs(),
+    getPayrollReport(from, to),
+    getActiveClockIns(),
+    // All projects up to the period end, so the split against lifetime-paid points is correct.
+    getPointsBreakdown("1970-01-01", to),
+    getApprovedTimeLogsForPeriod(from, to),
+    getDailyStaffForPeriod(from, to),
+    getDailyStaffSessions(from, to),
+    getAttendanceOnlyForPeriod(from, to),
+    getProductivityReportsForPeriod(from, to),
+  ]);
   // Show only the UNPAID projects in the live breakdown — already-paid ones live
   // in the Payment history, so the list isn't cluttered with settled work.
   const paidByUser = new Map(report.quotaRows.map((r) => [r.userId, r.pointsPaid]));
@@ -298,6 +310,25 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
             timeIn: phTime(a.clockIn),
             timeOut: phTime(a.clockOut),
             hours: a.hours ? a.hours.toFixed(2) : null,
+          }))}
+        />
+      </SectionCard>
+
+      <SectionCard
+        icon={ListChecks}
+        title="Productivity reports"
+        badge={productivityReports.length ? `${productivityReports.length}` : undefined}
+        tone="emerald"
+        description="What each staffer reported doing when they clocked out, for the selected date range. Newest first."
+      >
+        <ProductivityLog
+          rows={productivityReports.map((p) => ({
+            id: p.id,
+            userName: p.userName,
+            workDate: p.workDate,
+            timeOut: phTime(p.clockOut),
+            hours: p.hours === null ? null : p.hours.toFixed(2),
+            productivity: p.productivity,
           }))}
         />
       </SectionCard>

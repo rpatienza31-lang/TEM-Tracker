@@ -123,6 +123,55 @@ export async function getAttendanceOnlyForPeriod(from: string, to: string): Prom
   return rows.map((r) => ({ ...r, hours: Number(r.hours ?? 0) }));
 }
 
+export type ProductivityReport = {
+  id: string;
+  userName: string;
+  workDate: string;
+  clockIn: Date | null;
+  clockOut: Date | null;
+  hours: number | null;
+  productivity: string;
+};
+
+/**
+ * Productivity reports staff wrote at clock-out, within [from, to]. This is the
+ * admin's window into what each person says they did each day. Follows the
+ * selected date filter; newest work date first.
+ */
+export async function getProductivityReportsForPeriod(from: string, to: string): Promise<ProductivityReport[]> {
+  const rows = await db
+    .select({
+      id: timeLogs.id,
+      userName: users.fullName,
+      workDate: timeLogs.workDate,
+      clockIn: timeLogs.clockIn,
+      clockOut: timeLogs.clockOut,
+      hours: timeLogs.hours,
+      productivity: timeLogs.productivity,
+    })
+    .from(timeLogs)
+    .innerJoin(users, eq(users.id, timeLogs.userId))
+    .where(
+      and(
+        isNotNull(timeLogs.productivity),
+        ne(timeLogs.productivity, ""),
+        gte(timeLogs.workDate, from),
+        lte(timeLogs.workDate, to),
+      ),
+    )
+    .orderBy(desc(timeLogs.workDate), desc(timeLogs.clockOut));
+
+  return rows.map((r) => ({
+    id: r.id,
+    userName: r.userName,
+    workDate: r.workDate,
+    clockIn: r.clockIn,
+    clockOut: r.clockOut,
+    hours: r.hours === null ? null : Number(r.hours),
+    productivity: r.productivity ?? "",
+  }));
+}
+
 export type ApprovedTimeLog = {
   id: string;
   userId: string;

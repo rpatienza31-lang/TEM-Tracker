@@ -57,9 +57,19 @@ export async function clockInAction(): Promise<TimeLogActionResult> {
   return { ok: true };
 }
 
-/** Ends the open shift and computes hours from the elapsed clock-in→clock-out time. */
-export async function clockOutAction(): Promise<TimeLogActionResult> {
+/**
+ * Ends the open shift and computes hours from the elapsed clock-in→clock-out
+ * time. A productivity report is required — the staffer says what they did that
+ * day, and cannot clock out with it blank.
+ */
+export async function clockOutAction(productivity: string): Promise<TimeLogActionResult> {
   const actor = await requireUser();
+
+  const report = (productivity ?? "").trim();
+  if (report.length === 0) {
+    return { ok: false, message: "Please write your productivity for today before clocking out." };
+  }
+
   const open = await getOpenSession(actor.id);
   if (!open || !open.clockIn) {
     return { ok: false, message: "You're not clocked in." };
@@ -71,7 +81,10 @@ export async function clockOutAction(): Promise<TimeLogActionResult> {
   // clock-outs, and 24h max for a shift someone forgot to close (admin reviews).
   const hours = Math.min(24, Math.max(0.01, Math.round(elapsedHours * 100) / 100));
 
-  await db.update(timeLogs).set({ clockOut: now, hours: String(hours) }).where(eq(timeLogs.id, open.id));
+  await db
+    .update(timeLogs)
+    .set({ clockOut: now, hours: String(hours), productivity: report })
+    .where(eq(timeLogs.id, open.id));
 
   revalidatePath("/time-logs");
   revalidatePath("/payroll");

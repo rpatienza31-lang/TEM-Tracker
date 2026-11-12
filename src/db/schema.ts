@@ -293,6 +293,10 @@ export const timeLogs = pgTable(
     clockIn: timestamp("clock_in", { withTimezone: true }),
     clockOut: timestamp("clock_out", { withTimezone: true }),
     note: text("note"),
+    // What the staffer reports they produced/did that day, entered at clock-out.
+    // Required to clock out (enforced in the action). Visible to admins on the
+    // payroll "Productivity reports" view.
+    productivity: text("productivity"),
     approvedBy: uuid("approved_by").references(() => users.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     // Whether this approved session counts toward hourly pay. Approving as
