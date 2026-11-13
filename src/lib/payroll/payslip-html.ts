@@ -12,6 +12,7 @@ export type PayslipData = {
   daily?: { days: number; rate: number; amount: number };
   gross: number;
   cashAdvance: number;
+  cashAdvanceNote?: string | null;
   net: number;
   // Page-2 detail: the clock-in/out sessions (hourly) or credited projects (quota).
   hourlySessions?: PayslipSession[];
@@ -153,8 +154,10 @@ export function renderPayslipHtml(d: PayslipData): string {
     <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:${MUTED};margin:20px 0 4px;">Deductions</div>
     <table role="presentation" width="100%" style="border-collapse:collapse;">
       <tr>
-        <td style="padding:8px 0;font-size:14px;color:${INK};">Cash advance (CA)</td>
-        <td style="padding:8px 0;text-align:right;font-size:14px;color:#b91c1c;font-variant-numeric:tabular-nums;">− ${peso.format(d.cashAdvance)}</td>
+        <td style="padding:8px 0;font-size:14px;color:${INK};">
+          Cash advance (CA)${d.cashAdvanceNote ? `<div style="font-size:12px;color:${MUTED};">${esc(d.cashAdvanceNote)}</div>` : ""}
+        </td>
+        <td style="padding:8px 0;text-align:right;font-size:14px;color:#b91c1c;font-variant-numeric:tabular-nums;vertical-align:top;">− ${peso.format(d.cashAdvance)}</td>
       </tr>
     </table>
 

@@ -74,7 +74,12 @@ export default async function MyPayPage() {
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Cash advance</dt>
-                    <dd>{Number(p.cashAdvance) > 0 ? `− ${peso.format(Number(p.cashAdvance))}` : "—"}</dd>
+                    <dd>
+                      {Number(p.cashAdvance) > 0 ? `− ${peso.format(Number(p.cashAdvance))}` : "—"}
+                      {Number(p.cashAdvance) > 0 && p.cashAdvanceNote && (
+                        <span className="block text-xs text-muted-foreground">{p.cashAdvanceNote}</span>
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Paid on</dt>

@@ -384,6 +384,7 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
               dailySalary: p.dailySalary,
               quotaCarried: p.quotaCarried,
               cashAdvance: p.cashAdvance,
+              cashAdvanceNote: p.cashAdvanceNote,
             }))}
             from={from}
             to={to}

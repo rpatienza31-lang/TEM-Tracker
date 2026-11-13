@@ -112,6 +112,9 @@ export function PaymentHistoryList({ payments }: { payments: PaymentHistoryRow[]
                   <TableCell className="text-right tabular-nums">{peso.format(p.amount)}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {p.cashAdvance > 0 ? `−${peso.format(p.cashAdvance)}` : "—"}
+                    {p.cashAdvance > 0 && p.cashAdvanceNote && (
+                      <span className="block text-[11px] font-normal">{p.cashAdvanceNote}</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">{peso.format(p.net)}</TableCell>
                   <TableCell className="text-muted-foreground">{p.paidByName ?? "—"}</TableCell>

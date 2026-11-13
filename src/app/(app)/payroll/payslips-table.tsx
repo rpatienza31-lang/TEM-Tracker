@@ -16,6 +16,7 @@ export type PayslipRowData = {
   dailySalary: number;
   quotaCarried: number;
   cashAdvance: number;
+  cashAdvanceNote: string | null;
 };
 
 type Include = "both" | "quota" | "hourly";
@@ -149,7 +150,7 @@ export function PayslipsTable({ rows, from, to }: { rows: PayslipRowData[]; from
                 )}
                 <TableCell className="text-right tabular-nums">{peso.format(effGross(r))}</TableCell>
                 <TableCell>
-                  <CashAdvanceCell userId={r.userId} amount={r.cashAdvance} />
+                  <CashAdvanceCell userId={r.userId} amount={r.cashAdvance} note={r.cashAdvanceNote} />
                 </TableCell>
                 <TableCell className="text-right font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
                   {peso.format(effNet(r))}

@@ -50,6 +50,9 @@ export const users = pgTable("users", {
   dailyRate: numeric("daily_rate", { precision: 10, scale: 2 }).notNull().default("0"),
   // Cash advance to deduct from this payout, editable by the owner. Owner-only.
   cashAdvance: numeric("cash_advance", { precision: 10, scale: 2 }).notNull().default("0"),
+  // What the current cash advance is for (e.g. "Loan Nov 5", "Uniform"), so the
+  // owner remembers it and it can print on the payslip. Owner-only.
+  cashAdvanceNote: text("cash_advance_note"),
   // Owner reconciliation baseline added to the derived cycle number, so an
   // editor can be set to the cycle they are really on without touching history.
   cycleOffset: integer("cycle_offset").notNull().default(0),
@@ -265,6 +268,9 @@ export const payrollPayments = pgTable(
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
     // Cash advance recovered from this payout; net cash paid = amount − cashAdvance.
     cashAdvance: numeric("cash_advance", { precision: 12, scale: 2 }).notNull().default("0"),
+    // Snapshot of what that cash advance was for, taken at payout time so the
+    // recorded payslip and history show it even after the live note changes.
+    cashAdvanceNote: text("cash_advance_note"),
     // Snapshot of the projects this payout covered, taken at payment time so the
     // history is auditable even as the live breakdown changes. Array of
     // { title, subtitle, points, dateIso, kind }.

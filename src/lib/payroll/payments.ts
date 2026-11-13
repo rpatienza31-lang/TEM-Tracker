@@ -74,12 +74,13 @@ export async function recordPayrollPayment(params: {
   amount: number;
   rate: number;
   cashAdvance?: number;
+  cashAdvanceNote?: string | null;
   items?: PaymentItem[];
   from?: string;
   to?: string;
   paidBy?: string | null;
 }): Promise<void> {
-  const { editorId, kind, points, cycles, amount, rate, cashAdvance, items, from, to, paidBy } = params;
+  const { editorId, kind, points, cycles, amount, rate, cashAdvance, cashAdvanceNote, items, from, to, paidBy } = params;
   await db.insert(payrollPayments).values({
     editorId,
     kind: kind ?? "quota",
@@ -88,6 +89,7 @@ export async function recordPayrollPayment(params: {
     rate: rate.toFixed(2),
     amount: amount.toFixed(2),
     cashAdvance: (cashAdvance ?? 0).toFixed(2),
+    cashAdvanceNote: (cashAdvance ?? 0) > 0 ? cashAdvanceNote ?? null : null,
     items: items ?? null,
     periodFrom: from ?? null,
     periodTo: to ?? null,
@@ -103,6 +105,7 @@ export type PaymentHistoryRow = {
   points: number;
   amount: number;
   cashAdvance: number;
+  cashAdvanceNote: string | null;
   net: number;
   rate: number;
   periodFrom: string | null;
@@ -123,6 +126,7 @@ export type MyPayment = {
   rate: string;
   amount: string;
   cashAdvance: string;
+  cashAdvanceNote: string | null;
   periodFrom: string | null;
   periodTo: string | null;
   paidAt: Date;
@@ -139,6 +143,7 @@ export async function getMyPayments(userId: string): Promise<MyPayment[]> {
       rate: payrollPayments.rate,
       amount: payrollPayments.amount,
       cashAdvance: payrollPayments.cashAdvance,
+      cashAdvanceNote: payrollPayments.cashAdvanceNote,
       periodFrom: payrollPayments.periodFrom,
       periodTo: payrollPayments.periodTo,
       paidAt: payrollPayments.paidAt,
@@ -172,6 +177,7 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
       points: payrollPayments.points,
       amount: payrollPayments.amount,
       cashAdvance: payrollPayments.cashAdvance,
+      cashAdvanceNote: payrollPayments.cashAdvanceNote,
       rate: payrollPayments.rate,
       periodFrom: payrollPayments.periodFrom,
       periodTo: payrollPayments.periodTo,
@@ -233,6 +239,7 @@ export async function getPaymentHistory(): Promise<PaymentHistoryRow[]> {
       points: Number(r.points),
       amount,
       cashAdvance,
+      cashAdvanceNote: r.cashAdvanceNote ?? null,
       net: Math.round((amount - cashAdvance) * 100) / 100,
       rate: Number(r.rate),
       periodFrom: r.periodFrom,

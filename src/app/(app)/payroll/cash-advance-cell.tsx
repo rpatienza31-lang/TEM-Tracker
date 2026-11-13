@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 const initial: SetRateState = { status: "idle" };
 
 /** Inline editor for a staff member's cash advance (deducted from their payout). */
-export function CashAdvanceCell({ userId, amount }: { userId: string; amount: number }) {
+export function CashAdvanceCell({ userId, amount, note }: { userId: string; amount: number; note?: string | null }) {
   const [state, formAction, pending] = useActionState(setUserCashAdvanceAction, initial);
   const [value, setValue] = useState(amount.toString());
-  const dirty = value.trim() !== amount.toString();
+  const [desc, setDesc] = useState(note ?? "");
+  const dirty = value.trim() !== amount.toString() || desc !== (note ?? "");
 
   const [justSaved, setJustSaved] = useState(false);
   useEffect(() => {
@@ -24,28 +25,39 @@ export function CashAdvanceCell({ userId, amount }: { userId: string; amount: nu
   }, [state]);
 
   return (
-    <form action={formAction} className="flex items-center gap-2">
+    <form action={formAction} className="flex flex-col gap-1.5">
       <input type="hidden" name="userId" value={userId} />
-      <div className="flex items-center gap-1">
-        <span className="text-muted-foreground">₱</span>
-        <Input
-          name="rate"
-          type="number"
-          min="0"
-          step="0.01"
-          inputMode="decimal"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="w-28"
-          aria-label="Cash advance in pesos"
-        />
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground">₱</span>
+          <Input
+            name="rate"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="w-28"
+            aria-label="Cash advance in pesos"
+          />
+        </div>
+        {dirty && (
+          <Button type="submit" size="sm" variant="secondary" disabled={pending}>
+            {pending ? "Saving…" : "Save"}
+          </Button>
+        )}
+        {!dirty && justSaved && <span className="text-xs text-status-approved">Saved ✓</span>}
       </div>
-      {dirty && (
-        <Button type="submit" size="sm" variant="secondary" disabled={pending}>
-          {pending ? "Saving…" : "Save"}
-        </Button>
-      )}
-      {!dirty && justSaved && <span className="text-xs text-status-approved">Saved ✓</span>}
+      <Input
+        name="note"
+        type="text"
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        placeholder="What is this CA for? (shows on payslip)"
+        className="h-8 w-56 text-xs"
+        aria-label="Cash advance description"
+      />
       {state.status === "error" && <span className="text-xs text-destructive">{state.message}</span>}
     </form>
   );

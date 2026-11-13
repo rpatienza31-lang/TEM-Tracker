@@ -89,6 +89,7 @@ export default async function PayslipPage({
     daily: daily && dailyAmount > 0 ? { days: daily.daysUnpaid, rate: daily.dailyRate, amount: dailyAmount } : undefined,
     gross,
     cashAdvance: slip.cashAdvance,
+    cashAdvanceNote: slip.cashAdvanceNote,
     net,
     hourlySessions,
     quotaItems,

@@ -82,6 +82,7 @@ export async function emailPayslipAction(
     daily: daily && dailyAmount > 0 ? { days: daily.daysUnpaid, rate: daily.dailyRate, amount: dailyAmount } : undefined,
     gross,
     cashAdvance: slip.cashAdvance,
+    cashAdvanceNote: slip.cashAdvanceNote,
     net,
     hourlySessions,
     quotaItems,
@@ -107,6 +108,7 @@ export async function emailRecordedPayslipAction(paymentId: string): Promise<{ o
       rate: payrollPayments.rate,
       amount: payrollPayments.amount,
       cashAdvance: payrollPayments.cashAdvance,
+      cashAdvanceNote: payrollPayments.cashAdvanceNote,
       items: payrollPayments.items,
       periodFrom: payrollPayments.periodFrom,
       periodTo: payrollPayments.periodTo,
@@ -156,6 +158,7 @@ export async function emailRecordedPayslipAction(paymentId: string): Promise<{ o
     daily: isDaily ? { days: points, rate: Number(p.rate), amount } : undefined,
     gross: amount,
     cashAdvance,
+    cashAdvanceNote: p.cashAdvanceNote,
     net: amount - cashAdvance,
     quotaItems,
   });
@@ -213,6 +216,11 @@ export async function markDailyPaidAction(_prev: SetRateState, formData: FormDat
   if (daysToPay <= 0) return { status: "error", message: "Enter a number of days (more than 0)." };
   const amountToPay = round2(daysToPay * row.dailyRate);
 
+  const [u] = await db
+    .select({ cashAdvanceNote: users.cashAdvanceNote })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   const outstandingCA = row.cashAdvance;
   const appliedCA = Math.min(Math.max(0, outstandingCA), amountToPay);
 
@@ -224,14 +232,16 @@ export async function markDailyPaidAction(_prev: SetRateState, formData: FormDat
     amount: amountToPay,
     rate: row.dailyRate,
     cashAdvance: appliedCA,
+    cashAdvanceNote: u?.cashAdvanceNote ?? null,
     from,
     to,
     paidBy: actor.id,
   });
   if (appliedCA > 0) {
+    const remainingCA = outstandingCA - appliedCA;
     await db
       .update(users)
-      .set({ cashAdvance: (outstandingCA - appliedCA).toFixed(2) })
+      .set({ cashAdvance: remainingCA.toFixed(2), ...(remainingCA <= 0 ? { cashAdvanceNote: null } : {}) })
       .where(eq(users.id, userId));
   }
   revalidatePath("/payroll");
@@ -244,13 +254,17 @@ export async function setUserCashAdvanceAction(_prev: SetRateState, formData: Fo
 
   const userId = String(formData.get("userId") ?? "");
   const amount = Number(String(formData.get("rate") ?? "").trim());
+  const note = String(formData.get("note") ?? "").trim();
 
   if (!userId) return { status: "error", message: "Missing staff id." };
   if (!Number.isFinite(amount) || amount < 0) {
     return { status: "error", message: "Enter a valid amount (0 or more)." };
   }
 
-  await db.update(users).set({ cashAdvance: amount.toFixed(2) }).where(eq(users.id, userId));
+  await db
+    .update(users)
+    .set({ cashAdvance: amount.toFixed(2), cashAdvanceNote: note || null })
+    .where(eq(users.id, userId));
   revalidatePath("/payroll");
   return { status: "ok", message: "Saved." };
 }
@@ -326,7 +340,11 @@ export async function markQuotaPaidAction(
 
   // Recover the staff member's cash advance from this payout, up to the amount
   // being paid, and reduce their outstanding CA so it isn't deducted again.
-  const [u] = await db.select({ cashAdvance: users.cashAdvance }).from(users).where(eq(users.id, userId)).limit(1);
+  const [u] = await db
+    .select({ cashAdvance: users.cashAdvance, cashAdvanceNote: users.cashAdvanceNote })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   const outstandingCA = Number(u?.cashAdvance ?? 0);
   const appliedCA = Math.min(Math.max(0, outstandingCA), amountToPay);
 
@@ -337,15 +355,18 @@ export async function markQuotaPaidAction(
     amount: amountToPay,
     rate: row.rate,
     cashAdvance: appliedCA,
+    cashAdvanceNote: u?.cashAdvanceNote ?? null,
     items,
     from,
     to,
     paidBy: actor.id,
   });
   if (appliedCA > 0) {
+    const remainingCA = outstandingCA - appliedCA;
     await db
       .update(users)
-      .set({ cashAdvance: (outstandingCA - appliedCA).toFixed(2) })
+      // Clear the description once the advance is fully recovered.
+      .set({ cashAdvance: remainingCA.toFixed(2), ...(remainingCA <= 0 ? { cashAdvanceNote: null } : {}) })
       .where(eq(users.id, userId));
   }
   revalidatePath("/payroll");
@@ -378,7 +399,11 @@ export async function markHourlyPaidAction(_prev: SetRateState, formData: FormDa
   if (!row) return { status: "error", message: "No hourly staff found." };
   if (row.hoursUnpaid <= 0) return { status: "error", message: "No unpaid hours to record." };
 
-  const [u] = await db.select({ cashAdvance: users.cashAdvance }).from(users).where(eq(users.id, userId)).limit(1);
+  const [u] = await db
+    .select({ cashAdvance: users.cashAdvance, cashAdvanceNote: users.cashAdvanceNote })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   const outstandingCA = Number(u?.cashAdvance ?? 0);
   const appliedCA = Math.min(Math.max(0, outstandingCA), row.salary);
 
@@ -390,14 +415,16 @@ export async function markHourlyPaidAction(_prev: SetRateState, formData: FormDa
     amount: row.salary,
     rate: row.rate,
     cashAdvance: appliedCA,
+    cashAdvanceNote: u?.cashAdvanceNote ?? null,
     from,
     to,
     paidBy: actor.id,
   });
   if (appliedCA > 0) {
+    const remainingCA = outstandingCA - appliedCA;
     await db
       .update(users)
-      .set({ cashAdvance: (outstandingCA - appliedCA).toFixed(2) })
+      .set({ cashAdvance: remainingCA.toFixed(2), ...(remainingCA <= 0 ? { cashAdvanceNote: null } : {}) })
       .where(eq(users.id, userId));
   }
   revalidatePath("/payroll");

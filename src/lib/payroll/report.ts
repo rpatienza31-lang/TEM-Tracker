@@ -74,6 +74,7 @@ export type PayslipRow = {
   quotaCarried: number;
   gross: number;
   cashAdvance: number;
+  cashAdvanceNote: string | null;
   net: number;
 };
 
@@ -116,6 +117,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
         hourlyRate: users.hourlyRate,
         cycleRate: users.cycleRate,
         cashAdvance: users.cashAdvance,
+        cashAdvanceNote: users.cashAdvanceNote,
       })
       .from(users),
     // Fixed-daily staff (time-only): unpaid days × daily rate for the period.
@@ -125,6 +127,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
   const hourlyRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.hourlyRate)]));
   const cycleRateByUser = new Map(rateRows.map((r) => [r.id, Number(r.cycleRate)]));
   const cashAdvanceByUser = new Map(rateRows.map((r) => [r.id, Number(r.cashAdvance)]));
+  const cashAdvanceNoteByUser = new Map(rateRows.map((r) => [r.id, r.cashAdvanceNote ?? null]));
   const nameByUser = new Map(rateRows.map((r) => [r.id, r.fullName]));
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -243,6 +246,7 @@ export async function getPayrollReport(from: string, to: string): Promise<Payrol
         quotaCarried: round2(e.quotaCarried),
         gross,
         cashAdvance,
+        cashAdvanceNote: cashAdvanceNoteByUser.get(userId) ?? null,
         net: gross - cashAdvance,
       };
     })
