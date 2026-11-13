@@ -195,6 +195,47 @@ export async function addAttendanceDayAction(userId: string, date: string): Prom
   return { ok: true };
 }
 
+/**
+ * Owner adds a missing clock-in/out day for an hourly/quota staffer who forgot
+ * to clock in and out. Inserts an 8am–5pm PH session already approved as
+ * "Hourly (paid)" so it appears in the approved history, where the owner then
+ * corrects the times (hours recompute) or moves it to "Attendance only".
+ * Refuses a duplicate date.
+ */
+export async function addHourlySessionAction(userId: string, date: string): Promise<TimeLogActionResult> {
+  const actor = await requireUser();
+  if (actor.role !== "owner") return { ok: false, message: "Only the owner can add a session." };
+  if (!userId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, message: "Pick a valid date." };
+
+  const [target] = await db.select({ role: users.role }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!target) return { ok: false, message: "Staff member not found." };
+  if (target.role === "staff") {
+    return { ok: false, message: "Use the daily-staff attendance control for daily staff." };
+  }
+
+  const [existing] = await db
+    .select({ id: timeLogs.id })
+    .from(timeLogs)
+    .where(and(eq(timeLogs.userId, userId), eq(timeLogs.workDate, date), isNotNull(timeLogs.clockIn)))
+    .limit(1);
+  if (existing) return { ok: false, message: "That day already has a session." };
+
+  await db.insert(timeLogs).values({
+    userId,
+    workDate: date,
+    clockIn: new Date(`${date}T08:00:00+08:00`),
+    clockOut: new Date(`${date}T17:00:00+08:00`),
+    hours: "9.00",
+    note: "Manual entry (added by owner)",
+    approvedBy: actor.id,
+    approvedAt: new Date(),
+    countsHourly: true,
+  });
+
+  revalidatePath("/payroll");
+  return { ok: true };
+}
+
 export async function deleteTimeLogAction(logId: string): Promise<TimeLogActionResult> {
   const actor = await requireUser();
 

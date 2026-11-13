@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RateCell } from "./rate-cell";
 import { editTimeLogTimesAction, markHourlyPaidAction, type SetRateState } from "./actions";
-import { reclassifyTimeLogAction, removeSessionAction } from "@/lib/time-logs/actions";
+import { addHourlySessionAction, reclassifyTimeLogAction, removeSessionAction } from "@/lib/time-logs/actions";
 
 /**
  * Owner control to fix a mis-approval: move a session that was approved as
@@ -57,6 +57,50 @@ function RemoveSessionButton({ logId }: { logId: string }) {
     >
       ✕ Remove
     </button>
+  );
+}
+
+/**
+ * Owner control to add a day a staffer forgot to clock in/out. Inserts an
+ * 8am–5pm session (approved as hourly) that then appears in the list above,
+ * where the owner corrects the times.
+ */
+function AddDayForm({ userId }: { userId: string }) {
+  const [pending, startTransition] = useTransition();
+  const [date, setDate] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
+      <span className="text-xs text-muted-foreground">Forgot to clock in/out? Add the day:</span>
+      <Input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="h-8 w-40"
+        aria-label="Date to add"
+      />
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={pending || !date}
+        onClick={() => {
+          setError(null);
+          startTransition(async () => {
+            const res = await addHourlySessionAction(userId, date);
+            if (res.ok) {
+              setDate("");
+              router.refresh();
+            } else {
+              setError(res.message ?? "Something went wrong.");
+            }
+          });
+        }}
+      >
+        {pending ? "Adding…" : "Add day"}
+      </Button>
+      {error && <span className="text-xs text-destructive">{error}</span>}
+    </div>
   );
 }
 
@@ -240,7 +284,7 @@ export function HourlyStaffTable({
               <TableRow>
                 <TableCell>{row.fullName}</TableCell>
                 <TableCell>
-                  {list.length > 0 ? (
+                  {list.length > 0 || isOwner ? (
                     <button
                       type="button"
                       onClick={() => setOpenId(isOpen ? null : row.userId)}
@@ -304,6 +348,9 @@ export function HourlyStaffTable({
                               <RemoveSessionButton logId={s.id} />
                             </div>
                           ))}
+                          <div className="pt-2">
+                            <AddDayForm userId={row.userId} />
+                          </div>
                         </div>
                       ) : (
                         <div className="overflow-x-auto">
