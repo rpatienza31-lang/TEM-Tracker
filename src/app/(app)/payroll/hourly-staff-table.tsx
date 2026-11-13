@@ -72,7 +72,9 @@ function AddDayForm({ userId }: { userId: string }) {
   const router = useRouter();
   return (
     <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-2">
-      <span className="text-xs text-muted-foreground">Forgot to clock in/out? Add the day:</span>
+      <span className="text-xs text-muted-foreground">
+        Forgot to clock in/out, or a split shift (came back same day)? Add a session:
+      </span>
       <Input
         type="date"
         value={date}
@@ -97,7 +99,7 @@ function AddDayForm({ userId }: { userId: string }) {
           });
         }}
       >
-        {pending ? "Adding…" : "Add day"}
+        {pending ? "Adding…" : "Add session"}
       </Button>
       {error && <span className="text-xs text-destructive">{error}</span>}
     </div>

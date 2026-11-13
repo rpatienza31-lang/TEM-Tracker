@@ -196,11 +196,13 @@ export async function addAttendanceDayAction(userId: string, date: string): Prom
 }
 
 /**
- * Owner adds a missing clock-in/out day for an hourly/quota staffer who forgot
- * to clock in and out. Inserts an 8am–5pm PH session already approved as
- * "Hourly (paid)" so it appears in the approved history, where the owner then
- * corrects the times (hours recompute) or moves it to "Attendance only".
- * Refuses a duplicate date.
+ * Owner adds a clock-in/out session for an hourly/quota staffer — for a day
+ * they forgot to clock in and out, OR a second session on a day they already
+ * worked (a split shift: clocked out mid-shift and came back). Inserts an
+ * 8am–5pm PH session already approved as "Hourly (paid)" so it appears in the
+ * approved history, where the owner then corrects the times (hours recompute)
+ * or moves it to "Attendance only". Multiple sessions on the same date are
+ * allowed, so split shifts can each be recorded.
  */
 export async function addHourlySessionAction(userId: string, date: string): Promise<TimeLogActionResult> {
   const actor = await requireUser();
@@ -212,13 +214,6 @@ export async function addHourlySessionAction(userId: string, date: string): Prom
   if (target.role === "staff") {
     return { ok: false, message: "Use the daily-staff attendance control for daily staff." };
   }
-
-  const [existing] = await db
-    .select({ id: timeLogs.id })
-    .from(timeLogs)
-    .where(and(eq(timeLogs.userId, userId), eq(timeLogs.workDate, date), isNotNull(timeLogs.clockIn)))
-    .limit(1);
-  if (existing) return { ok: false, message: "That day already has a session." };
 
   await db.insert(timeLogs).values({
     userId,
