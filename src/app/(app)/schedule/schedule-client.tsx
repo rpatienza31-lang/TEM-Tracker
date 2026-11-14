@@ -467,8 +467,9 @@ function ScheduleCard({
       )}
 
       {/* Who changed this on the schedule — revealed on click (button appears on
-          hover). Admins/owner only. */}
-      {isAdmin && item.activity.length > 0 && (
+          hover). Admins/owner only. Shown even with no history yet, so it's
+          discoverable; older items simply have nothing logged. */}
+      {isAdmin && (
         <div className="mt-1.5 border-t border-border/60 pt-1">
           <button
             type="button"
@@ -480,6 +481,9 @@ function ScheduleCard({
           </button>
           {histOpen && (
             <ul className="mt-1 flex flex-col gap-1">
+              {item.activity.length === 0 && (
+                <li className="text-[10px] italic text-muted-foreground">No changes recorded yet.</li>
+              )}
               {item.activity.map((a, i) => {
                 const meta = ACTIVITY_META[a.action] ?? { label: a.action, emoji: "•" };
                 return (
