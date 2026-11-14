@@ -261,6 +261,7 @@ function AvailabilityCell({
 function ScheduleCard({
   item,
   isAdmin,
+  showHistory,
   overdue,
   today,
   onReschedule,
@@ -270,6 +271,7 @@ function ScheduleCard({
 }: {
   item: ScheduleItem;
   isAdmin: boolean;
+  showHistory: boolean;
   overdue: boolean;
   today: string;
   onReschedule: (item: ScheduleItem, date: string | null) => void;
@@ -467,9 +469,9 @@ function ScheduleCard({
       )}
 
       {/* Who changed this on the schedule — revealed on click (button appears on
-          hover). Admins/owner only. Shown even with no history yet, so it's
+          hover). Owner/admin/editor. Shown even with no history yet, so it's
           discoverable; older items simply have nothing logged. */}
-      {isAdmin && (
+      {showHistory && (
         <div className="mt-1.5 border-t border-border/60 pt-1">
           <button
             type="button"
@@ -877,6 +879,8 @@ export function ScheduleClient({
     return m;
   }, [tasks]);
   const canManageTask = (ownerId: string) => currentUserRole === "owner" || ownerId === currentUserId;
+  // Who can see the "Who changed this?" history — owner, admin, and editors.
+  const canSeeHistory = ["owner", "admin", "editor"].includes(currentUserRole);
 
   // Columns: staff with work or a day-off marker in the window (or every active
   // staffer when "Show all staff" is on, so anyone can be marked off), plus an
@@ -1339,6 +1343,7 @@ export function ScheduleClient({
                                   key={it.id}
                                   item={it}
                                   isAdmin={isAdmin}
+                                  showHistory={canSeeHistory}
                                   overdue={(past || it.overdue) && it.status !== "approved" && it.status !== "uploaded"}
                                   today={today}
                                   onReschedule={reschedule}
