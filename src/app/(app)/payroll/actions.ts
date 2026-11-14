@@ -509,7 +509,11 @@ export async function reconcileEditorAction(_prev: SetRateState, formData: FormD
     if (!Number.isFinite(points) || points < 0) {
       return { status: "error", message: "Current points must be 0 or more." };
     }
-    const delta = Math.round((points - row.pointsUnpaid) * 100) / 100;
+    // Use the UNCLAMPED balance (earned − paid), which can be negative when the
+    // editor was overpaid. The displayed unpaid is clamped at 0, so computing
+    // the delta from it would undershoot the target by the overpaid amount.
+    const currentBalance = Math.round((row.totalPoints - row.pointsPaid) * 100) / 100;
+    const delta = Math.round((points - currentBalance) * 100) / 100;
     if (delta !== 0) {
       await recordPointAdjustment({ editorId, points: delta, note: "Reconciliation baseline" });
     }
