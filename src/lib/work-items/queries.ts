@@ -164,6 +164,10 @@ export type ScheduleEntry = {
   termName: string | null; // catalog term; null for COT
   title: string; // catalog: subject; cot: customer name
   subtitle: string; // catalog: "Grade X · Week Y"; cot: subject · topic
+  // Points this deliverable is worth on approval — so the schedule can show how
+  // many points a day of assigned work could earn. Catalog uses its stored
+  // points value; each COT deliverable is 0.5.
+  points: number;
   scheduleNote: string | null;
   cotWorkKind: "new" | "align" | null; // COT only: brand-new work vs. alignment
   // The paired deliverable (DLP↔PPT) so, e.g., a PPT editor sees who has the
@@ -220,6 +224,7 @@ export async function getScheduleItems(
       weekNumber: workItems.weekNumber,
       subjectName: subjects.name,
       subjectCode: subjects.shortCode,
+      pointsValue: workItems.pointsValue,
       scheduleNote: workItems.scheduleNote,
       counterpartType: sibling.type,
       counterpartAssigneeName: siblingUser.fullName,
@@ -255,6 +260,7 @@ export async function getScheduleItems(
     termName: r.termName,
     title: r.subjectCode || r.subjectName,
     subtitle: `Grade ${r.grade} · Week ${r.weekNumber}`,
+    points: Number(r.pointsValue ?? 0),
     scheduleNote: r.scheduleNote,
     cotWorkKind: null,
     counterpartType: r.counterpartType ?? null,
@@ -322,6 +328,8 @@ export async function getScheduleItems(
       termName: null,
       title: r.customerName,
       subtitle: parts.length ? parts.join(" · ") : "Custom order",
+      // Each COT deliverable (DLP or PPT) is worth 0.5 points on approval.
+      points: 0.5,
       scheduleNote: r.scheduleNote,
       cotWorkKind: r.workKind,
       counterpartType: r.counterpartType ?? null,

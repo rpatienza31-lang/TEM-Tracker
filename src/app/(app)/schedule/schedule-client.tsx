@@ -74,6 +74,11 @@ function colorFor(id: string): string {
   return EDITOR_COLORS[h % EDITOR_COLORS.length];
 }
 
+// Points formatter: whole numbers show plain (3), halves keep one decimal (2.5).
+function fmtPts(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
@@ -882,6 +887,17 @@ export function ScheduleClient({
     return m;
   }, [filteredItems]);
 
+  // Total potential points per column in the whole window, so the owner sees at
+  // a glance how much each editor could earn from everything assigned to them.
+  const perColumnPoints = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const it of filteredItems) {
+      const col = it.assigneeId ?? UNASSIGNED;
+      m.set(col, Math.round(((m.get(col) ?? 0) + it.points) * 100) / 100);
+    }
+    return m;
+  }, [filteredItems]);
+
   const rangeLabel = `${rangeFmt.format(new Date(`${from}T00:00:00`))} – ${rangeFmt.format(new Date(`${dates[dates.length - 1]}T00:00:00`))}`;
 
   return (
@@ -1163,6 +1179,11 @@ export function ScheduleClient({
                           </div>
                           <div className="text-[11px] text-muted-foreground">
                             {perColumnCount.get(c.id) ?? 0} item{(perColumnCount.get(c.id) ?? 0) === 1 ? "" : "s"}
+                            {(perColumnPoints.get(c.id) ?? 0) > 0 && (
+                              <span className="ml-1 font-semibold text-foreground">
+                                · {fmtPts(perColumnPoints.get(c.id) ?? 0)} pts
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1242,6 +1263,24 @@ export function ScheduleClient({
                             <div className="min-h-[1.5rem]" />
                           ) : (
                             <div className="flex flex-col gap-2">
+                              {/* Potential points this editor could earn from
+                                  everything assigned on this day. */}
+                              {cell.length > 0 &&
+                                (() => {
+                                  const cellPoints = Math.round(cell.reduce((s, it) => s + it.points, 0) * 100) / 100;
+                                  return cellPoints > 0 ? (
+                                    <div
+                                      className="flex items-center justify-between rounded-md border border-dashed px-1.5 py-0.5 text-[11px] font-semibold"
+                                      style={{ borderColor: `${color}66`, color }}
+                                      title="Potential points from everything assigned to this editor on this day"
+                                    >
+                                      <span>⭐ {fmtPts(cellPoints)} pts</span>
+                                      <span className="font-normal text-muted-foreground">
+                                        {cell.length} item{cell.length === 1 ? "" : "s"}
+                                      </span>
+                                    </div>
+                                  ) : null;
+                                })()}
                               {cell.map((it) => (
                                 <ScheduleCard
                                   key={it.id}
