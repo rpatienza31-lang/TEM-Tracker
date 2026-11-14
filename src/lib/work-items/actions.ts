@@ -266,7 +266,10 @@ export async function setAvailabilityRangeAction(
 export async function claimItemAction(itemId: string): Promise<TransitionResult> {
   const actor = await requireUser();
   const result = await transitionWorkItem({ action: "claim", itemId, actor });
-  if (result.ok) refresh();
+  if (result.ok) {
+    await logScheduleEvent({ itemKind: "catalog", itemId, actorId: actor.id, action: "claimed", detail: actor.fullName });
+    refresh();
+  }
   return result;
 }
 

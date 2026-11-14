@@ -3,7 +3,7 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { scheduleEvents, users } from "@/db/schema";
 
-export type ScheduleAction = "scheduled" | "unscheduled" | "assigned" | "revision";
+export type ScheduleAction = "scheduled" | "unscheduled" | "assigned" | "claimed" | "revision";
 export type ScheduleItemKind = "catalog" | "cot";
 
 /**

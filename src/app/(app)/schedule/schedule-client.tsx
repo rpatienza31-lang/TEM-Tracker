@@ -61,6 +61,7 @@ const ACTIVITY_META: Record<string, { label: string; emoji: string }> = {
   scheduled: { label: "Scheduled", emoji: "📅" },
   unscheduled: { label: "Removed from schedule", emoji: "📅" },
   assigned: { label: "Assigned editor", emoji: "👤" },
+  claimed: { label: "Claimed", emoji: "✋" },
   revision: { label: "Sent back (revision)", emoji: "🔴" },
 };
 const activityFmt = new Intl.DateTimeFormat("en-PH", {

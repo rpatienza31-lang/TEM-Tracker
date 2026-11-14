@@ -131,7 +131,10 @@ export async function createCotOrderAction(_prev: NewCotState, formData: FormDat
 export async function claimCotAction(itemId: string): Promise<CotResult> {
   const user = await requireUser();
   const result = await claimCotItem(itemId, actorOf(user));
-  if (result.ok) revalidatePath("/cot");
+  if (result.ok) {
+    await logScheduleEvent({ itemKind: "cot", itemId, actorId: user.id, action: "claimed", detail: user.fullName });
+    revalidatePath("/cot");
+  }
   return result;
 }
 
