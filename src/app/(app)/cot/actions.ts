@@ -15,6 +15,7 @@ import {
   releaseCotItem,
   requestCotRevisionItem,
   setCotOrderType,
+  setCotRedAlert,
   submitCotItem,
   unapproveCotItem,
   updateCotOrderDetails,
@@ -38,6 +39,20 @@ export async function archiveCotOrderAction(orderId: string): Promise<CotResult>
     revalidatePath("/cot/library");
     revalidatePath("/schedule");
     revalidatePath("/review");
+  }
+  return result;
+}
+
+/**
+ * Raises or clears a red alert on a COT order (sales/admin/owner). Revalidates
+ * the COT page and the dashboard so the banner and bell count update.
+ */
+export async function setCotRedAlertAction(orderId: string, on: boolean, note: string): Promise<CotResult> {
+  const user = await requireUser();
+  const result = await setCotRedAlert(orderId, on, note, actorOf(user));
+  if (result.ok) {
+    revalidatePath("/cot");
+    revalidatePath("/");
   }
   return result;
 }

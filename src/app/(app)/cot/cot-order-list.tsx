@@ -10,10 +10,17 @@ import { cn } from "@/lib/utils";
 import { type CotOrderView } from "@/lib/cot/queries";
 import { type PriorityLevel } from "@/lib/cot/deadline";
 import { CotItemControls, type EditorOption } from "./cot-item-controls";
-import { archiveCotOrdersAction } from "./actions";
+import { archiveCotOrdersAction, setCotRedAlertAction } from "./actions";
 import { CotOrderEdit } from "./cot-order-edit";
 
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+const alertTimeFmt = new Intl.DateTimeFormat("en-PH", {
+  timeZone: "Asia/Manila",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
 
 /**
  * Copies a value to the clipboard without toggling the surrounding clickable
@@ -41,6 +48,103 @@ function CopyButton({ value, label }: { value: string; label?: string }) {
     >
       {copied ? "Copied ✓" : "Copy"}
     </button>
+  );
+}
+
+/**
+ * Raise or clear a 🚨 red alert on a COT order — a customer urgently waiting for
+ * their files. Sales/admin/owner only. Raising asks for a short reason; clearing
+ * confirms. Lives in the card header, so it stops click-through to the expander.
+ */
+function RedAlertControl({ order, canRedAlert }: { order: CotOrderView; canRedAlert: boolean }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [formOpen, setFormOpen] = useState(false);
+  const [note, setNote] = useState("");
+
+  const raise = () => {
+    startTransition(async () => {
+      const res = await setCotRedAlertAction(order.id, true, note);
+      if (res.ok) {
+        setFormOpen(false);
+        setNote("");
+        router.refresh();
+      }
+    });
+  };
+  const clear = () => {
+    if (!window.confirm("Clear the red alert for this customer?")) return;
+    startTransition(async () => {
+      const res = await setCotRedAlertAction(order.id, false, "");
+      if (res.ok) router.refresh();
+    });
+  };
+
+  if (order.redAlert) {
+    return (
+      <button
+        type="button"
+        disabled={pending || !canRedAlert}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (canRedAlert) clear();
+        }}
+        title={canRedAlert ? "Red alert — click to clear" : "Red alert"}
+        className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-60"
+      >
+        🚨 RED ALERT{canRedAlert && <span className="font-normal opacity-80">✕</span>}
+      </button>
+    );
+  }
+
+  if (!canRedAlert) return null;
+
+  if (!formOpen) {
+    return (
+      <button
+        type="button"
+        disabled={pending}
+        onClick={(e) => {
+          e.stopPropagation();
+          setFormOpen(true);
+        }}
+        title="Flag this customer as urgently waiting for files"
+        className="inline-flex items-center gap-1 rounded-full border border-red-300 px-2 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+      >
+        🚨 Red alert
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="flex items-center gap-1"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <Input
+        autoFocus
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Why urgent? (optional)"
+        className="h-7 w-48 text-xs"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") raise();
+          if (e.key === "Escape") setFormOpen(false);
+        }}
+      />
+      <button
+        type="button"
+        disabled={pending}
+        onClick={raise}
+        className="rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-60"
+      >
+        {pending ? "…" : "Flag"}
+      </button>
+      <button type="button" onClick={() => setFormOpen(false)} className="text-xs text-muted-foreground underline">
+        cancel
+      </button>
+    </div>
   );
 }
 
@@ -127,12 +231,14 @@ export function CotOrderList({
   isAdmin,
   isOwner,
   canClaim,
+  canRedAlert,
 }: {
   orders: CotOrderView[];
   editors: EditorOption[];
   isAdmin: boolean;
   isOwner: boolean;
   canClaim: boolean;
+  canRedAlert: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [timeFilter, setTimeFilter] = useState<Set<TimeKey>>(new Set());
@@ -243,8 +349,77 @@ export function CotOrderList({
   const assignCount = (k: AssignKey) =>
     k === "none_assigned" ? counts.none_assigned : k === "partial" ? counts.partial : counts.assigned;
 
+  // Red-alert clients — a customer urgently waiting for files. Shown in a bold
+  // panel at the top so admins can prioritize them at a glance.
+  const redAlertOrders = useMemo(() => orders.filter((o) => o.redAlert), [orders]);
+
+  const openOrder = (id: string) => {
+    setExpanded((prev) => new Set(prev).add(id));
+    // Let the card render expanded, then bring it into view.
+    setTimeout(() => document.getElementById(`cot-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  };
+
+  const clearAlert = (id: string) => {
+    if (!window.confirm("Clear the red alert for this customer?")) return;
+    startArchive(async () => {
+      const res = await setCotRedAlertAction(id, false, "");
+      if (res.ok) router.refresh();
+    });
+  };
+
   return (
     <div className="flex flex-col gap-4">
+      {redAlertOrders.length > 0 && (
+        <div className="rounded-xl border-2 border-red-500 bg-red-50 p-3 shadow-sm dark:bg-red-950/30">
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-red-700 dark:text-red-300">
+            🚨 Red alert — {redAlertOrders.length} customer{redAlertOrders.length === 1 ? "" : "s"} urgently waiting for files
+          </div>
+          <ul className="flex flex-col divide-y divide-red-200/70 dark:divide-red-900/50">
+            {redAlertOrders.map((o) => {
+              const pendingItems = o.items.filter((i) => i.status !== "approved");
+              return (
+                <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
+                  <span className="font-semibold">{o.customerName}</span>
+                  <span className="text-muted-foreground">
+                    {[o.grade ? `Grade ${o.grade}` : null, o.subjectName, o.topic].filter(Boolean).join(" · ") || "—"}
+                  </span>
+                  <Badge className={PRIORITY_BADGE[o.priority]}>{daysLabel(o.priority, o.daysLeft)}</Badge>
+                  <span className="text-xs text-muted-foreground">Deadline {o.deadline}</span>
+                  {pendingItems.length > 0 && (
+                    <span className="flex flex-wrap gap-1">
+                      {pendingItems.map((i) => (
+                        <Badge key={i.id} variant="outline" className="border-red-300 text-xs font-normal text-red-700 dark:text-red-300">
+                          {shortType(i.type)}: {i.assigneeName ?? "Unassigned"}
+                        </Badge>
+                      ))}
+                    </span>
+                  )}
+                  {o.redAlertNote && (
+                    <span className="w-full text-xs italic text-red-700 dark:text-red-300">🚨 {o.redAlertNote}</span>
+                  )}
+                  <span className="flex items-center gap-2 text-xs">
+                    {o.redAlertByName && (
+                      <span className="text-muted-foreground">
+                        flagged by {o.redAlertByName}
+                        {o.redAlertAt ? ` · ${alertTimeFmt.format(new Date(o.redAlertAt))}` : ""}
+                      </span>
+                    )}
+                    <button type="button" onClick={() => openOrder(o.id)} className="font-medium text-primary underline hover:no-underline">
+                      Open
+                    </button>
+                    {canRedAlert && (
+                      <button type="button" onClick={() => clearAlert(o.id)} className="text-muted-foreground underline hover:text-foreground">
+                        Clear
+                      </button>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
       {/* Priority summary — click a tile to toggle that filter */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map((t) => (
@@ -412,9 +587,12 @@ export function CotOrderList({
         return (
           <Card
             key={o.id}
+            id={`cot-${o.id}`}
             className={cn(
               `border-l-4 ${PRIORITY_CLASS[o.priority]}`,
               o.workKind === "align" && "ring-1 ring-orange-400 dark:ring-orange-500",
+              // Red alert wins the visual — a bold red ring around the whole card.
+              o.redAlert && "ring-2 ring-red-500 dark:ring-red-500",
             )}
           >
             {/* Collapsed summary row — click to expand full details */}
@@ -469,10 +647,17 @@ export function CotOrderList({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <RedAlertControl order={o} canRedAlert={canRedAlert} />
                   <Badge className={PRIORITY_BADGE[o.priority]}>{daysLabel(o.priority, o.daysLeft)}</Badge>
                   <span className="text-xs text-muted-foreground">Deadline {o.deadline}</span>
                 </div>
               </div>
+              {o.redAlert && o.redAlertNote && (
+                <p className="mt-1 flex items-start gap-1 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  <span aria-hidden>🚨</span>
+                  <span className="whitespace-pre-wrap">{o.redAlertNote}</span>
+                </p>
+              )}
               <p className={`text-muted-foreground ${isOpen ? "text-base" : "text-sm"}`}>
                 {[o.grade ? `Grade ${o.grade}` : null, o.subjectName, o.topic].filter(Boolean).join(" · ") || "—"}
               </p>

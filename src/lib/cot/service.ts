@@ -15,6 +15,39 @@ function isAdmin(role: string) {
   return role === "owner" || role === "admin";
 }
 
+/** Sales, admins and the owner can raise or clear a red alert on a COT order. */
+function canRedAlert(role: string) {
+  return role === "owner" || role === "admin" || role === "sales";
+}
+
+/**
+ * Raises or clears a "red alert" on a COT order — a customer urgently following
+ * up for their files. Sales/admin/owner only. When raising, stores the reason
+ * and who/when; when clearing, wipes them.
+ */
+export async function setCotRedAlert(
+  orderId: string,
+  on: boolean,
+  note: string,
+  actor: CotActor,
+): Promise<CotResult> {
+  if (!canRedAlert(actor.role)) {
+    return { ok: false, message: "Only sales, admins, or the owner can set a red alert." };
+  }
+  const [order] = await db.select({ id: customOrders.id }).from(customOrders).where(eq(customOrders.id, orderId)).limit(1);
+  if (!order) return { ok: false, message: "Order not found." };
+
+  await db
+    .update(customOrders)
+    .set(
+      on
+        ? { redAlert: true, redAlertNote: note.trim() || null, redAlertBy: actor.id, redAlertAt: new Date() }
+        : { redAlert: false, redAlertNote: null, redAlertBy: null, redAlertAt: null },
+    )
+    .where(eq(customOrders.id, orderId));
+  return { ok: true };
+}
+
 export type CreateCotOrderInput = {
   externalId?: string | null;
   customerName: string;

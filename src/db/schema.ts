@@ -383,6 +383,13 @@ export const customOrders = pgTable("custom_orders", {
   deadline: date("deadline").notNull(),
   // Free-text note shown on the Project Schedule card for this order.
   scheduleNote: text("schedule_note"),
+  // Red alert: a customer urgently following up for their files. Sales (or an
+  // admin/owner) raises it; admins are notified and it's prioritized. The note
+  // says why, and we keep who/when raised it.
+  redAlert: boolean("red_alert").notNull().default(false),
+  redAlertNote: text("red_alert_note"),
+  redAlertBy: uuid("red_alert_by").references(() => users.id),
+  redAlertAt: timestamp("red_alert_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -23,7 +23,7 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
 import { terms } from "@/db/schema";
 import { getDashboardCounts, getMyWorkItems } from "@/lib/work-items/queries";
-import { getMyCotItems } from "@/lib/cot/queries";
+import { getMyCotItems, getActiveRedAlertCount } from "@/lib/cot/queries";
 import { getProductivityStats, type EditorProductivity } from "@/lib/quota/productivity";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -98,13 +98,14 @@ export default async function DashboardPage() {
     );
   }
 
-  const [counts, stats, myClaimed, mySubmitted, myRevisions, myCot] = await Promise.all([
+  const [counts, stats, myClaimed, mySubmitted, myRevisions, myCot, redAlertCount] = await Promise.all([
     getDashboardCounts(activeTerm?.id),
     getProductivityStats(),
     getMyWorkItems(user.id, ["claimed"]),
     getMyWorkItems(user.id, ["in_review"]),
     getMyWorkItems(user.id, ["revision"]),
     getMyCotItems(user.id, ["claimed", "in_review", "revision"]),
+    getActiveRedAlertCount(),
   ]);
   // Rank by cycle first (whoever is on the most cycles leads), then by unpaid
   // points within the same cycle.
@@ -120,6 +121,24 @@ export default async function DashboardPage() {
         subtitle={activeTerm ? `Active term · ${activeTerm.name}` : "No active term — configure one in Admin / Setup"}
         today={today}
       />
+
+      {redAlertCount > 0 && (
+        <Link
+          href="/cot"
+          className="flex items-center gap-3 rounded-xl border-2 border-red-500 bg-red-50 px-4 py-3 shadow-sm transition-colors hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-950/50"
+        >
+          <span className="text-2xl" aria-hidden>🚨</span>
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-red-700 dark:text-red-300">
+              {redAlertCount} red-alert COT customer{redAlertCount === 1 ? "" : "s"} urgently waiting for files
+            </div>
+            <div className="text-xs text-red-600/80 dark:text-red-300/80">
+              Highly prioritize — tap to open the COT orders and see who&apos;s waiting.
+            </div>
+          </div>
+          <ArrowUpRight className="ml-auto h-5 w-5 shrink-0 text-red-600 dark:text-red-300" />
+        </Link>
+      )}
 
       {myAssignedTotal > 0 && (
         <section className="flex flex-col gap-3">

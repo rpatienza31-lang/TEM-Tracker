@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, desc, eq, inArray } from "drizzle-orm";
+import { aliasedTable, and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { customOrders, customOrderItems, terms, users } from "@/db/schema";
@@ -122,6 +122,11 @@ export type CotOrderView = {
   priority: PriorityLevel;
   daysLeft: number;
   completed: boolean;
+  // Red alert: customer urgently waiting for files. Flagged by sales/admin/owner.
+  redAlert: boolean;
+  redAlertNote: string | null;
+  redAlertByName: string | null;
+  redAlertAt: string | null;
   items: CotItemView[];
 };
 
@@ -142,6 +147,13 @@ async function loadOrders(orderRows: (typeof customOrders.$inferSelect)[]): Prom
     .from(customOrderItems)
     .leftJoin(assignee, eq(assignee.id, customOrderItems.assigneeId))
     .where(inArray(customOrderItems.orderId, orderRows.map((o) => o.id)));
+
+  // Resolve the names of whoever raised each red alert, in one lookup.
+  const flaggerIds = [...new Set(orderRows.map((o) => o.redAlertBy).filter((x): x is string => !!x))];
+  const flaggerRows = flaggerIds.length
+    ? await db.select({ id: users.id, fullName: users.fullName }).from(users).where(inArray(users.id, flaggerIds))
+    : [];
+  const flaggerName = new Map(flaggerRows.map((u) => [u.id, u.fullName]));
 
   const itemsByOrder = new Map<string, CotItemView[]>();
   for (const it of itemRows) {
@@ -178,6 +190,10 @@ async function loadOrders(orderRows: (typeof customOrders.$inferSelect)[]): Prom
       priority: level,
       daysLeft,
       completed: items.length > 0 && items.every((i) => i.status === "approved"),
+      redAlert: o.redAlert,
+      redAlertNote: o.redAlertNote,
+      redAlertByName: o.redAlertBy ? flaggerName.get(o.redAlertBy) ?? null : null,
+      redAlertAt: o.redAlertAt ? new Date(o.redAlertAt).toISOString() : null,
       items,
     };
   });
@@ -188,6 +204,24 @@ export async function getActiveCotOrders(): Promise<CotOrderView[]> {
   const rows = await db.select().from(customOrders).orderBy(asc(customOrders.deadline));
   const all = await loadOrders(rows);
   return all.filter((o) => !o.completed);
+}
+
+/**
+ * How many red-alert COT orders are still open (flagged, and at least one
+ * deliverable not yet approved) — drives the dashboard banner and the bell
+ * alert. An order whose work is all done no longer counts, even if still flagged.
+ */
+export async function getActiveRedAlertCount(): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(customOrders)
+    .where(
+      and(
+        eq(customOrders.redAlert, true),
+        sql`exists (select 1 from ${customOrderItems} i where i.order_id = ${customOrders.id} and i.status <> 'approved' and i.status <> 'cancelled')`,
+      ),
+    );
+  return row?.count ?? 0;
 }
 
 export type CotBackfillCandidate = {

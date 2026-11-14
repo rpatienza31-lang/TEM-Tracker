@@ -17,6 +17,8 @@ export default async function CotOrdersPage({ searchParams }: { searchParams: Pr
   const isAdmin = user.role === "owner" || user.role === "admin";
   const isOwner = user.role === "owner";
   const canClaim = user.role === "editor" || isAdmin;
+  // Sales raise red alerts (they talk to the customer); admins/owner can too.
+  const canRedAlert = isAdmin || user.role === "sales";
   const sp = await searchParams;
   const view = sp.view === "completed" ? "completed" : "open";
 
@@ -66,7 +68,14 @@ export default async function CotOrdersPage({ searchParams }: { searchParams: Pr
       {view === "open" ? (
         <>
           {isAdmin && <NewCotOrderForm />}
-          <CotOrderList orders={orders} editors={editors} isAdmin={isAdmin} isOwner={isOwner} canClaim={canClaim} />
+          <CotOrderList
+            orders={orders}
+            editors={editors}
+            isAdmin={isAdmin}
+            isOwner={isOwner}
+            canClaim={canClaim}
+            canRedAlert={canRedAlert}
+          />
         </>
       ) : (
         <CompletedCotList orders={completed} isOwner={isOwner} isAdmin={isAdmin} />

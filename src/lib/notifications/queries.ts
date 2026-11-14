@@ -3,6 +3,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db/client";
 import { notifications, workItems } from "@/db/schema";
 import { overdueCondition, atRiskCondition } from "@/lib/work-items/queries";
+import { getActiveRedAlertCount } from "@/lib/cot/queries";
 import type { AppUser } from "@/lib/auth";
 
 export async function getNotificationsForBell(userId: string, limit = 15) {
@@ -48,17 +49,31 @@ export type LiveAlert = { label: string; count: number; href: string; tone: "dan
 /** Computed on read, not stored — the "unclaimed item" / "due soon" alerts (spec §9 Phase 4). */
 export async function getLiveAlertsForUser(user: Pick<AppUser, "id" | "role">): Promise<LiveAlert[]> {
   if (user.role === "owner" || user.role === "admin") {
-    const [row] = await db
-      .select({
-        overdue: sql<number>`count(*) filter (where ${overdueCondition()})::int`,
-        atRisk: sql<number>`count(*) filter (where ${atRiskCondition()})::int`,
-      })
-      .from(workItems);
+    const [[row], redAlerts] = await Promise.all([
+      db
+        .select({
+          overdue: sql<number>`count(*) filter (where ${overdueCondition()})::int`,
+          atRisk: sql<number>`count(*) filter (where ${atRiskCondition()})::int`,
+        })
+        .from(workItems),
+      getActiveRedAlertCount(),
+    ]);
 
     const alerts: LiveAlert[] = [];
+    // Red-alert COT clients come first — these customers are actively waiting.
+    if (redAlerts > 0)
+      alerts.push({ label: "🚨 red-alert COT client(s) waiting", count: redAlerts, href: "/cot", tone: "danger" });
     if (row.overdue > 0) alerts.push({ label: "overdue", count: row.overdue, href: "/board?overdueOnly=1", tone: "danger" });
     if (row.atRisk > 0) alerts.push({ label: "unclaimed at risk", count: row.atRisk, href: "/board?availableOnly=1", tone: "warn" });
     return alerts;
+  }
+
+  // Sales see the red-alert COT clients they're responsible for flagging.
+  if (user.role === "sales") {
+    const redAlerts = await getActiveRedAlertCount();
+    return redAlerts > 0
+      ? [{ label: "🚨 red-alert COT client(s) waiting", count: redAlerts, href: "/cot", tone: "danger" }]
+      : [];
   }
 
   if (user.role === "editor") {
