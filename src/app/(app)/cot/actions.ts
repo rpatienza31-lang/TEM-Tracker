@@ -22,6 +22,10 @@ import {
   type CotResult,
 } from "@/lib/cot/service";
 import { type OrderType } from "@/lib/cot/deadline";
+import { logScheduleEvent } from "@/lib/schedule/activity";
+import { db } from "@/db/client";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 function actorOf(user: Awaited<ReturnType<typeof requireUser>>) {
   return { id: user.id, role: user.role };
@@ -179,7 +183,11 @@ export async function updateCotOrderAction(
 export async function assignCotAction(itemId: string, editorId: string): Promise<CotResult> {
   const user = await requireUser();
   const result = await assignCotItem(itemId, editorId, actorOf(user));
-  if (result.ok) revalidatePath("/cot");
+  if (result.ok) {
+    const [editor] = await db.select({ name: users.fullName }).from(users).where(eq(users.id, editorId)).limit(1);
+    await logScheduleEvent({ itemKind: "cot", itemId, actorId: user.id, action: "assigned", detail: editor?.name ?? null });
+    revalidatePath("/cot");
+  }
   return result;
 }
 
@@ -213,6 +221,7 @@ export async function requestCotRevisionAction(itemId: string): Promise<CotResul
   const user = await requireUser();
   const result = await requestCotRevisionItem(itemId, actorOf(user));
   if (result.ok) {
+    await logScheduleEvent({ itemKind: "cot", itemId, actorId: user.id, action: "revision", detail: null });
     revalidatePath("/cot");
     revalidatePath("/review");
   }

@@ -5,9 +5,10 @@ import { and, eq } from "drizzle-orm";
 
 import { requireRole, requireUser } from "@/lib/auth";
 import { db } from "@/db/client";
-import { customOrderItems, customOrders, scheduleTasks, staffAvailability, workItems } from "@/db/schema";
+import { customOrderItems, customOrders, scheduleTasks, staffAvailability, users, workItems } from "@/db/schema";
 import type { AvailabilityKind } from "@/lib/work-items/queries";
 import { deleteWorkItem, transitionWorkItem, type DeleteResult, type TransitionResult } from "@/lib/work-items/transitions";
+import { logScheduleEvent } from "@/lib/schedule/activity";
 
 type OkResult = { ok: boolean; message?: string };
 
@@ -105,10 +106,17 @@ export async function setDueDateAction(
   itemId: string,
   date: string | null,
 ): Promise<{ ok: boolean; message?: string }> {
-  await requireRole("owner", "admin");
+  const actor = await requireRole("owner", "admin");
   const value = date && date.trim() ? date.trim() : null;
   if (value && !ISO_DATE.test(value)) return { ok: false, message: "Invalid date." };
   await db.update(workItems).set({ dueDate: value, updatedAt: new Date() }).where(eq(workItems.id, itemId));
+  await logScheduleEvent({
+    itemKind: "catalog",
+    itemId,
+    actorId: actor.id,
+    action: value ? "scheduled" : "unscheduled",
+    detail: value,
+  });
   refresh();
   return { ok: true };
 }
@@ -154,10 +162,17 @@ export async function setCotItemScheduleAction(
   itemId: string,
   date: string | null,
 ): Promise<{ ok: boolean; message?: string }> {
-  await requireRole("owner", "admin");
+  const actor = await requireRole("owner", "admin");
   const value = date && date.trim() ? date.trim() : null;
   if (value && !ISO_DATE.test(value)) return { ok: false, message: "Invalid date." };
   await db.update(customOrderItems).set({ scheduledFor: value, updatedAt: new Date() }).where(eq(customOrderItems.id, itemId));
+  await logScheduleEvent({
+    itemKind: "cot",
+    itemId,
+    actorId: actor.id,
+    action: value ? "scheduled" : "unscheduled",
+    detail: value,
+  });
   refresh();
   return { ok: true };
 }
@@ -270,6 +285,18 @@ export async function assignItemAction(
     if (value && ISO_DATE.test(value)) {
       await db.update(workItems).set({ dueDate: value, updatedAt: new Date() }).where(eq(workItems.id, itemId));
     }
+    const [editor] = await db
+      .select({ name: users.fullName })
+      .from(users)
+      .where(eq(users.id, assigneeId))
+      .limit(1);
+    await logScheduleEvent({
+      itemKind: "catalog",
+      itemId,
+      actorId: actor.id,
+      action: "assigned",
+      detail: editor?.name ?? null,
+    });
     refresh();
   }
   return result;
@@ -295,7 +322,10 @@ export async function submitItemAction(
 export async function requestRevisionAction(itemId: string, note: string): Promise<TransitionResult> {
   const actor = await requireUser();
   const result = await transitionWorkItem({ action: "request_revision", itemId, actor, note });
-  if (result.ok) refresh();
+  if (result.ok) {
+    await logScheduleEvent({ itemKind: "catalog", itemId, actorId: actor.id, action: "revision", detail: note || null });
+    refresh();
+  }
   return result;
 }
 

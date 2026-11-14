@@ -188,6 +188,27 @@ export const workItemEvents = pgTable("work_item_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Who did what on the Project Schedule — scheduling (setting a deadline/day),
+ * assigning an editor, or sending back for revision — for both catalog work
+ * items and COT deliverables. Shown on hover/click of a schedule card so the
+ * owner can see which admin made each change. `itemId` is the deliverable id
+ * (work_items.id for catalog, custom_order_items.id for COT).
+ */
+export const scheduleEvents = pgTable(
+  "schedule_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    itemKind: text("item_kind").notNull(), // 'catalog' | 'cot'
+    itemId: uuid("item_id").notNull(),
+    actorId: uuid("actor_id").references(() => users.id),
+    action: text("action").notNull(), // 'scheduled' | 'unscheduled' | 'assigned' | 'revision'
+    detail: text("detail"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("schedule_events_item_idx").on(t.itemId, t.createdAt)],
+);
+
 export const quotaCycles = pgTable(
   "quota_cycles",
   {

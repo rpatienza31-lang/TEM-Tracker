@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db/client";
 import { customOrderItems, customOrders, scheduleTasks, staffAvailability, workItems, subjects, users, terms, termOfferings } from "@/db/schema";
 import type { DeliverableType, ItemStatus } from "@/lib/constants";
+import { getScheduleActivity, type ScheduleActivityEntry } from "@/lib/schedule/activity";
 
 export type AvailabilityKind = "day_off" | "vacation" | "school" | "absent";
 
@@ -177,6 +178,9 @@ export type ScheduleEntry = {
   // Real deadline is before today — kept even when the card is rolled onto
   // today's column so the "overdue" flag still shows.
   overdue: boolean;
+  // Recent Project Schedule actions on this deliverable (who scheduled/assigned/
+  // sent back for revision), newest first — shown on hover/click of the card.
+  activity: ScheduleActivityEntry[];
 };
 
 /**
@@ -266,10 +270,11 @@ export async function getScheduleItems(
     counterpartType: r.counterpartType ?? null,
     counterpartAssigneeName: r.counterpartAssigneeName ?? null,
     overdue: (r.dueDate as string) < today,
+    activity: [],
   }));
 
   // COT orders aren't tied to a term, so only include them in the combined view.
-  if (filters.termId) return catalog;
+  if (filters.termId) return attachActivity(catalog);
 
   // A COT item lands on its own scheduled_for when set, otherwise the order deadline.
   const cotPlanned = sql`coalesce(${customOrderItems.scheduledFor}, ${customOrders.deadline})`;
@@ -335,10 +340,18 @@ export async function getScheduleItems(
       counterpartType: r.counterpartType ?? null,
       counterpartAssigneeName: r.counterpartAssigneeName ?? null,
       overdue: r.plannedFor < today,
+      activity: [],
     };
   });
 
-  return [...catalog, ...cot];
+  return attachActivity([...catalog, ...cot]);
+}
+
+/** Fills each entry's `activity` from the schedule-event log, in one lookup. */
+async function attachActivity(entries: ScheduleEntry[]): Promise<ScheduleEntry[]> {
+  const activity = await getScheduleActivity(entries.map((e) => e.id));
+  for (const e of entries) e.activity = activity.get(e.id) ?? [];
+  return entries;
 }
 
 export type DailyEntry = {

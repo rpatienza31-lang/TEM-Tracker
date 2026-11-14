@@ -56,6 +56,21 @@ const AVAILABILITY_KINDS = Object.keys(AVAILABILITY) as AvailabilityKind[];
 
 const UNASSIGNED = "__unassigned__";
 
+// How each logged schedule action reads in the card's history panel.
+const ACTIVITY_META: Record<string, { label: string; emoji: string }> = {
+  scheduled: { label: "Scheduled", emoji: "📅" },
+  unscheduled: { label: "Removed from schedule", emoji: "📅" },
+  assigned: { label: "Assigned editor", emoji: "👤" },
+  revision: { label: "Sent back (revision)", emoji: "🔴" },
+};
+const activityFmt = new Intl.DateTimeFormat("en-PH", {
+  timeZone: "Asia/Manila",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 const dayNameFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", weekday: "long" });
 const dayShortFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", weekday: "short" });
 const dateFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
@@ -269,10 +284,11 @@ function ScheduleCard({
   const [reviseOpen, setReviseOpen] = useState(false);
   const [revNote, setRevNote] = useState("");
   const [revDate, setRevDate] = useState(item.dueDate || today);
+  const [histOpen, setHistOpen] = useState(false);
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-lg border pl-2.5 pr-2 py-2 shadow-sm transition-shadow hover:shadow-md",
+        "group relative overflow-hidden rounded-lg border pl-2.5 pr-2 py-2 shadow-sm transition-shadow hover:shadow-md",
         status.card,
         // Align-only COT (DLP only) gets an orange ring so it's spotted instantly.
         isAlign && "ring-2 ring-orange-400 dark:ring-orange-500",
@@ -446,6 +462,39 @@ function ScheduleCard({
               />
               <span className="text-[10px] text-muted-foreground">Click away to save.</span>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Who changed this on the schedule — revealed on click (button appears on
+          hover). Admins/owner only. */}
+      {isAdmin && item.activity.length > 0 && (
+        <div className="mt-1.5 border-t border-border/60 pt-1">
+          <button
+            type="button"
+            onClick={() => setHistOpen((o) => !o)}
+            className="text-[10px] text-muted-foreground underline decoration-dotted underline-offset-2 opacity-60 transition-opacity hover:text-foreground group-hover:opacity-100"
+            aria-expanded={histOpen}
+          >
+            ⓘ {histOpen ? "Hide history" : "Who changed this?"}
+          </button>
+          {histOpen && (
+            <ul className="mt-1 flex flex-col gap-1">
+              {item.activity.map((a, i) => {
+                const meta = ACTIVITY_META[a.action] ?? { label: a.action, emoji: "•" };
+                return (
+                  <li key={i} className="flex flex-col text-[11px] leading-snug">
+                    <span>
+                      <span aria-hidden>{meta.emoji}</span> <span className="font-medium">{meta.label}</span>
+                      {a.detail ? <span className="text-muted-foreground"> — {a.detail}</span> : null}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {a.actorName ?? "Someone"} · {activityFmt.format(new Date(a.at))}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}
