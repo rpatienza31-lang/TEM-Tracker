@@ -134,6 +134,7 @@ export async function claimCotAction(itemId: string): Promise<CotResult> {
   if (result.ok) {
     await logScheduleEvent({ itemKind: "cot", itemId, actorId: user.id, action: "claimed", detail: user.fullName });
     revalidatePath("/cot");
+    revalidatePath("/schedule");
   }
   return result;
 }
@@ -190,6 +191,7 @@ export async function assignCotAction(itemId: string, editorId: string): Promise
     const [editor] = await db.select({ name: users.fullName }).from(users).where(eq(users.id, editorId)).limit(1);
     await logScheduleEvent({ itemKind: "cot", itemId, actorId: user.id, action: "assigned", detail: editor?.name ?? null });
     revalidatePath("/cot");
+    revalidatePath("/schedule");
   }
   return result;
 }
