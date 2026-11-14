@@ -114,7 +114,11 @@ export async function getProductivityStats(range?: DateRange): Promise<EditorPro
       .from(workItems)
       .where(and(isNotNull(workItems.assigneeId), dateCondition(workItems.submittedAt, range)))
       .groupBy(workItems.assigneeId),
-    getAdjustmentTotals(range),
+    // Manual adjustments/reconciliation are running ledger corrections (like
+    // payments), not period-specific earned work — so they always count in
+    // full, regardless of the viewed period's end date. Otherwise an adjustment
+    // made today wouldn't show when looking at an earlier payroll period.
+    getAdjustmentTotals(),
     getPaymentTotals(),
   ]);
 
