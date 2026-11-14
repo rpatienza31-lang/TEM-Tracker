@@ -65,7 +65,8 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  useNotificationsRealtime(user.id);
+  // Owner/admin/sales also watch COT orders so a new red alert chimes live.
+  useNotificationsRealtime(user.id, ["owner", "admin", "sales"].includes(user.role));
   const items = NAV.filter(
     (item) =>
       (item.roles as readonly string[]).includes(user.role) &&
