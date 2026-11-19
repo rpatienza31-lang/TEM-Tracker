@@ -296,6 +296,7 @@ export async function getScheduleItems(
       type: customOrderItems.type,
       status: customOrderItems.status,
       plannedFor: sql<string>`${cotPlanned}`,
+      pointsValue: customOrderItems.pointsValue,
       assigneeId: customOrderItems.assigneeId,
       assigneeName: users.fullName,
       customerName: customOrders.customerName,
@@ -333,8 +334,9 @@ export async function getScheduleItems(
       termName: null,
       title: r.customerName,
       subtitle: parts.length ? parts.join(" · ") : "Custom order",
-      // Each COT deliverable (DLP or PPT) is worth 0.5 points on approval.
-      points: 0.5,
+      // The deliverable's own stored points value (set from settings at
+      // creation) — so the schedule reflects 0.5 or 0.25 per the item itself.
+      points: Number(r.pointsValue ?? 0),
       scheduleNote: r.scheduleNote,
       cotWorkKind: r.workKind,
       counterpartType: r.counterpartType ?? null,
