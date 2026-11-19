@@ -33,13 +33,13 @@ export default async function SettingsAdminPage() {
         {ALL_DELIVERABLE_TYPES.map((type) => (
           <div key={type} className="flex flex-col gap-1">
             <Label htmlFor={`points_${type}`}>{DELIVERABLE_TYPE_LABELS[type]} points</Label>
-            <Input id={`points_${type}`} name={`points_${type}`} type="number" step="0.5" defaultValue={points[type]} />
+            <Input id={`points_${type}`} name={`points_${type}`} type="number" step="0.05" min="0" defaultValue={points[type]} />
           </div>
         ))}
         {COT_ALIGN_KEYS.map((key) => (
           <div key={key} className="flex flex-col gap-1">
             <Label htmlFor={`points_${key}`}>{COT_ALIGN_LABELS[key]} points</Label>
-            <Input id={`points_${key}`} name={`points_${key}`} type="number" step="0.1" defaultValue={points[key]} />
+            <Input id={`points_${key}`} name={`points_${key}`} type="number" step="0.05" min="0" defaultValue={points[key]} />
           </div>
         ))}
         <Button type="submit" className="w-fit">
