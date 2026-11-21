@@ -49,7 +49,11 @@ export type QuotaRow = {
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const dateFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
 const paidFmt = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" });
-const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
+// Points can be fractional (e.g. a 6.45 reconciliation baseline, or 0.25 COT).
+// Show up to 2 decimals, trimming trailing zeros, so the displayed total matches
+// the exact value instead of rounding 6.45 up to "6.5".
+const fmtPts = (n: number) => String(Math.round(n * 100) / 100);
+const signed = (n: number) => `${n > 0 ? "+" : ""}${fmtPts(n)}`;
 
 const payInitial: SetRateState = { status: "idle" };
 
@@ -81,7 +85,7 @@ function MarkPaidButton({
   const [state, formAction, pending] = useActionState(markQuotaPaidAction, payInitial);
   // When over one cycle, default to paying exactly one cycle (e.g. 21) so the
   // excess carries over; otherwise pay the whole balance.
-  const defaultPoints = pointsUnpaid > quotaSize ? quotaSize : Math.round(pointsUnpaid * 10) / 10;
+  const defaultPoints = pointsUnpaid > quotaSize ? quotaSize : Math.round(pointsUnpaid * 100) / 100;
   const [points, setPoints] = useState(defaultPoints);
 
   if (isPaid) {
@@ -94,7 +98,7 @@ function MarkPaidButton({
   if (salary <= 0) return <span className="text-xs text-muted-foreground">—</span>;
 
   const amount = Math.round(Math.min(points, pointsUnpaid) * perSubjectRate * 100) / 100;
-  const carried = Math.round((pointsUnpaid - Math.min(points, pointsUnpaid)) * 10) / 10;
+  const carried = Math.round((pointsUnpaid - Math.min(points, pointsUnpaid)) * 100) / 100;
 
   return (
     <form
@@ -128,7 +132,7 @@ function MarkPaidButton({
         {peso.format(amount)}
         {carried > 0 && ` · ${carried} pt${carried === 1 ? "" : "s"} carries over`}
         {points < pointsUnpaid && (
-          <button type="button" onClick={() => setPoints(Math.round(pointsUnpaid * 10) / 10)} className="ml-1.5 text-primary underline">
+          <button type="button" onClick={() => setPoints(Math.round(pointsUnpaid * 100) / 100)} className="ml-1.5 text-primary underline">
             pay all
           </button>
         )}
@@ -255,11 +259,11 @@ function BreakdownPanel({ row, lines, isOwner }: { row: QuotaRow; lines: Breakdo
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Unpaid projects — {row.pointsUnpaid.toFixed(1)} of {row.pointsEarned.toFixed(1)} earned
+          Unpaid projects — {fmtPts(row.pointsUnpaid)} of {fmtPts(row.pointsEarned)} earned
           {row.pointsPaid > 0 && (
             <span className="font-normal normal-case">
               {" · "}
-              {row.pointsPaid.toFixed(1)} already paid — see{" "}
+              {fmtPts(row.pointsPaid)} already paid — see{" "}
               <a href="/payroll/history" className="text-primary underline">
                 Payment history
               </a>
@@ -394,25 +398,25 @@ export function QuotaStaffTable({
                       className="inline-flex items-center gap-1 rounded text-primary underline decoration-dotted underline-offset-2 hover:decoration-solid"
                       aria-expanded={isOpen}
                     >
-                      <span className="tabular-nums">{row.pointsUnpaid.toFixed(1)}</span>
+                      <span className="tabular-nums">{fmtPts(row.pointsUnpaid)}</span>
                       <span className="text-xs text-muted-foreground">
-                        {row.pointsPaid > 0 ? `(of ${row.pointsEarned.toFixed(1)}) ` : ""}
+                        {row.pointsPaid > 0 ? `(of ${fmtPts(row.pointsEarned)}) ` : ""}
                         {isOpen ? "▲" : "▼"}
                       </span>
                     </button>
                   ) : (
-                    <span className="tabular-nums">{row.pointsUnpaid.toFixed(1)}</span>
+                    <span className="tabular-nums">{fmtPts(row.pointsUnpaid)}</span>
                   )}
                 </TableCell>
                 <TableCell className="tabular-nums">
                   <span className="text-muted-foreground">#{row.cycleNumber} · </span>
                   {row.quotaReached ? (
-                    <span className="text-status-approved">✓ {row.pointsUnpaid.toFixed(0)}/21</span>
+                    <span className="text-status-approved">✓ {fmtPts(row.pointsUnpaid)}/21</span>
                   ) : (
-                    <span className="text-muted-foreground">{row.pointsUnpaid.toFixed(0)}/21</span>
+                    <span className="text-muted-foreground">{fmtPts(row.pointsUnpaid)}/21</span>
                   )}
                 </TableCell>
-                <TableCell className="tabular-nums">{row.remainderCarried.toFixed(1)}</TableCell>
+                <TableCell className="tabular-nums">{fmtPts(row.remainderCarried)}</TableCell>
                 {isOwner && (
                   <TableCell>
                     <RateCell userId={row.userId} rate={row.rate} field="cycle" />
